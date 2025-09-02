@@ -108,25 +108,25 @@ export function MailProcessingDashboard() {
     <div className="min-h-screen bg-white text-black">
       <WorkflowNavigation activeStep={activeStep} onStepChange={setActiveStep} />
       <div className="ml-60 min-h-screen">
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-2 py-1">
         {savedPriorityConditions.length > 0 && (
-          <Card className="bg-white border-gray-200 shadow-sm mb-6">
-            <CardHeader>
-              <CardTitle className="text-black flex items-center gap-2">
-                <Eye className="h-5 w-5" />
+          <Card className="bg-white border-gray-200 shadow-sm mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-black flex items-center gap-2 text-lg">
+                <Eye className="h-4 w-4" />
                 Priority Conditions Overview
               </CardTitle>
-              <p className="text-gray-600 text-sm">Active priority conditions applied across the workflow</p>
+              <p className="text-gray-600 text-xs">Active priority conditions applied across the workflow</p>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
                 {savedPriorityConditions.map((condition, index) => (
-                  <div key={condition.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge className="bg-black text-white px-2 py-1 text-xs">Priority {index + 1}</Badge>
+                  <div key={condition.id} className="p-2 bg-gray-50 rounded border border-gray-200">
+                    <div className="flex items-center gap-1 mb-1">
+                      <Badge className="bg-black text-white px-1 py-0.5 text-xs">#{index + 1}</Badge>
                       <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
                     </div>
-                    <div className="text-sm space-y-1">
+                    <div className="text-xs space-y-0.5">
                       <div className="font-medium text-black">
                         {condition.field.replace("_", " ")} {condition.operator} "{condition.value}"
                       </div>
@@ -135,9 +135,9 @@ export function MailProcessingDashboard() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="text-sm text-blue-800">
-                  <Filter className="h-4 w-4 inline mr-1" />
+              <div className="mt-3 p-2 bg-blue-50 rounded border border-blue-200">
+                <div className="text-xs text-blue-800">
+                  <Filter className="h-3 w-3 inline mr-1" />
                   {savedPriorityConditions.length} active condition{savedPriorityConditions.length !== 1 ? "s" : ""}
                   will be applied when processing customer data
                 </div>

@@ -181,7 +181,7 @@ export function ReviewRates({ settings, onSettingsChange, data }: ReviewRatesPro
               </div>
 
               {/* Master Rate Plan */}
-              <div className="space-y-4">
+              <div className="space-y-4 pt-2">
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -300,12 +300,7 @@ export function ReviewRates({ settings, onSettingsChange, data }: ReviewRatesPro
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="container mx-auto px-6 py-8 space-y-8">
-        <div className="space-y-2">
-          {/* <h1 className="text-3xl font-bold text-black">Rate Set Up</h1> */}
-          {/* <p className="text-gray-600">Configure pricing for your routes and manage rate plans.</p> */}
-        </div>
-
+      <div className="container mx-auto px-2 py-1 space-y-2">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
             <div className="flex items-center gap-3 mb-2">
@@ -346,7 +341,7 @@ export function ReviewRates({ settings, onSettingsChange, data }: ReviewRatesPro
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-2">
           <h2 className="text-2xl font-bold text-black">Rate Management</h2>
 
           <div className="flex gap-2">
@@ -390,7 +385,7 @@ export function ReviewRates({ settings, onSettingsChange, data }: ReviewRatesPro
         </div>
 
         {activeTab === "routes" && (
-          <div className="space-y-6">
+          <div className="space-y-2">
             <div className="space-y-2">
               <h3 className="text-xl font-semibold text-black">Routes</h3>
               <p className="text-gray-600">
@@ -416,7 +411,7 @@ export function ReviewRates({ settings, onSettingsChange, data }: ReviewRatesPro
             </div>
 
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-              <div className="grid grid-cols-6 gap-4 p-4 bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-700">
+              <div className="grid grid-cols-6 gap-2 p-2 bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-700">
                 <div>Origin</div>
                 <div>Destination</div>
                 <div>Base Rate</div>
@@ -428,7 +423,7 @@ export function ReviewRates({ settings, onSettingsChange, data }: ReviewRatesPro
               {routes.map((route, index) => (
                 <div
                   key={index}
-                  className="grid grid-cols-6 gap-4 p-4 border-b border-gray-100 hover:bg-gray-50 items-center"
+                  className="grid grid-cols-6 gap-2 p-2 border-b border-gray-100 hover:bg-gray-50 items-center"
                 >
                   <div className="text-black font-medium">{route.origin}</div>
                   <div className="text-black font-medium">{route.destination}</div>

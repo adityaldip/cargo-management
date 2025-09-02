@@ -280,12 +280,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   // Remove the early return - we'll handle column mapping within the main component structure
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        {/* <h2 className="text-3xl font-bold text-black mb-2">Import Mail Agent Data</h2> */}
-        {/* <p className="text-gray-600">Upload and verify mail agent Excel files for processing</p> */}
-      </div>
-
+    <div className="space-y-4 pt-2">
       {/* Header Navigation */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">

@@ -288,11 +288,7 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        {/* <p className="text-gray-600"></p> */}
-      </div>
-
+    <div className="space-y-4 pt-2">
       {/* Configure/Execute Tabs */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">

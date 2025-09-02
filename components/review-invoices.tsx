@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -18,7 +18,9 @@ import {
   Eye,
   FileText,
   Calendar,
-  Euro
+  Euro,
+  TrendingUp,
+  Package
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ProcessedData } from "@/types/cargo-data"
@@ -106,11 +108,61 @@ const SAMPLE_INVOICES: Invoice[] = [
   }
 ]
 
+// Pre-existing customer data for demo purposes
+const preExistingCustomers = [
+  {
+    customer: "AirMail Limited / ZZXDA14",
+    totalKg: 245.8,
+    totalEur: 1250.75,
+    parcels: 45,
+    euRevenue: 850.25,
+    nonEuRevenue: 400.5,
+    routes: new Set(["USFRAT → USRIXT", "USFRAT → USROMT", "USFRAT → USVNOT"]),
+  },
+  {
+    customer: "Euro Express",
+    totalKg: 312.4,
+    totalEur: 1564.2,
+    parcels: 52,
+    euRevenue: 1100.15,
+    nonEuRevenue: 464.05,
+    routes: new Set(["DKCPHA → FRANK", "GBLON → FRANK"]),
+  },
+  {
+    customer: "Nordic Post",
+    totalKg: 189.3,
+    totalEur: 945.2,
+    parcels: 32,
+    euRevenue: 945.2,
+    nonEuRevenue: 0,
+    routes: new Set(["SEARNK → OSLO", "DKCPH → GBLON"]),
+  },
+  {
+    customer: "Central Mail",
+    totalKg: 456.7,
+    totalEur: 2283.5,
+    parcels: 78,
+    euRevenue: 1825.8,
+    nonEuRevenue: 457.7,
+    routes: new Set(["CZPRG → DEBER", "CZPRG → FRANK"]),
+  },
+  {
+    customer: "Scan Mail",
+    totalKg: 203.1,
+    totalEur: 1015.5,
+    parcels: 35,
+    euRevenue: 1015.5,
+    nonEuRevenue: 0,
+    routes: new Set(["SEARNK → OSLOG", "SEARNK → DKCPH"]),
+  }
+]
+
 export function ReviewInvoices({ data }: ReviewInvoicesProps) {
   const [invoices] = useState<Invoice[]>(SAMPLE_INVOICES)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([])
+  const [sortBy, setSortBy] = useState<"revenue" | "weight" | "parcels">("revenue")
 
   // Filter invoices based on search and status
   const filteredInvoices = invoices.filter(invoice => {
@@ -126,6 +178,79 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
   const paidAmount = filteredInvoices.filter(inv => inv.status === "paid").reduce((sum, invoice) => sum + invoice.amount, 0)
   const pendingAmount = filteredInvoices.filter(inv => inv.status === "pending").reduce((sum, invoice) => sum + invoice.amount, 0)
   const overdueAmount = filteredInvoices.filter(inv => inv.status === "overdue").reduce((sum, invoice) => sum + invoice.amount, 0)
+
+  // Customer analysis logic
+  const customerAnalysis = useMemo(() => {
+    if (data) {
+      const analysis = data.data.reduce(
+        (acc, record) => {
+          const customer = record.customer || "Unknown"
+          if (!acc[customer]) {
+            acc[customer] = {
+              customer,
+              totalKg: 0,
+              totalEur: 0,
+              parcels: 0,
+              euRevenue: 0,
+              nonEuRevenue: 0,
+              routes: new Set<string>(),
+            }
+          }
+          acc[customer].totalKg += record.totalKg
+          acc[customer].totalEur += record.totalEur || 0
+          acc[customer].parcels += 1
+
+          const route = `${record.origOE} → ${record.destOE}`
+          acc[customer].routes.add(route)
+
+          if (record.euromail === "EU") {
+            acc[customer].euRevenue += record.totalEur || 0
+          } else {
+            acc[customer].nonEuRevenue += record.totalEur || 0
+          }
+
+          return acc
+        },
+        {} as Record<
+          string,
+          {
+            customer: string
+            totalKg: number
+            totalEur: number
+            parcels: number
+            euRevenue: number
+            nonEuRevenue: number
+            routes: Set<string>
+          }
+        >,
+      )
+
+      return Object.values(analysis)
+        .sort((a, b) => {
+          switch (sortBy) {
+            case "weight":
+              return b.totalKg - a.totalKg
+            case "parcels":
+              return b.parcels - a.parcels
+            default:
+              return b.totalEur - a.totalEur
+          }
+        })
+    }
+
+    // Use pre-existing customers when no import data
+    return preExistingCustomers
+      .sort((a, b) => {
+        switch (sortBy) {
+          case "weight":
+            return b.totalKg - a.totalKg
+          case "parcels":
+            return b.parcels - a.parcels
+          default:
+            return b.totalEur - a.totalEur
+        }
+      })
+  }, [data, sortBy])
 
   const getStatusBadge = (status: Invoice["status"]) => {
     const statusConfig = {
@@ -160,11 +285,7 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        {/* <p className="text-gray-600">Review and manage generated invoices from processed cargo data</p> */}
-      </div>
-
+    <div className="space-y-4 pt-2">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-white border-gray-200">
@@ -383,6 +504,73 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
             <div className="text-center py-8">
               <Receipt className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <p className="text-gray-500">No invoices found matching your criteria</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Customer Performance Overview */}
+      <Card className="bg-white border-gray-200 shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-black flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Customer Performance Overview
+            </CardTitle>
+            <Select value={sortBy} onValueChange={(value: "revenue" | "weight" | "parcels") => setSortBy(value)}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="revenue">Sort by Revenue</SelectItem>
+                <SelectItem value="weight">Sort by Weight</SelectItem>
+                <SelectItem value="parcels">Sort by Parcels</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-sm text-gray-600">
+            Showing {customerAnalysis.length} customers sorted by {sortBy}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {customerAnalysis.slice(0, 10).map((customer, index) => (
+              <div
+                key={customer.customer}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <Badge
+                    variant="secondary"
+                    className="bg-black text-white w-8 h-8 rounded-full flex items-center justify-center font-bold"
+                  >
+                    {index + 1}
+                  </Badge>
+                  <div>
+                    <div className="text-black font-medium">{customer.customer}</div>
+                    <div className="text-gray-600 text-sm flex items-center gap-4">
+                      <span className="flex items-center gap-1">
+                        <Package className="h-3 w-3" />
+                        {customer.parcels} parcels
+                      </span>
+                      <span>{customer.totalKg.toFixed(1)} kg</span>
+                      <span>{customer.routes.size} routes</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-black font-bold text-lg">€{customer.totalEur.toFixed(2)}</div>
+                  <div className="text-gray-600 text-sm">
+                    EU: €{customer.euRevenue.toFixed(0)} | Non-EU: €{customer.nonEuRevenue.toFixed(0)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {customerAnalysis.length > 10 && (
+            <div className="text-center py-4 text-gray-500 text-sm">
+              Showing 10 of {customerAnalysis.length} customers
             </div>
           )}
         </CardContent>

@@ -72,38 +72,37 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pt-2">
       {/* Column Mapping Interface */}
       <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-black text-lg">Column Mapping</CardTitle>
-          <div className="grid grid-cols-3 gap-4 mt-3">
+        <CardHeader className="pb-0">
+          <div className="grid grid-cols-3 gap-1 mt-1">
             <div className="text-center">
-              <div className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">
+              <div className="bg-black text-white px-1 py-2 rounded text-xs font-medium">
                 Excel Column
               </div>
             </div>
             <div className="text-center">
-              <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+              {/* <div className="bg-blue-100 text-blue-800 px-1 py-2 rounded text-xs font-medium">
                 {getMappedCount()}/{getTotalCount()}
-              </div>
+              </div> */}
             </div>
             <div className="text-center">
-              <div className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+              <div className="bg-black text-white px-1 py-2 rounded text-xs font-medium">
                 Final Export Column
               </div>
             </div>
           </div>
-        </CardHeader>
+        </CardHeader> 
         <CardContent className="pt-0">
-          <div className="space-y-2">
+          <div className="space-y-1">
             {mappings.map((mapping, index) => (
               <div
                 key={index}
-                className="grid grid-cols-3 gap-4 items-center py-2 border-b border-gray-100 last:border-b-0"
+                className="grid grid-cols-3 gap-4 items-center py-1"
               >
                 {/* Excel Column */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <span className="w-5 h-5 bg-gray-100 rounded text-xs flex items-center justify-center text-gray-600 flex-shrink-0">
                     {index + 1}
                   </span>

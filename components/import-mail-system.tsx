@@ -244,12 +244,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        {/* <h2 className="text-3xl font-bold text-black mb-2">Import Mail System Data</h2> */}
-        {/* <p className="text-gray-600"></p> */}
-      </div>
-
+    <div className="space-y-4 pt-2">
       {/* Header Navigation */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">

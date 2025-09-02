@@ -6,12 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Users, Package, TrendingUp, Plus, X, Filter } from "lucide-react"
+import { Search, Users, Package, TrendingUp, Plus, X, Filter, Download } from "lucide-react"
 import { useState, useMemo } from "react"
 
 interface FilterCondition {
   id: string
-  field: "office_of_exchange" | "flight_number"
+  field: "inb_flight_date" | "outb_flight_date" | "rec_id" | "des_no" | "rec_numb" | "orig_oe" | "dest_oe" | "inb_flight_no" | "outb_flight_no" | "mail_cat" | "mail_class" | "total_kg" | "invoice" | "customer" | "rate"
   operator: "is" | "is_not"
   value: string
   customer?: string
@@ -109,14 +109,14 @@ export function ReviewCustomers({
   const [savedAssociations, setSavedAssociations] = useState<
     Array<{
       id: string
-      field: "office_of_exchange" | "flight_number"
+      field: FilterCondition["field"]
       value: string
       customer: string
       createdAt: Date
     }>
   >([])
 
-  const addFilterCondition = (field: "office_of_exchange" | "flight_number") => {
+  const addFilterCondition = (field: FilterCondition["field"]) => {
     const newCondition: FilterCondition = {
       id: Date.now().toString(),
       field,
@@ -132,7 +132,7 @@ export function ReviewCustomers({
     setFilterConditions(filterConditions.filter((condition) => condition.id !== id))
   }
 
-  const saveAssociation = (field: "office_of_exchange" | "flight_number", value: string, customer: string) => {
+  const saveAssociation = (field: FilterCondition["field"], value: string, customer: string) => {
     const newAssociation = {
       id: Date.now().toString(),
       field,
@@ -289,35 +289,142 @@ export function ReviewCustomers({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        {/* <h2 className="text-3xl font-bold text-black mb-2">Review Customers</h2> */}
-        {/* <p className="text-gray-600">
-          {data
-            ? "Analyze customer performance and individual data breakdown"
-            : "Review pre-existing customer database and set up filtering rules"}
-        </p> */}
-      </div>
-
+    <div className="space-y-4 pt-2">
       <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-black flex items-center gap-2">
+                <CardContent className="space-y-1 pt-0 pb-4">
+          <CardTitle className="text-black flex items-center gap-2 mb-2">
             <Filter className="h-5 w-5" />
-            Priority Condition Filters
+            Rules
           </CardTitle>
-          <p className="text-gray-600 text-sm">
-            Set conditions in order of priority to filter customer data and create associations
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          
+          <div className="flex items-center justify-between mb-3">
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAddFilter(!showAddFilter)}
+                className="border-gray-300 text-black hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add Filter
+              </Button>
+
+              {showAddFilter && (
+                <div className="absolute top-full left-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[200px]">
+                  <div className="p-2">
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search..."
+                        className="pl-10 bg-white border-gray-200 text-black text-sm h-8"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <button
+                        onClick={() => addFilterCondition("orig_oe")}
+                        className="w-full text-left px-3 py-2 text-sm text-black hover:bg-gray-100 rounded flex items-center gap-2"
+                      >
+                        <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
+                          <span className="text-xs">📍</span>
+                        </div>
+                        Origin OE
+                      </button>
+                      <button
+                        onClick={() => addFilterCondition("dest_oe")}
+                        className="w-full text-left px-3 py-2 text-sm text-black hover:bg-gray-100 rounded flex items-center gap-2"
+                      >
+                        <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
+                          <span className="text-xs">🎯</span>
+                        </div>
+                        Destination OE
+                      </button>
+                      <button
+                        onClick={() => addFilterCondition("inb_flight_no")}
+                        className="w-full text-left px-3 py-2 text-sm text-black hover:bg-gray-100 rounded flex items-center gap-2"
+                      >
+                        <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
+                          <span className="text-xs">✈️</span>
+                        </div>
+                        Flight Number
+                      </button>
+                      <button
+                        onClick={() => addFilterCondition("mail_cat")}
+                        className="w-full text-left px-3 py-2 text-sm text-black hover:bg-gray-100 rounded flex items-center gap-2"
+                      >
+                        <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
+                          <span className="text-xs">📦</span>
+                        </div>
+                        Mail Category
+                      </button>
+                      <button
+                        onClick={() => addFilterCondition("customer")}
+                        className="w-full text-left px-3 py-2 text-sm text-black hover:bg-gray-100 rounded flex items-center gap-2"
+                      >
+                        <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
+                          <span className="text-xs">👤</span>
+                        </div>
+                        Customer
+                      </button>
+                      <button
+                        onClick={() => addFilterCondition("total_kg")}
+                        className="w-full text-left px-3 py-2 text-sm text-black hover:bg-gray-100 rounded flex items-center gap-2"
+                      >
+                        <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
+                          <span className="text-xs">⚖️</span>
+                        </div>
+                        Weight
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Click outside to close dropdown */}
+              {showAddFilter && <div className="fixed inset-0 z-0" onClick={() => setShowAddFilter(false)} />}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {filterConditions.length > 0 && (
+                <>
+                  <Button
+                    onClick={() => setFilterConditions([])}
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Clear All
+                  </Button>
+                  <Button
+                    onClick={saveConditions}
+                    disabled={isSaving}
+                    size="sm"
+                    className="bg-orange-500 hover:bg-orange-600 text-white flex items-center gap-2"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Package className="h-4 w-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
           {filterConditions.map((condition, index) => (
-            <div key={condition.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+            <div key={condition.id} className="flex items-center gap-2 p-1 bg-gray-50 rounded-lg">
               <span className="text-gray-600 font-medium text-sm">Where</span>
 
-              <div className="border-2 border-black rounded px-4 py-2 bg-white min-w-[180px]">
+              <div className="border-2 border-black rounded px-3 py-1 bg-white min-w-[160px]">
                 <Select
                   value={condition.field}
-                  onValueChange={(value: "office_of_exchange" | "flight_number") =>
+                  onValueChange={(value: FilterCondition["field"]) =>
                     updateFilterCondition(condition.id, { field: value })
                   }
                 >
@@ -325,11 +432,50 @@ export function ReviewCustomers({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-gray-300">
-                    <SelectItem value="office_of_exchange" className="text-black hover:bg-gray-100">
-                      office_of_exchange
+                    <SelectItem value="inb_flight_date" className="text-black hover:bg-gray-100">
+                      Inb.Flight Date
                     </SelectItem>
-                    <SelectItem value="flight_number" className="text-black hover:bg-gray-100">
-                      flight_number
+                    <SelectItem value="outb_flight_date" className="text-black hover:bg-gray-100">
+                      Outb.Flight Date
+                    </SelectItem>
+                    <SelectItem value="rec_id" className="text-black hover:bg-gray-100">
+                      Rec. ID
+                    </SelectItem>
+                    <SelectItem value="des_no" className="text-black hover:bg-gray-100">
+                      Des. No.
+                    </SelectItem>
+                    <SelectItem value="rec_numb" className="text-black hover:bg-gray-100">
+                      Rec. Numb.
+                    </SelectItem>
+                    <SelectItem value="orig_oe" className="text-black hover:bg-gray-100">
+                      Orig. OE
+                    </SelectItem>
+                    <SelectItem value="dest_oe" className="text-black hover:bg-gray-100">
+                      Dest. OE
+                    </SelectItem>
+                    <SelectItem value="inb_flight_no" className="text-black hover:bg-gray-100">
+                      Inb. Flight No.
+                    </SelectItem>
+                    <SelectItem value="outb_flight_no" className="text-black hover:bg-gray-100">
+                      Outb. Flight No.
+                    </SelectItem>
+                    <SelectItem value="mail_cat" className="text-black hover:bg-gray-100">
+                      Mail Cat.
+                    </SelectItem>
+                    <SelectItem value="mail_class" className="text-black hover:bg-gray-100">
+                      Mail Class
+                    </SelectItem>
+                    <SelectItem value="total_kg" className="text-black hover:bg-gray-100">
+                      Total kg
+                    </SelectItem>
+                    <SelectItem value="invoice" className="text-black hover:bg-gray-100">
+                      Invoice
+                    </SelectItem>
+                    <SelectItem value="customer" className="text-black hover:bg-gray-100">
+                      Customer
+                    </SelectItem>
+                    <SelectItem value="rate" className="text-black hover:bg-gray-100">
+                      Rate
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -339,7 +485,7 @@ export function ReviewCustomers({
                 value={condition.operator}
                 onValueChange={(value: "is" | "is_not") => updateFilterCondition(condition.id, { operator: value })}
               >
-                <SelectTrigger className="bg-white border-gray-300 text-black w-20 h-10">
+                <SelectTrigger className="bg-white border-gray-300 text-black w-16 h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-white border-gray-300">
@@ -349,14 +495,29 @@ export function ReviewCustomers({
                   <SelectItem value="is_not" className="text-black hover:bg-gray-100">
                     is not
                   </SelectItem>
+                  <SelectItem value="contains" className="text-black hover:bg-gray-100">
+                    contains
+                  </SelectItem>
+                  <SelectItem value="starts_with" className="text-black hover:bg-gray-100">
+                    starts with
+                  </SelectItem>
                 </SelectContent>
               </Select>
 
-              <div className="border-2 border-black rounded px-4 py-2 bg-white min-w-[140px]">
+              <div className="border-2 border-black rounded px-3 py-1 bg-white min-w-[120px]">
                 <Input
                   value={condition.value}
                   onChange={(e) => updateFilterCondition(condition.id, { value: e.target.value })}
-                  placeholder={condition.field === "office_of_exchange" ? "DKCPHA" : "BT234"}
+                  placeholder={
+                    condition.field === "orig_oe" || condition.field === "dest_oe" ? "DKCPHA" :
+                    condition.field === "inb_flight_no" || condition.field === "outb_flight_no" ? "BT234" :
+                    condition.field === "mail_cat" ? "A" :
+                    condition.field === "mail_class" ? "7C" :
+                    condition.field === "total_kg" ? "25.5" :
+                    condition.field === "customer" ? "AirMail Limited" :
+                    condition.field === "rate" ? "15.75" :
+                    "Enter value"
+                  }
                   className="border-none p-0 h-auto text-black font-medium bg-transparent"
                 />
               </div>
@@ -392,107 +553,6 @@ export function ReviewCustomers({
             </div>
           ))}
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAddFilter(!showAddFilter)}
-                  className="border-gray-300 text-black hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Filter
-                </Button>
-
-                {showAddFilter && (
-                  <div className="absolute top-full left-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[200px]">
-                    <div className="p-2">
-                      <div className="relative mb-2">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <Input
-                          placeholder="Search..."
-                          className="pl-10 bg-white border-gray-200 text-black text-sm h-8"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <button
-                          onClick={() => addFilterCondition("office_of_exchange")}
-                          className="w-full text-left px-3 py-2 text-sm text-black hover:bg-gray-100 rounded flex items-center gap-2"
-                        >
-                          <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
-                            <span className="text-xs">📍</span>
-                          </div>
-                          Office of Exchange
-                        </button>
-                        <button
-                          onClick={() => addFilterCondition("flight_number")}
-                          className="w-full text-left px-3 py-2 text-sm text-black hover:bg-gray-100 rounded flex items-center gap-2"
-                        >
-                          <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
-                            <span className="text-xs">✈️</span>
-                          </div>
-                          Flight Number
-                        </button>
-                        <div className="border-t border-gray-200 my-1"></div>
-                        <div className="px-3 py-2 text-xs text-gray-500">More filters coming soon...</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Click outside to close dropdown */}
-              {showAddFilter && <div className="fixed inset-0 z-0" onClick={() => setShowAddFilter(false)} />}
-            </div>
-
-            {filterConditions.length > 0 && (
-              <Button
-                onClick={saveConditions}
-                disabled={isSaving}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg flex items-center gap-2"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Package className="h-4 w-4" />
-                    Save Changes
-                    <svg className="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-
-          {filterConditions.length > 0 && (
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="text-black font-medium mb-2">Example Results Preview</h4>
-              <div className="text-sm text-gray-600 space-y-1">
-                {filterConditions.map((condition, index) => (
-                  <div key={condition.id}>
-                    • Priority {index + 1}: {condition.field} {condition.operator} "{condition.value}"
-                    {condition.customer && ` for customer "${condition.customer}"`}
-                    {condition.customer && !customers.includes(condition.customer) && (
-                      <Badge className="ml-2 bg-yellow-100 text-yellow-800 text-xs">Pasted</Badge>
-                    )}
-                  </div>
-                ))}
-                <div className="mt-2 pt-2 border-t border-blue-200">
-                  <div>• Estimated matches: {Math.floor(Math.random() * 50) + 10} records</div>
-                  <div>• Affected customers: {Math.floor(Math.random() * 5) + 1}</div>
-                  <div>
-                    • Total weight: {(Math.random() * 200 + 50).toFixed(1)} kg | Total value: €
-                    {(Math.random() * 5000 + 1000).toFixed(2)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {saveMessage && (
             <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
@@ -502,15 +562,41 @@ export function ReviewCustomers({
 
           {savedPriorityConditions.length > 0 && (
             <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <h4 className="text-black font-medium mb-2">Currently Active Conditions</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-black font-medium">Currently Active Conditions</h4>
+                <Button
+                  onClick={() => onSavePriorityConditions && onSavePriorityConditions([])}
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear All Active
+                </Button>
+              </div>
               <div className="text-sm text-gray-600 space-y-1">
                 {savedPriorityConditions.map((condition, index) => (
-                  <div key={condition.id} className="flex items-center gap-2">
-                    <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
-                    <span>
-                      Priority {index + 1}: {condition.field} {condition.operator} "{condition.value}"
-                    </span>
-                    {condition.customer && <span className="text-gray-500">({condition.customer})</span>}
+                  <div key={condition.id} className="flex items-center justify-between gap-2 p-2 bg-white rounded border">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
+                      <span>
+                        Priority {index + 1}: {condition.field} {condition.operator} "{condition.value}"
+                      </span>
+                      {condition.customer && <span className="text-gray-500">({condition.customer})</span>}
+                    </div>
+                    <Button
+                      onClick={() => {
+                        if (onSavePriorityConditions) {
+                          const updatedConditions = savedPriorityConditions.filter(c => c.id !== condition.id)
+                          onSavePriorityConditions(updatedConditions)
+                        }
+                      }}
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -519,225 +605,151 @@ export function ReviewCustomers({
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-white border-gray-200 shadow-sm">
-          <CardContent className="p-4">
-            <label className="text-black text-sm font-medium mb-2 block">Search Customers</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search by customer name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-white border-gray-300 text-black"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-gray-200 shadow-sm">
-          <CardContent className="p-4">
-            <label className="text-black text-sm font-medium mb-2 block">Sort By</label>
-            <Select value={sortBy} onValueChange={(value: "revenue" | "weight" | "parcels") => setSortBy(value)}>
-              <SelectTrigger className="bg-white border-gray-300 text-black">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-gray-300">
-                <SelectItem value="revenue" className="text-black hover:bg-gray-100">
-                  Total Revenue
-                </SelectItem>
-                <SelectItem value="weight" className="text-black hover:bg-gray-100">
-                  Total Weight
-                </SelectItem>
-                <SelectItem value="parcels" className="text-black hover:bg-gray-100">
-                  Parcel Count
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-gray-200 shadow-sm">
-          <CardContent className="p-4">
-            <label className="text-black text-sm font-medium mb-2 block">Select Customer</label>
-            <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-              <SelectTrigger className="bg-white border-gray-300 text-black">
-                <SelectValue placeholder="All Customers" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-gray-300">
-                <SelectItem value="all" className="text-black hover:bg-gray-100">
-                  All Customers
-                </SelectItem>
-                {customers.map((customer) => (
-                  <SelectItem key={customer} value={customer} className="text-black hover:bg-gray-100">
-                    {customer}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-      </div>
-
-      {selectedCustomerData && (
-        <Card className="bg-white border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-black flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              {selectedCustomerData.customer} - Detailed Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              <div className="p-4 bg-gray-50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-black">{selectedCustomerData.parcels}</div>
-                <div className="text-sm text-gray-600">Total Parcels</div>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-black">{selectedCustomerData.totalKg.toFixed(1)} kg</div>
-                <div className="text-sm text-gray-600">Total Weight</div>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-black">€{selectedCustomerData.euRevenue.toFixed(2)}</div>
-                <div className="text-sm text-gray-600">EU Revenue</div>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-black">€{selectedCustomerData.nonEuRevenue.toFixed(2)}</div>
-                <div className="text-sm text-gray-600">Non-EU Revenue</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-black mb-2">EU vs Non-EU Breakdown</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">EU Parcels:</span>
-                    <span className="text-black font-medium">{selectedCustomerData.euParcels}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Non-EU Parcels:</span>
-                    <span className="text-black font-medium">{selectedCustomerData.nonEuParcels}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">EU Revenue %:</span>
-                    <span className="text-black font-medium">
-                      {((selectedCustomerData.euRevenue / selectedCustomerData.totalEur) * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-black mb-2">Active Routes</h4>
-                <div className="space-y-1 text-sm">
-                  {Array.from(selectedCustomerData.routes)
-                    .slice(0, 5)
-                    .map((route) => (
-                      <div key={route} className="text-gray-600">
-                        • {route}
-                      </div>
-                    ))}
-                  {selectedCustomerData.routes.size > 5 && (
-                    <div className="text-gray-500">... and {selectedCustomerData.routes.size - 5} more routes</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+      {/* Data Table Preview */}
       <Card className="bg-white border-gray-200 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-black flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            Customer Performance Overview
-          </CardTitle>
-          <div className="text-sm text-gray-600">
-            Showing {customerAnalysis.length} customers sorted by {sortBy}
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="text-black">Customer Data Preview</CardTitle>
+              <p className="text-sm text-gray-600">Preview of processed customer data with applied rules</p>
+            </div>
+            <Button
+              className="bg-black text-white"
+              size="sm"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export Data
+            </Button>
+          </div>
+          <div className="flex justify-end">
+            <div className="flex gap-4 text-sm text-gray-600">
+              <span>Total Records: <strong className="text-black">1,000</strong></span>
+              <span>Total Weight: <strong className="text-black">25,450.5 kg</strong></span>
+              <span>Avg Weight: <strong className="text-black">25.5 kg</strong></span>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {customerAnalysis.slice(0, 10).map((customer, index) => (
-              <div
-                key={customer.customer}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <Badge
-                    variant="secondary"
-                    className="bg-black text-white w-8 h-8 rounded-full flex items-center justify-center font-bold"
-                  >
-                    {index + 1}
-                  </Badge>
-                  <div>
-                    <div className="text-black font-medium">{customer.customer}</div>
-                    <div className="text-gray-600 text-sm flex items-center gap-4">
-                      <span className="flex items-center gap-1">
-                        <Package className="h-3 w-3" />
-                        {customer.parcels} parcels
-                      </span>
-                      <span>{customer.totalKg.toFixed(1)} kg</span>
-                      <span>{customer.routes.size} routes</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-black font-bold text-lg">€{customer.totalEur.toFixed(2)}</div>
-                  <div className="text-gray-600 text-sm">
-                    EU: €{customer.euRevenue.toFixed(0)} | Non-EU: €{customer.nonEuRevenue.toFixed(0)}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border border-gray-300">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Inb.Flight Date</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Outb.Flight Date</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Rec. ID</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Des. No.</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Rec. Numb.</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Orig. OE</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Dest. OE</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Inb. Flight No.</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Outb. Flight No.</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Mail Cat.</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Mail Class</th>
+                  <th className="border border-gray-300 p-2 text-right text-black font-medium">Total kg</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Invoice</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium bg-yellow-200">Customer</th>
+                  <th className="border border-gray-300 p-2 text-left text-black font-medium bg-yellow-200">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...Array(20)].map((_, index) => {
+                  // Generate sample data for demonstration
+                  const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM"]
+                  const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA"]
+                  const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456"]
+                  const mailCats = ["A", "B", "C", "D", "E"]
+                  const mailClasses = ["7C", "7D", "7E", "7F", "7G"]
+                  const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
+                  
+                  const origOE = origins[index % origins.length]
+                  const destOE = destinations[index % destinations.length]
+                  const mailCat = mailCats[index % mailCats.length]
+                  const mailClass = mailClasses[index % mailClasses.length]
+                  
+                  return (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="border border-gray-300 p-2 text-gray-900">2025 JUL {(15 + index % 10).toString().padStart(2, '0')}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">2025 JUL {(16 + index % 10).toString().padStart(2, '0')}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900 font-mono text-xs">{origOE}{destOE}{mailCat}{mailClass}507{(index + 1).toString().padStart(2, '0')}{(70000 + index * 123).toString().slice(-4)}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">507{(index + 1).toString().padStart(2, '0')}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">{(index + 1).toString().padStart(3, '0')}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">{origOE}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">{destOE}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">{flightNos[index % flightNos.length]}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">{flightNos[(index + 1) % flightNos.length]}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">{mailCat}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">{mailClass}</td>
+                      <td className="border border-gray-300 p-2 text-right text-gray-900">{(15.5 + (index * 2.3)).toFixed(1)}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900">{invoiceTypes[index % invoiceTypes.length]}</td>
+                      <td className="border border-gray-300 p-2 text-gray-900 text-xs bg-yellow-200"></td>
+                      <td className="border border-gray-300 p-2 text-gray-900 text-xs bg-yellow-200"></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-
-          {customerAnalysis.length > 10 && (
-            <div className="text-center py-4 text-gray-500 text-sm">
-              Showing 10 of {customerAnalysis.length} customers
+          
+          {/* Pagination Controls */}
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Showing 1 to 20 of 1,000 records
             </div>
-          )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={true}
+              >
+                Previous
+              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="w-8 h-8 p-0"
+                >
+                  1
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-8 h-8 p-0"
+                >
+                  2
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-8 h-8 p-0"
+                >
+                  3
+                </Button>
+                <span className="text-gray-500">...</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-8 h-8 p-0"
+                >
+                  50
+                </Button>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+          
+          <div className="mt-2 text-center">
+            <p className="text-sm text-gray-500">
+              This preview shows processed data with applied customer rules
+            </p>
+          </div>
         </CardContent>
       </Card>
-
-      {savedAssociations.length > 0 && (
-        <Card className="bg-white border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-black flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Saved Customer Associations
-            </CardTitle>
-            <p className="text-gray-600 text-sm">
-              Customer associations created from filter conditions (including pasted customer names)
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {savedAssociations.map((association) => (
-                <div key={association.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <Badge className="bg-green-100 text-green-800 text-xs">Saved</Badge>
-                    <div>
-                      <div className="text-black font-medium">
-                        {association.field.replace("_", " ")} = "{association.value}"
-                      </div>
-                      <div className="text-gray-600 text-sm">
-                        Associated with: {association.customer}
-                        {!customers.includes(association.customer) && (
-                          <Badge className="ml-2 bg-blue-100 text-blue-800 text-xs">Custom Entry</Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-gray-500 text-sm">{association.createdAt.toLocaleTimeString()}</div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="flex justify-end">
         <Button 

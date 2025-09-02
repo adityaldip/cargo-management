@@ -26,13 +26,13 @@ export function WorkflowNavigation({ activeStep, onStepChange }: WorkflowNavigat
       <aside className="fixed left-0 top-0 h-full w-60 bg-white border-r border-gray-100 z-10">
         <div className="flex flex-col h-full">
           {/* Logo Header */}
-          <div className="p-6">
+          <div className="p-2">
             <div className="flex items-center">
             </div>
           </div>
 
           {/* Navigation Steps */}
-          <nav className="flex-1 px-4">
+          <nav className="flex-1 px-1">
             <div className="space-y-1">
               {steps.map((step) => {
                 const Icon = step.icon

@@ -16,7 +16,7 @@ export function DataPreview({ processedData, onDownloadReport }: DataPreviewProp
   const { data, missingFields, warnings, summary } = processedData
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pt-2">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gray-900 border-orange-500/20">

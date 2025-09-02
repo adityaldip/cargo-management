@@ -209,13 +209,100 @@ const SAMPLE_RULES: CustomerRule[] = [
   }
 ]
 
+interface Customer {
+  id: string
+  name: string
+  code: string
+  email: string
+  phone: string
+  address: string
+  contactPerson: string
+  priority: "high" | "medium" | "low"
+  isActive: boolean
+  createdDate: string
+  totalShipments: number
+}
+
+// Sample customers data
+const SAMPLE_CUSTOMERS: Customer[] = [
+  {
+    id: "1",
+    name: "Premium Express Ltd",
+    code: "PREM001",
+    email: "contact@premiumexpress.com",
+    phone: "+371 2345 6789",
+    address: "Riga, Latvia",
+    contactPerson: "Anna Berzina",
+    priority: "high",
+    isActive: true,
+    createdDate: "2023-01-15",
+    totalShipments: 245
+  },
+  {
+    id: "2",
+    name: "Nordic Post AS",
+    code: "NORD002",
+    email: "info@nordicpost.ee",
+    phone: "+372 5678 9012",
+    address: "Tallinn, Estonia",
+    contactPerson: "Erik Saar",
+    priority: "high",
+    isActive: true,
+    createdDate: "2023-02-20",
+    totalShipments: 189
+  },
+  {
+    id: "3",
+    name: "Baltic Express Network",
+    code: "BALT003",
+    email: "support@balticexpress.lt",
+    phone: "+370 6789 0123",
+    address: "Vilnius, Lithuania",
+    contactPerson: "Ruta Kazlauskas",
+    priority: "medium",
+    isActive: true,
+    createdDate: "2023-03-10",
+    totalShipments: 156
+  },
+  {
+    id: "4",
+    name: "Cargo Masters International",
+    code: "CARG004",
+    email: "operations@cargomasters.com",
+    phone: "+49 30 1234 5678",
+    address: "Berlin, Germany",
+    contactPerson: "Hans Mueller",
+    priority: "medium",
+    isActive: true,
+    createdDate: "2023-04-05",
+    totalShipments: 134
+  },
+  {
+    id: "5",
+    name: "General Mail Services",
+    code: "GENM005",
+    email: "service@generalmail.com",
+    phone: "+33 1 2345 6789",
+    address: "Paris, France",
+    contactPerson: "Marie Dubois",
+    priority: "low",
+    isActive: false,
+    createdDate: "2023-05-12",
+    totalShipments: 78
+  }
+]
+
 export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityConditions }: AssignCustomersProps) {
-  const [activeTab, setActiveTab] = useState<"configure" | "execute">("configure")
+  const [activeTab, setActiveTab] = useState<"customers" | "configure" | "execute">("customers")
   const [currentView, setCurrentView] = useState<"rules" | "results">("rules")
   const [rules, setRules] = useState<CustomerRule[]>(SAMPLE_RULES)
+  const [customers, setCustomers] = useState<Customer[]>(SAMPLE_CUSTOMERS)
   const [searchTerm, setSearchTerm] = useState("")
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("")
   const [selectedRule, setSelectedRule] = useState<CustomerRule | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [isRuleEditorOpen, setIsRuleEditorOpen] = useState(false)
+  const [isCustomerEditorOpen, setIsCustomerEditorOpen] = useState(false)
   const [draggedRule, setDraggedRule] = useState<string | null>(null)
 
   // Filter rules based on search
@@ -223,6 +310,14 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
     rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     rule.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     rule.actions.assignTo.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  // Filter customers based on search
+  const filteredCustomers = customers.filter(customer => 
+    customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    customer.code.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    customer.email.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+    customer.contactPerson.toLowerCase().includes(customerSearchTerm.toLowerCase())
   )
 
   const handleToggleRule = (ruleId: string) => {
@@ -234,6 +329,21 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
   const handleEditRule = (rule: CustomerRule) => {
     setSelectedRule(rule)
     setIsRuleEditorOpen(true)
+  }
+
+  const handleToggleCustomer = (customerId: string) => {
+    setCustomers(prev => prev.map(customer => 
+      customer.id === customerId ? { ...customer, isActive: !customer.isActive } : customer
+    ))
+  }
+
+  const handleEditCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setIsCustomerEditorOpen(true)
+  }
+
+  const handleDeleteCustomer = (customerId: string) => {
+    setCustomers(prev => prev.filter(customer => customer.id !== customerId))
   }
 
   const handleDragStart = (e: React.DragEvent, ruleId: string) => {
@@ -301,14 +411,25 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        {/* <p className="text-gray-600"></p> */}
-      </div>
-
+    <div className="space-y-4  pt-2">
       {/* Configure/Execute Tabs - Always Visible */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
+          <Button
+            variant={activeTab === "customers" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              setActiveTab("customers")
+              setCurrentView("rules")
+            }}
+            className={
+              activeTab === "customers"
+                ? "bg-black text-white hover:bg-gray-800"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            Configure Customers
+          </Button>
           <Button
             variant={activeTab === "configure" ? "default" : "ghost"}
             size="sm"
@@ -346,62 +467,258 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
       {currentView === "rules" && (
         <>
 
+      {/* Configure Customers Tab */}
+      {activeTab === "customers" && (
+        <>
+          {/* Customer Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <Card className="bg-white border-gray-200">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-50 rounded">
+                    <UserCheck className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Total Customers</p>
+                    <p className="text-xl font-bold text-black">{customers.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border-gray-200">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-green-50 rounded">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Active Customers</p>
+                    <p className="text-xl font-bold text-green-600">{customers.filter(c => c.isActive).length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border-gray-200">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-purple-50 rounded">
+                    <Package className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Total Shipments</p>
+                    <p className="text-xl font-bold text-black">{customers.reduce((sum, c) => sum + c.totalShipments, 0)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border-gray-200">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-red-50 rounded">
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">High Priority</p>
+                    <p className="text-xl font-bold text-black">{customers.filter(c => c.priority === 'high').length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Customer Management */}
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-black flex items-center gap-2">
+                  <UserCheck className="h-5 w-5" />
+                  Customer Management
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCustomer(null)
+                      setIsCustomerEditorOpen(true)
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Customer
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Search */}
+              <div className="flex gap-4 mt-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search customers by name, code, email, or contact person..."
+                    value={customerSearchTerm}
+                    onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Shipments</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCustomers.map((customer) => (
+                      <TableRow key={customer.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={customer.isActive}
+                              onCheckedChange={() => handleToggleCustomer(customer.id)}
+                            />
+                            <span className={cn(
+                              "text-xs font-medium",
+                              customer.isActive ? "text-green-600" : "text-gray-400"
+                            )}>
+                              {customer.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-black">{customer.name}</p>
+                            <p className="text-sm text-gray-500">{customer.address}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {customer.code}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-sm text-black">{customer.contactPerson}</p>
+                            <p className="text-xs text-gray-500">{customer.email}</p>
+                            <p className="text-xs text-gray-500">{customer.phone}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {getPriorityBadge(customer.priority)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{customer.totalShipments}</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-gray-500">
+                            {new Date(customer.createdDate).toLocaleDateString()}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleEditCustomer(customer)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleDeleteCustomer(customer.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {filteredCustomers.length === 0 && (
+                <div className="text-center py-8">
+                  <UserCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-500">No customers found matching your search criteria</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
       {/* Configure Rules Tab */}
       {activeTab === "configure" && (
         <>
           {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Card className="bg-white border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <UserCheck className="h-5 w-5 text-blue-600" />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-blue-50 rounded">
+                <UserCheck className="h-4 w-4 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total Rules</p>
-                <p className="text-2xl font-bold text-black">{rules.length}</p>
+                <p className="text-xs text-gray-600">Total Rules</p>
+                <p className="text-xl font-bold text-black">{rules.length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-white border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-50 rounded-lg">
-                <Play className="h-5 w-5 text-green-600" />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-green-50 rounded">
+                <Play className="h-4 w-4 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Active Rules</p>
-                <p className="text-2xl font-bold text-green-600">{rules.filter(r => r.isActive).length}</p>
+                <p className="text-xs text-gray-600">Active Rules</p>
+                <p className="text-xl font-bold text-green-600">{rules.filter(r => r.isActive).length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-white border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <CheckCircle className="h-5 w-5 text-purple-600" />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-purple-50 rounded">
+                <CheckCircle className="h-4 w-4 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total Matches</p>
-                <p className="text-2xl font-bold text-black">{rules.reduce((sum, r) => sum + r.matchCount, 0)}</p>
+                <p className="text-xs text-gray-600">Total Matches</p>
+                <p className="text-xl font-bold text-black">{rules.reduce((sum, r) => sum + r.matchCount, 0)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-white border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-50 rounded-lg">
-                <Settings className="h-5 w-5 text-orange-600" />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-orange-50 rounded">
+                <Settings className="h-4 w-4 text-orange-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Avg Match Rate</p>
-                <p className="text-2xl font-bold text-black">{Math.round(rules.reduce((sum, r) => sum + r.matchCount, 0) / rules.length)}</p>
+                <p className="text-xs text-gray-600">Avg Match Rate</p>
+                <p className="text-xl font-bold text-black">{Math.round(rules.reduce((sum, r) => sum + r.matchCount, 0) / rules.length)}</p>
               </div>
             </div>
           </CardContent>
@@ -703,6 +1020,111 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Customer Editor Modal */}
+      <Dialog open={isCustomerEditorOpen} onOpenChange={setIsCustomerEditorOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedCustomer ? `Edit Customer: ${selectedCustomer.name}` : "Create New Customer"}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Customer Basic Info */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customer-name">Customer Name</Label>
+                <Input 
+                  id="customer-name"
+                  placeholder="e.g., Premium Express Ltd"
+                  defaultValue={selectedCustomer?.name}
+                />
+              </div>
+              <div>
+                <Label htmlFor="customer-code">Customer Code</Label>
+                <Input 
+                  id="customer-code"
+                  placeholder="e.g., PREM001"
+                  defaultValue={selectedCustomer?.code}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customer-email">Email</Label>
+                <Input 
+                  id="customer-email"
+                  type="email"
+                  placeholder="contact@example.com"
+                  defaultValue={selectedCustomer?.email}
+                />
+              </div>
+              <div>
+                <Label htmlFor="customer-phone">Phone</Label>
+                <Input 
+                  id="customer-phone"
+                  placeholder="+371 2345 6789"
+                  defaultValue={selectedCustomer?.phone}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="customer-address">Address</Label>
+              <Input 
+                id="customer-address"
+                placeholder="City, Country"
+                defaultValue={selectedCustomer?.address}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customer-contact">Contact Person</Label>
+                <Input 
+                  id="customer-contact"
+                  placeholder="John Doe"
+                  defaultValue={selectedCustomer?.contactPerson}
+                />
+              </div>
+              <div>
+                <Label htmlFor="customer-priority">Priority Level</Label>
+                <Select defaultValue={selectedCustomer?.priority || "medium"}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">High Priority</SelectItem>
+                    <SelectItem value="medium">Medium Priority</SelectItem>
+                    <SelectItem value="low">Low Priority</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Customer Status */}
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="customer-active"
+                defaultChecked={selectedCustomer?.isActive ?? true}
+              />
+              <Label htmlFor="customer-active">Active Customer</Label>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button variant="outline" onClick={() => setIsCustomerEditorOpen(false)}>
+                Cancel
+              </Button>
+              <Button className="bg-black hover:bg-gray-800 text-white">
+                {selectedCustomer ? "Update Customer" : "Create Customer"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
         </>
       )}
 
@@ -808,9 +1230,10 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
       {currentView === "results" && data && (
         <>
           {/* Navigation Button */}
-          <div className="flex justify-start mb-6">
+          <div className="flex justify-start mb-4">
             <Button 
               variant="default"
+              size="sm"
               onClick={() => setCurrentView("rules")}
               className="bg-black text-white hover:bg-gray-800"
             >
