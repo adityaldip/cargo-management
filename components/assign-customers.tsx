@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { 
   UserCheck, 
   Settings, 
@@ -28,7 +29,8 @@ import {
   Package,
   MapPin,
   Weight,
-  Eye
+  Eye,
+  ArrowLeft
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ProcessedData } from "@/types/cargo-data"
@@ -209,6 +211,7 @@ const SAMPLE_RULES: CustomerRule[] = [
 
 export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityConditions }: AssignCustomersProps) {
   const [activeTab, setActiveTab] = useState<"configure" | "execute">("configure")
+  const [currentView, setCurrentView] = useState<"rules" | "results">("rules")
   const [rules, setRules] = useState<CustomerRule[]>(SAMPLE_RULES)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedRule, setSelectedRule] = useState<CustomerRule | null>(null)
@@ -303,13 +306,16 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
         {/* <p className="text-gray-600"></p> */}
       </div>
 
-      {/* Configure/Execute Tabs */}
+      {/* Configure/Execute Tabs - Always Visible */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
           <Button
             variant={activeTab === "configure" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveTab("configure")}
+            onClick={() => {
+              setActiveTab("configure")
+              setCurrentView("rules")
+            }}
             className={
               activeTab === "configure"
                 ? "bg-black text-white hover:bg-gray-800"
@@ -321,7 +327,10 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
           <Button
             variant={activeTab === "execute" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveTab("execute")}
+            onClick={() => {
+              setActiveTab("execute")
+              setCurrentView("rules")
+            }}
             className={
               activeTab === "execute"
                 ? "bg-black text-white hover:bg-gray-800"
@@ -332,6 +341,10 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
           </Button>
         </div>
       </div>
+
+      {/* Rules View */}
+      {currentView === "rules" && (
+        <>
 
       {/* Configure Rules Tab */}
       {activeTab === "configure" && (
@@ -776,7 +789,10 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
                   <Eye className="h-4 w-4 mr-2" />
                   Preview Results
                 </Button>
-                <Button className="bg-black hover:bg-gray-800 text-white">
+                <Button 
+                  className="bg-black hover:bg-gray-800 text-white"
+                  onClick={() => setCurrentView("results")}
+                >
                   <Play className="h-4 w-4 mr-2" />
                   Execute All Rules
                 </Button>
@@ -784,6 +800,173 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
             </div>
           </CardContent>
         </Card>
+      )}
+        </>
+      )}
+
+      {/* Results View */}
+      {currentView === "results" && data && (
+        <>
+          {/* Navigation Button */}
+          <div className="flex justify-start mb-6">
+            <Button 
+              variant="default"
+              onClick={() => setCurrentView("rules")}
+              className="bg-black text-white hover:bg-gray-800"
+            >
+              Assign Customers
+            </Button>
+          </div>
+
+          {/* Data Table Display */}
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-black flex items-center gap-2">
+                <Play className="h-5 w-5" />
+                Cargo Data Table
+              </CardTitle>
+            </div>
+            <p className="text-gray-600 text-sm">
+              Showing {data.data.length} cargo records with automation rules applied
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Record ID</TableHead>
+                    <TableHead>Flight Date</TableHead>
+                    <TableHead>Route</TableHead>
+                    <TableHead>Flight No.</TableHead>
+                    <TableHead>Mail Cat.</TableHead>
+                    <TableHead>Weight (kg)</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Assigned Team</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.data.map((row: any, index) => {
+                    // Apply rule matching logic to determine assigned team
+                    const matchedRule = rules.find(rule => {
+                      if (!rule.isActive) return false
+                      return rule.conditions.some(condition => {
+                        const fieldValue = String(row[condition.field] || '').toLowerCase()
+                        const conditionValue = condition.value.toLowerCase()
+                        
+                        switch (condition.operator) {
+                          case 'contains':
+                            return fieldValue.includes(conditionValue)
+                          case 'equals':
+                            return fieldValue === conditionValue
+                          case 'greater_than':
+                            return parseFloat(fieldValue) > parseFloat(conditionValue)
+                          case 'less_than':
+                            return parseFloat(fieldValue) < parseFloat(conditionValue)
+                          default:
+                            return false
+                        }
+                      })
+                    })
+
+                    return (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {String(row["Rec. ID"] || row["Record ID"] || `REC-${index + 1}`).substring(0, 12)}...
+                        </TableCell>
+                        <TableCell>
+                          {row["Inb.Flight Date"] || row["Flight Date"] || "N/A"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <span>{row["Orig. OE"] || "N/A"}</span>
+                            <span>→</span>
+                            <span>{row["Dest. OE"] || "N/A"}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {row["Inb. Flight No."] || row["Flight No."] || "N/A"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {row["Mail Cat."] || row["Category"] || "N/A"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {row["Total kg"] || row["Weight"] || "0.0"}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">
+                          {String(row["Customer name / number"] || row["Customer"] || "Unknown").split("/")[0].trim()}
+                        </TableCell>
+                        <TableCell>
+                          {matchedRule ? (
+                            <Badge className="bg-green-100 text-green-800 text-xs">
+                              {matchedRule.actions.assignTo}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs text-gray-500">
+                              Unassigned
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {matchedRule ? (
+                            <Badge className="bg-blue-100 text-blue-800 text-xs">
+                              Processed
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-800 text-xs">
+                              Pending
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            
+            {/* Summary Footer */}
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-black">{data.data.length}</div>
+                  <div className="text-sm text-gray-600">Total Records</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {data.data.filter((row: any) => 
+                      rules.some(rule => rule.isActive && rule.conditions.some(condition => {
+                        const fieldValue = String(row[condition.field] || '').toLowerCase()
+                        return fieldValue.includes(condition.value.toLowerCase())
+                      }))
+                    ).length}
+                  </div>
+                  <div className="text-sm text-gray-600">Assigned</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-600">
+                    {data.data.length - data.data.filter((row: any) => 
+                      rules.some(rule => rule.isActive && rule.conditions.some(condition => {
+                        const fieldValue = String(row[condition.field] || '').toLowerCase()
+                        return fieldValue.includes(condition.value.toLowerCase())
+                      }))
+                    ).length}
+                  </div>
+                  <div className="text-sm text-gray-600">Pending</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{rules.filter(r => r.isActive).length}</div>
+                  <div className="text-sm text-gray-600">Rules Applied</div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        </>
       )}
     </div>
   )
