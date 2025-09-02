@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { 
   DollarSign, 
   Settings, 
@@ -188,13 +189,33 @@ const SAMPLE_RATE_RULES: RateRule[] = [
   }
 ]
 
+interface RateConfig {
+  key: string
+  label: string
+  visible: boolean
+  order: number
+}
+
 export function AssignRates({ data, savedRateConditions, onSaveRateConditions }: AssignRatesProps) {
-  const [activeTab, setActiveTab] = useState<"configure" | "execute">("configure")
+  const [activeTab, setActiveTab] = useState<"setup" | "configure" | "execute">("setup")
   const [rules, setRules] = useState<RateRule[]>(SAMPLE_RATE_RULES)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedRule, setSelectedRule] = useState<RateRule | null>(null)
   const [isRuleEditorOpen, setIsRuleEditorOpen] = useState(false)
   const [draggedRule, setDraggedRule] = useState<string | null>(null)
+
+  // Rate configuration state
+  const [rateConfigs, setRateConfigs] = useState<RateConfig[]>([
+    { key: 'eu_zone_standard', label: 'EU Zone Standard Rate', visible: true, order: 1 },
+    { key: 'nordic_express_premium', label: 'Nordic Express Premium', visible: true, order: 2 },
+    { key: 'heavy_cargo_discount', label: 'Heavy Cargo Discount', visible: true, order: 3 },
+    { key: 'intercontinental_fixed', label: 'Intercontinental Fixed Rate', visible: true, order: 4 },
+    { key: 'distance_based_calculation', label: 'Distance-Based Calculation', visible: true, order: 5 },
+    { key: 'zone_based_regional', label: 'Zone-Based Regional', visible: true, order: 6 },
+  ])
+
+  // Drag and drop state for rate configs
+  const [draggedRateConfig, setDraggedRateConfig] = useState<string | null>(null)
 
   // Filter rules based on search
   const filteredRules = rules.filter(rule => 
@@ -287,11 +308,74 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
     }, 0)
   }
 
+  // Rate configuration handlers
+  const toggleRateConfigVisibility = (key: string) => {
+    setRateConfigs(prev => 
+      prev.map(config => 
+        config.key === key ? { ...config, visible: !config.visible } : config
+      )
+    )
+  }
+
+  const updateRateConfigLabel = (key: string, label: string) => {
+    setRateConfigs(prev => 
+      prev.map(config => 
+        config.key === key ? { ...config, label } : config
+      )
+    )
+  }
+
+  // Drag and drop handlers for rate configs
+  const handleRateConfigDragStart = (e: React.DragEvent, configKey: string) => {
+    setDraggedRateConfig(configKey)
+    e.dataTransfer.effectAllowed = "move"
+  }
+
+  const handleRateConfigDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }
+
+  const handleRateConfigDrop = (e: React.DragEvent, targetConfigKey: string) => {
+    e.preventDefault()
+    
+    if (!draggedRateConfig || draggedRateConfig === targetConfigKey) return
+
+    const draggedIndex = rateConfigs.findIndex(c => c.key === draggedRateConfig)
+    const targetIndex = rateConfigs.findIndex(c => c.key === targetConfigKey)
+    
+    const newConfigs = [...rateConfigs]
+    const [draggedItem] = newConfigs.splice(draggedIndex, 1)
+    newConfigs.splice(targetIndex, 0, draggedItem)
+    
+    // Update order values based on new positions
+    const updatedConfigs = newConfigs.map((config, index) => ({
+      ...config,
+      order: index + 1
+    }))
+    
+    setRateConfigs(updatedConfigs)
+    setDraggedRateConfig(null)
+  }
+
   return (
     <div className="space-y-4 pt-2">
-      {/* Configure/Execute Tabs */}
+      {/* Tabs */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
+          <Button
+            variant={activeTab === "setup" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("setup")}
+            className={
+              activeTab === "setup"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Set Up Rates
+          </Button>
           <Button
             variant={activeTab === "configure" ? "default" : "ghost"}
             size="sm"
@@ -302,7 +386,7 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
-            Configure Rules
+            Configure Rates
           </Button>
           <Button
             variant={activeTab === "execute" ? "default" : "ghost"}
@@ -314,73 +398,119 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
-            Execute Rules
+            Execute Rates
           </Button>
         </div>
       </div>
 
+      {/* Set Up Rates Tab */}
+      {activeTab === "setup" && (
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-black">Set Up Rates</CardTitle>
+            <p className="text-sm text-gray-600">
+              Configure rate fields and their display order
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Quick Actions */}
+              <div className="flex gap-2 mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRateConfigs(prev => 
+                    prev.map(config => ({ ...config, visible: true }))
+                  )}
+                >
+                  Show All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRateConfigs(prev => 
+                    prev.map(config => ({ ...config, visible: false }))
+                  )}
+                >
+                  Hide All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRateConfigs(prev => 
+                    prev.map((config, index) => ({ ...config, order: index + 1 }))
+                  )}
+                >
+                  Reset Order
+                </Button>
+              </div>
+
+              {/* Rate Configuration List */}
+              <div className="space-y-1">
+                {rateConfigs.map((config, index) => (
+                  <div 
+                    key={config.key} 
+                    draggable
+                    onDragStart={(e) => handleRateConfigDragStart(e, config.key)}
+                    onDragOver={handleRateConfigDragOver}
+                    onDrop={(e) => handleRateConfigDrop(e, config.key)}
+                    className={`flex items-center gap-1 p-1 border border-gray-200 rounded-lg transition-all cursor-pointer hover:bg-gray-50 ${
+                      draggedRateConfig === config.key ? 'opacity-50' : ''
+                    }`}
+                  >
+                    {/* Drag Handle */}
+                    <div className="cursor-grab hover:cursor-grabbing">
+                      <GripVertical className="h-5 w-5 text-gray-400" />
+                    </div>
+
+                    {/* Visibility Checkbox */}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`rate-config-${config.key}`}
+                        checked={config.visible}
+                        onCheckedChange={() => toggleRateConfigVisibility(config.key)}
+                      />
+                      <Label
+                        htmlFor={`rate-config-${config.key}`}
+                        className={`text-sm ${config.visible ? 'text-black' : 'text-gray-500'}`}
+                      >
+                        {config.visible ? 'Visible' : 'Hidden'}
+                      </Label>
+                    </div>
+
+                    {/* Field Label Input */}
+                    <div className="flex-1">
+                      <Input
+                        value={config.label}
+                        onChange={(e) => updateRateConfigLabel(config.key, e.target.value)}
+                        className="text-sm"
+                        placeholder="Field label"
+                      />
+                    </div>
+
+                    {/* Order Display */}
+                    <div className="text-sm text-gray-500 min-w-[60px]">
+                      Order: {config.order}
+                    </div>
+
+                    {/* Status Badge */}
+                    <Badge 
+                      variant={config.visible ? "default" : "secondary"}
+                      className="text-xs"
+                    >
+                      {config.visible ? "Shown" : "Hidden"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Configure Rules Tab */}
       {activeTab === "configure" && (
         <>
-          {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="bg-white border-gray-200">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <Calculator className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Rules</p>
-                    <p className="text-2xl font-bold text-black">{rules.length}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-gray-200">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <Play className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Active Rules</p>
-                    <p className="text-2xl font-bold text-green-600">{rules.filter(r => r.isActive).length}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-gray-200">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-50 rounded-lg">
-                    <Package className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Matches</p>
-                    <p className="text-2xl font-bold text-black">{rules.reduce((sum, r) => sum + r.matchCount, 0)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-gray-200">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <DollarSign className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Est. Revenue</p>
-                    <p className="text-2xl font-bold text-black">€{calculateTotalRevenue().toFixed(0)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Rules Management */}
           <Card className="bg-white border-gray-200 shadow-sm">
             <CardHeader>
@@ -407,23 +537,10 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
                   </Button>
                 </div>
               </div>
-              
-              {/* Search */}
-              <div className="flex gap-4 mt-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search rules by name, description, or tags..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
             </CardHeader>
 
             <CardContent>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {filteredRules.map((rule) => (
                   <div
                     key={rule.id}
@@ -432,7 +549,7 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, rule.id)}
                     className={cn(
-                      "flex items-center gap-4 p-4 border rounded-lg transition-all cursor-pointer hover:bg-gray-50",
+                      "flex items-center gap-4 p-1 border rounded-lg transition-all cursor-pointer hover:bg-gray-50",
                       rule.isActive ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
                       draggedRule === rule.id && "opacity-50"
                     )}
@@ -699,106 +816,114 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
       {activeTab === "execute" && (
         <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-black flex items-center gap-2">
-              <Play className="h-5 w-5" />
-              Execute Rate Assignment Rules
-            </CardTitle>
-            <p className="text-gray-600 text-sm">
-              Apply rate assignment rules to your cargo data and calculate pricing automatically.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Execution Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="font-medium text-green-800">Ready to Execute</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  {rules.filter(r => r.isActive).length} active rate rules for {data?.data?.length || 0} cargo records
-                </p>
-              </div>
-              
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Clock className="h-5 w-5 text-blue-600" />
-                  <span className="font-medium text-blue-800">Processing Time</span>
-                </div>
-                <p className="text-sm text-blue-700">
-                  ~1-2 minutes for rate calculation
-                </p>
-              </div>
-              
-              <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Calculator className="h-5 w-5 text-purple-600" />
-                  <span className="font-medium text-purple-800">Last Execution</span>
-                </div>
-                <p className="text-sm text-purple-700">
-                  Today at 11:30 AM
-                </p>
-              </div>
-
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <DollarSign className="h-5 w-5 text-green-600" />
-                  <span className="font-medium text-green-800">Est. Revenue</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  €{calculateTotalRevenue().toFixed(0)} from active rules
-                </p>
-              </div>
-            </div>
-
-            {/* Active Rules Preview */}
-            <div>
-              <h3 className="text-lg font-medium text-black mb-4">Rate Rules to Execute ({rules.filter(r => r.isActive).length})</h3>
-              <div className="space-y-2">
-                {rules.filter(r => r.isActive).map((rule, index) => (
-                  <div key={rule.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600 text-xs font-semibold">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium text-black">{rule.name}</p>
-                          {getRateTypeBadge(rule.actions.rateType)}
-                        </div>
-                        <p className="text-sm text-gray-600">{rule.description}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-black">
-                        {rule.actions.currency} {rule.actions.baseRate.toFixed(2)}
-                        {rule.actions.rateType === "per_kg" && "/kg"}
-                      </p>
-                      <p className="text-xs text-gray-500">Expected: ~{rule.matchCount} matches</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Execution Actions */}
-            <div className="flex items-center justify-between pt-4 border-t">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                <p className="text-sm text-gray-600">
-                  This will calculate and assign rates to all cargo data automatically
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Preview Rates
-                </Button>
-                <Button className="bg-black hover:bg-gray-800 text-white">
-                  <Play className="h-4 w-4 mr-2" />
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle className="text-black flex items-center gap-2">
+                  <Play className="h-5 w-5" />
                   Execute Rate Assignment
-                </Button>
+                </CardTitle>
+                <p className="text-sm text-gray-600">Rate assignment results for cargo data</p>
               </div>
+              <Button
+                className="bg-black text-white"
+                size="sm"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Execute Rates
+              </Button>
+            </div>
+            <div className="flex justify-end">
+              <div className="flex gap-4 text-sm text-gray-600">
+                <span>Total Records: <strong className="text-black">20</strong></span>
+                <span>Applied Rules: <strong className="text-black">{rules.filter(r => r.isActive).length}</strong></span>
+                <span>Est. Revenue: <strong className="text-black">€{calculateTotalRevenue().toFixed(0)}</strong></span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border border-gray-300">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Inb.Flight Date</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Outb.Flight Date</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Rec. ID</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Des. No.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Rec. Numb.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Orig. OE</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Dest. OE</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Inb. Flight No.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Outb. Flight No.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Mail Cat.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Mail Class</th>
+                    <th className="border border-gray-300 p-1 text-right text-black font-medium">Total kg</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Invoice</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium bg-yellow-200">Applied Rule</th>
+                    <th className="border border-gray-300 p-1 text-right text-black font-medium bg-yellow-200">Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 20 }, (_, index) => {
+                    const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM", "ESMADD", "NLAMS", "BEBRUB"]
+                    const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA", "USANC", "USHOU", "USDAL"]
+                    const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456", "BA789", "KL012", "IB345"]
+                    const mailCats = ["A", "B", "C", "D", "E"]
+                    const mailClasses = ["7C", "7D", "7E", "7F", "7G", "8A", "8B", "8C"]
+                    const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
+                    const appliedRules = [
+                      "EU Zone Standard Rate",
+                      "Nordic Express Premium",
+                      "Heavy Cargo Discount",
+                      "Intercontinental Fixed Rate",
+                      "Distance-Based Calculation",
+                      "Zone-Based Regional"
+                    ]
+
+                    const year = 2025
+                    const month = Math.floor(Math.random() * 12) + 1
+                    const day = Math.floor(Math.random() * 28) + 1
+                    const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+                    
+                    const inbDate = `${year} ${monthNames[month - 1]} ${day.toString().padStart(2, '0')}`
+                    const outbDate = `${year} ${monthNames[month - 1]} ${(day + 1).toString().padStart(2, '0')}`
+                    
+                    const origOE = origins[Math.floor(Math.random() * origins.length)]
+                    const destOE = destinations[Math.floor(Math.random() * destinations.length)]
+                    const mailCat = mailCats[Math.floor(Math.random() * mailCats.length)]
+                    const mailClass = mailClasses[Math.floor(Math.random() * mailClasses.length)]
+                    
+                    const desNo = (50700 + Math.floor(Math.random() * 100)).toString()
+                    const recNumb = (Math.floor(Math.random() * 999) + 1).toString().padStart(3, '0')
+                    const recId = `${origOE}${destOE}${mailCat}${mailClass}${desNo}${recNumb}${(70000 + Math.floor(Math.random() * 9999)).toString()}`
+
+                    return (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="border border-gray-300 p-1 text-gray-900">{inbDate}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{outbDate}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900 font-mono text-xs">{recId}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{desNo}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{recNumb}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{origOE}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{destOE}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{flightNos[Math.floor(Math.random() * flightNos.length)]}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{flightNos[Math.floor(Math.random() * flightNos.length)]}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{mailCat}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{mailClass}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900 text-right">{(Math.random() * 50 + 0.1).toFixed(1)}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)]}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900 text-xs bg-yellow-200">{appliedRules[Math.floor(Math.random() * appliedRules.length)]}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900 text-xs bg-yellow-200 text-right">€{(Math.random() * 15 + 2.5).toFixed(2)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="mt-2 text-center">
+              <p className="text-sm text-gray-500">
+                Rate assignment results showing applied rules and calculated rates for each cargo record
+              </p>
             </div>
           </CardContent>
         </Card>

@@ -5,7 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle, CheckCircle, RefreshCw, Download } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { AlertTriangle, CheckCircle, RefreshCw, Download, Settings, Eye, GripVertical } from "lucide-react"
 import { combineProcessedData } from "@/lib/file-processor"
 import { ExportModal } from "@/components/export-modal"
 import type { ProcessedData } from "@/types/cargo-data"
@@ -17,12 +20,43 @@ interface ReviewMergedExcelProps {
   onContinue?: () => void
 }
 
+interface ColumnConfig {
+  key: string
+  label: string
+  visible: boolean
+  width?: number
+  order: number
+}
+
 export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData, onContinue }: ReviewMergedExcelProps) {
   const [mergedData, setMergedData] = useState<ProcessedData | null>(null)
   const [mergeConflicts, setMergeConflicts] = useState<string[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [activeStep, setActiveStep] = useState<"preview" | "configure">("configure")
   const recordsPerPage = 20
+
+  // Column configuration state
+  const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([
+    { key: 'inbFlightDate', label: 'Inb.Flight Date', visible: true, order: 1 },
+    { key: 'outbFlightDate', label: 'Outb.Flight Date', visible: true, order: 2 },
+    { key: 'recId', label: 'Rec. ID', visible: true, order: 3 },
+    { key: 'desNo', label: 'Des. No.', visible: true, order: 4 },
+    { key: 'recNumb', label: 'Rec. Numb.', visible: true, order: 5 },
+    { key: 'origOE', label: 'Orig. OE', visible: true, order: 6 },
+    { key: 'destOE', label: 'Dest. OE', visible: true, order: 7 },
+    { key: 'inbFlightNo', label: 'Inb. Flight No.', visible: true, order: 8 },
+    { key: 'outbFlightNo', label: 'Outb. Flight No.', visible: true, order: 9 },
+    { key: 'mailCat', label: 'Mail Cat.', visible: true, order: 10 },
+    { key: 'mailClass', label: 'Mail Class', visible: true, order: 11 },
+    { key: 'totalKg', label: 'Total kg', visible: true, order: 12 },
+    { key: 'invoiceExtend', label: 'Invoice', visible: true, order: 13 },
+    { key: 'customer', label: 'Customer', visible: false, order: 14 },
+    { key: 'rate', label: 'Rate', visible: false, order: 15 },
+  ])
+
+  // Drag and drop state
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
 
   // Generate 1000 dummy data entries
   const generateDummyData = () => {
@@ -85,6 +119,14 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
 
   const sampleExcelData = useMemo(() => generateDummyData(), [])
   
+  // Get visible columns in order
+  const visibleColumns = useMemo(() => 
+    columnConfigs
+      .filter(config => config.visible)
+      .sort((a, b) => a.order - b.order),
+    [columnConfigs]
+  )
+  
   // Calculate pagination
   const totalPages = Math.ceil(sampleExcelData.length / recordsPerPage)
   const startIndex = (currentPage - 1) * recordsPerPage
@@ -94,6 +136,56 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   // Calculate summary statistics
   const totalWeight = sampleExcelData.reduce((sum, record) => sum + record.totalKg, 0)
   const avgWeight = totalWeight / sampleExcelData.length
+
+  // Column configuration handlers
+  const toggleColumnVisibility = (key: string) => {
+    setColumnConfigs(prev => 
+      prev.map(config => 
+        config.key === key ? { ...config, visible: !config.visible } : config
+      )
+    )
+  }
+
+  const updateColumnLabel = (key: string, label: string) => {
+    setColumnConfigs(prev => 
+      prev.map(config => 
+        config.key === key ? { ...config, label } : config
+      )
+    )
+  }
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, columnKey: string) => {
+    setDraggedColumn(columnKey)
+    e.dataTransfer.effectAllowed = "move"
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }
+
+  const handleDrop = (e: React.DragEvent, targetColumnKey: string) => {
+    e.preventDefault()
+    
+    if (!draggedColumn || draggedColumn === targetColumnKey) return
+
+    const draggedIndex = columnConfigs.findIndex(c => c.key === draggedColumn)
+    const targetIndex = columnConfigs.findIndex(c => c.key === targetColumnKey)
+    
+    const newConfigs = [...columnConfigs]
+    const [draggedItem] = newConfigs.splice(draggedIndex, 1)
+    newConfigs.splice(targetIndex, 0, draggedItem)
+    
+    // Update order values based on new positions
+    const updatedConfigs = newConfigs.map((config, index) => ({
+      ...config,
+      order: index + 1
+    }))
+    
+    setColumnConfigs(updatedConfigs)
+    setDraggedColumn(null)
+  }
 
   const handleExportExcel = () => {
     // Demo function - just shows alert
@@ -155,77 +247,223 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
 
   return (
     <div className="space-y-4 pt-2">
+      {/* Header Navigation */}
+      <div className="flex justify-start">
+        <div className="inline-flex bg-gray-100 rounded-lg p-1">
+          <Button
+            variant={activeStep === "configure" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveStep("configure")}
+            className={
+              activeStep === "configure"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Configure Columns
+          </Button>
+          <Button
+            variant={activeStep === "preview" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveStep("preview")}
+            className={
+              activeStep === "preview"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Excel Preview
+          </Button>
+        </div>
+      </div>
+
       <div className="space-y-2">
-        {/* Always show Excel Data Preview section with sample data */}
-        <Card className="bg-white border-gray-200 shadow-sm">
-          <CardHeader>
-            <div className="flex justify-between items-start">
-              <div>
-                <CardTitle className="text-black">Excel Data Preview</CardTitle>
-                <p className="text-sm text-gray-600">Sample of how the exported Excel file will look</p>
-              </div>
-              <Button
-                onClick={handleExportExcel}
-                className="bg-black text-white"
-                size="sm"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export Data
-              </Button>
-            </div>
-            <div className="flex justify-end">
-              <div className="flex gap-4 text-sm text-gray-600">
-                <span>Total Records: <strong className="text-black">{sampleExcelData.length.toLocaleString()}</strong></span>
-                <span>Total Weight: <strong className="text-black">{totalWeight.toFixed(1)} kg</strong></span>
-                <span>Avg Weight: <strong className="text-black">{avgWeight.toFixed(1)} kg</strong></span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border border-gray-300">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Inb.Flight Date</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Outb.Flight Date</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Rec. ID</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Des. No.</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Rec. Numb.</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Orig. OE</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Dest. OE</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Inb. Flight No.</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Outb. Flight No.</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Mail Cat.</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Mail Class</th>
-                    <th className="border border-gray-300 p-2 text-right text-black font-medium">Total kg</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium">Invoice</th>
-                                          <th className="border border-gray-300 p-2 text-left text-black font-medium bg-yellow-200">Customer</th>
-                      <th className="border border-gray-300 p-2 text-left text-black font-medium bg-yellow-200">Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentRecords.map((record, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.inbFlightDate}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.outbFlightDate}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900 font-mono text-xs">{record.recId}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.desNo}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.recNumb}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.origOE}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.destOE}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.inbFlightNo}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.outbFlightNo}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.mailCat}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{record.mailClass}</td>
-                      <td className="border border-gray-300 p-2 text-right text-gray-900">{record.totalKg}</td>
-                                              <td className="border border-gray-300 p-2 text-gray-900">{record.invoiceExtend}</td>
-                        <td className="border border-gray-300 p-2 text-gray-900 text-xs bg-yellow-200"></td>
-                        <td className="border border-gray-300 p-2 text-gray-900 text-xs bg-yellow-200"></td>
-                    </tr>
+        {/* Configure Columns section */}
+        {activeStep === "configure" && (
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardContent>
+              <div className="space-y-2">
+              <CardTitle className="text-black">Configure Columns</CardTitle>
+              <p className="text-sm text-gray-600">
+                Customize which columns to display and their order in the Excel export
+              </p>
+                {/* Quick Actions */}
+                <div className="flex gap-2 mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setColumnConfigs(prev => 
+                      prev.map(config => ({ ...config, visible: true }))
+                    )}
+                  >
+                    Show All
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setColumnConfigs(prev => 
+                      prev.map(config => ({ ...config, visible: false }))
+                    )}
+                  >
+                    Hide All
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setColumnConfigs(prev => 
+                      prev.map((config, index) => ({ ...config, order: index + 1 }))
+                    )}
+                  >
+                    Reset Order
+                  </Button>
+                </div>
+
+                {/* Column Configuration List */}
+                <div className="space-y-1">
+                  {columnConfigs.map((config, index) => (
+                    <div 
+                      key={config.key} 
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, config.key)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, config.key)}
+                      className={`flex items-center gap-4 p-1 border border-gray-200 rounded-lg transition-all cursor-pointer hover:bg-gray-50 ${
+                        draggedColumn === config.key ? 'opacity-50' : ''
+                      }`}
+                    >
+                      {/* Drag Handle */}
+                      <div className="cursor-grab hover:cursor-grabbing">
+                        <GripVertical className="h-5 w-5 text-gray-400" />
+                      </div>
+
+                      {/* Visibility Checkbox */}
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`column-${config.key}`}
+                          checked={config.visible}
+                          onCheckedChange={() => toggleColumnVisibility(config.key)}
+                        />
+                        <Label
+                          htmlFor={`column-${config.key}`}
+                          className={`text-sm ${config.visible ? 'text-black' : 'text-gray-500'}`}
+                        >
+                          {config.visible ? 'Visible' : 'Hidden'}
+                        </Label>
+                      </div>
+
+                      {/* Column Label Input */}
+                      <div className="flex-1">
+                        <Input
+                          value={config.label}
+                          onChange={(e) => updateColumnLabel(config.key, e.target.value)}
+                          className="text-sm"
+                          placeholder="Column label"
+                        />
+                      </div>
+
+                      {/* Order Display */}
+                      <div className="text-sm text-gray-500 min-w-[60px]">
+                        Order: {config.order}
+                      </div>
+
+                      {/* Column Status Badge */}
+                      <Badge 
+                        variant={config.visible ? "default" : "secondary"}
+                        className="text-xs"
+                      >
+                        {config.visible ? "Shown" : "Hidden"}
+                      </Badge>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
+
+                {/* Preview Summary */}
+                <div className="mt-2 p-2 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-medium text-black mb-2">Export Preview</h4>
+                  <p className="text-sm text-gray-600 mb-2">
+                    {visibleColumns.length} of {columnConfigs.length} columns will be exported
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {visibleColumns.map((column, index) => (
+                      <Badge key={column.key} variant="outline" className="text-xs">
+                        {index + 1}. {column.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Excel Data Preview section */}
+        {activeStep === "preview" && (
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-black">Excel Data Preview</CardTitle>
+                  <p className="text-sm text-gray-600">Sample of how the exported Excel file will look</p>
+                </div>
+                <Button
+                  onClick={handleExportExcel}
+                  className="bg-black text-white"
+                  size="sm"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Data
+                </Button>
+              </div>
+              <div className="flex justify-end">
+                <div className="flex gap-4 text-sm text-gray-600">
+                  <span>Total Records: <strong className="text-black">{sampleExcelData.length.toLocaleString()}</strong></span>
+                  <span>Total Weight: <strong className="text-black">{totalWeight.toFixed(1)} kg</strong></span>
+                  <span>Avg Weight: <strong className="text-black">{avgWeight.toFixed(1)} kg</strong></span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      {visibleColumns.map((column) => (
+                        <th 
+                          key={column.key}
+                          className={`border border-gray-300 p-1 text-left text-black font-medium ${
+                            column.key === 'customer' || column.key === 'rate' ? 'bg-yellow-200' : ''
+                          } ${column.key === 'totalKg' ? 'text-right' : ''}`}
+                        >
+                          {column.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentRecords.map((record, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        {visibleColumns.map((column) => (
+                          <td 
+                            key={column.key}
+                            className={`border border-gray-300 p-1 text-gray-900 ${
+                              column.key === 'customer' || column.key === 'rate' ? 'bg-yellow-200 text-xs' : ''
+                            } ${column.key === 'recId' ? 'font-mono text-xs' : ''} ${
+                              column.key === 'totalKg' ? 'text-right' : ''
+                            }`}
+                          >
+                            {column.key === 'customer' || column.key === 'rate' 
+                              ? '' 
+                              : (record as any)[column.key] || ''
+                            }
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             
             {/* Pagination Controls */}
             <div className="mt-4 flex items-center justify-between">
@@ -282,13 +520,14 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
               </div>
             </div>
             
-            <div className="mt-2 text-center">
-              <p className="text-sm text-gray-500">
-                This preview shows how your data will appear in the exported Excel file
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="mt-2 text-center">
+                <p className="text-sm text-gray-500">
+                  This preview shows how your data will appear in the exported Excel file
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex justify-end">
           <Button 

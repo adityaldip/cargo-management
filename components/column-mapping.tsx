@@ -158,7 +158,7 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
               )}
             </div>
             <Button size="sm" className="bg-black hover:bg-gray-800 text-white" onClick={handleContinue}>
-              Continue to Preview
+              Continue to Next Step
             </Button>
           </div>
         </CardContent>

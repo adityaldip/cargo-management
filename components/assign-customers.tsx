@@ -304,6 +304,7 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
   const [isRuleEditorOpen, setIsRuleEditorOpen] = useState(false)
   const [isCustomerEditorOpen, setIsCustomerEditorOpen] = useState(false)
   const [draggedRule, setDraggedRule] = useState<string | null>(null)
+  const [expandedRule, setExpandedRule] = useState<string | null>(null)
 
   // Filter rules based on search
   const filteredRules = rules.filter(rule => 
@@ -327,8 +328,11 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
   }
 
   const handleEditRule = (rule: CustomerRule) => {
-    setSelectedRule(rule)
-    setIsRuleEditorOpen(true)
+    if (expandedRule === rule.id) {
+      setExpandedRule(null)
+    } else {
+      setExpandedRule(rule.id)
+    }
   }
 
   const handleToggleCustomer = (customerId: string) => {
@@ -411,7 +415,7 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
   }
 
   return (
-    <div className="space-y-4  pt-2">
+    <div className="space-y-4 pt-2">
       {/* Configure/Execute Tabs - Always Visible */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
@@ -470,69 +474,10 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
       {/* Configure Customers Tab */}
       {activeTab === "customers" && (
         <>
-          {/* Customer Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <Card className="bg-white border-gray-200">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-blue-50 rounded">
-                    <UserCheck className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600">Total Customers</p>
-                    <p className="text-xl font-bold text-black">{customers.length}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-gray-200">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-green-50 rounded">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600">Active Customers</p>
-                    <p className="text-xl font-bold text-green-600">{customers.filter(c => c.isActive).length}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-gray-200">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-purple-50 rounded">
-                    <Package className="h-4 w-4 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600">Total Shipments</p>
-                    <p className="text-xl font-bold text-black">{customers.reduce((sum, c) => sum + c.totalShipments, 0)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-gray-200">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-red-50 rounded">
-                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600">High Priority</p>
-                    <p className="text-xl font-bold text-black">{customers.filter(c => c.priority === 'high').length}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Customer Management */}
           <Card className="bg-white border-gray-200 shadow-sm">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+            <CardContent>
+            <div className="flex items-center justify-between pb-2">
                 <CardTitle className="text-black flex items-center gap-2">
                   <UserCheck className="h-5 w-5" />
                   Customer Management
@@ -551,44 +496,26 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
                   </Button>
                 </div>
               </div>
-              
-              {/* Search */}
-              <div className="flex gap-4 mt-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search customers by name, code, email, or contact person..."
-                    value={customerSearchTerm}
-                    onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Contact</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Shipments</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Actions</TableHead>
+                    <TableRow className="h-8">
+                      <TableHead className="h-8 py-1 text-xs">Status</TableHead>
+                      <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
+                      <TableHead className="h-8 py-1 text-xs">Code</TableHead>
+                      <TableHead className="h-8 py-1 text-xs">Shipments</TableHead>
+                      <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredCustomers.map((customer) => (
-                      <TableRow key={customer.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                      <TableRow key={customer.id} className="h-10">
+                        <TableCell className="py-1 px-2">
+                          <div className="flex items-center gap-1">
                             <Switch
                               checked={customer.isActive}
                               onCheckedChange={() => handleToggleCustomer(customer.id)}
+                              className="scale-75"
                             />
                             <span className={cn(
                               "text-xs font-medium",
@@ -598,51 +525,37 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-2 px-3">
                           <div>
-                            <p className="font-medium text-black">{customer.name}</p>
-                            <p className="text-sm text-gray-500">{customer.address}</p>
+                            <p className="font-medium text-black text-sm leading-tight">{customer.name}</p>
+                            <p className="text-xs text-gray-500 leading-tight">{customer.address}</p>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="font-mono text-xs">
+                        <TableCell className="py-2 px-3">
+                          <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
                             {customer.code}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="text-sm text-black">{customer.contactPerson}</p>
-                            <p className="text-xs text-gray-500">{customer.email}</p>
-                            <p className="text-xs text-gray-500">{customer.phone}</p>
-                          </div>
+                        <TableCell className="py-2 px-3">
+                          <span className="font-medium text-sm">{customer.totalShipments}</span>
                         </TableCell>
-                        <TableCell>
-                          {getPriorityBadge(customer.priority)}
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-medium">{customer.totalShipments}</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-gray-500">
-                            {new Date(customer.createdDate).toLocaleDateString()}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
+                        <TableCell className="py-2 px-3">
+                          <div className="flex gap-0">
                             <Button 
                               variant="ghost" 
                               size="sm" 
                               onClick={() => handleEditCustomer(customer)}
+                              className="h-6 w-6 p-0"
                             >
-                              <Edit className="h-4 w-4" />
+                              <Edit className="h-3 w-3" />
                             </Button>
                             <Button 
                               variant="ghost" 
                               size="sm"
                               onClick={() => handleDeleteCustomer(customer.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
                         </TableCell>
@@ -666,65 +579,6 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
       {/* Configure Rules Tab */}
       {activeTab === "configure" && (
         <>
-          {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Card className="bg-white border-gray-200">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-blue-50 rounded">
-                <UserCheck className="h-4 w-4 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Total Rules</p>
-                <p className="text-xl font-bold text-black">{rules.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-gray-200">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-green-50 rounded">
-                <Play className="h-4 w-4 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Active Rules</p>
-                <p className="text-xl font-bold text-green-600">{rules.filter(r => r.isActive).length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-gray-200">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-purple-50 rounded">
-                <CheckCircle className="h-4 w-4 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Total Matches</p>
-                <p className="text-xl font-bold text-black">{rules.reduce((sum, r) => sum + r.matchCount, 0)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-gray-200">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-orange-50 rounded">
-                <Settings className="h-4 w-4 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Avg Match Rate</p>
-                <p className="text-xl font-bold text-black">{Math.round(rules.reduce((sum, r) => sum + r.matchCount, 0) / rules.length)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Rules Management */}
       <Card className="bg-white border-gray-200 shadow-sm">
         <CardHeader>
@@ -751,127 +605,176 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
               </Button>
             </div>
           </div>
-          
-          {/* Search */}
-          <div className="flex gap-4 mt-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search rules by name, description, or customer..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
         </CardHeader>
 
         <CardContent>
           <div className="space-y-2">
             {filteredRules.map((rule) => (
-              <div
-                key={rule.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, rule.id)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, rule.id)}
-                className={cn(
-                  "flex items-center gap-4 p-4 border rounded-lg transition-all cursor-pointer hover:bg-gray-50",
-                  rule.isActive ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
-                  draggedRule === rule.id && "opacity-50"
-                )}
-                onClick={() => handleEditRule(rule)}
-              >
-                {/* Drag Handle */}
-                <div className="cursor-grab hover:cursor-grabbing">
-                  <GripVertical className="h-5 w-5 text-gray-400" />
-                </div>
-
-                {/* Priority Badge */}
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-sm font-semibold">
-                  {rule.priority}
-                </div>
-
-                {/* Toggle Switch */}
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={rule.isActive}
-                    onCheckedChange={() => handleToggleRule(rule.id)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-                
-                {/* Rule Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-medium text-black truncate">{rule.name}</h3>
-                    {/* {getStatusIcon(rule)} */}
-                    {/* {getPriorityBadge(rule.actions.priority)} */}
-                  </div>
-                  {/* <p className="text-sm text-gray-600 truncate">{rule.description}</p> */}
-                  
-                  {/* Conditions Preview */}
-                  {/* <div className="flex items-center gap-2 mt-2">
-                    {rule.conditions.slice(0, 2).map((condition, idx) => (
-                      <Badge key={idx} variant="outline" className="text-xs flex items-center gap-1">
-                        {getConditionIcon(condition.field)}
-                        {condition.field}: {condition.value}
-                      </Badge>
-                    ))}
-                    {rule.conditions.length > 2 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{rule.conditions.length - 2} more
-                      </Badge>
-                    )}
-                  </div> */}
-                </div>
-
-                {/* Assignment Info */}
-                <div className="text-right">
-                  {/* <p className="text-sm font-medium text-black">{rule.actions.assignTo}</p>
-                  <p className="text-xs text-gray-500">{rule.matchCount} matches</p> */}
-                  {rule.lastRun && (
-                    <p className="text-xs text-gray-400">
-                      Last update: {new Date(rule.lastRun).toLocaleDateString()}
-                    </p>
+              <div key={rule.id} className="border rounded-lg">
+                <div
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, rule.id)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, rule.id)}
+                  className={cn(
+                    "flex items-center gap-4 p-3 transition-all cursor-pointer hover:bg-gray-50",
+                    rule.isActive ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
+                    draggedRule === rule.id && "opacity-50",
+                    expandedRule === rule.id && "bg-gray-50"
                   )}
+                  onClick={() => handleEditRule(rule)}
+                >
+                  {/* Drag Handle */}
+                  <div className="cursor-grab hover:cursor-grabbing">
+                    <GripVertical className="h-4 w-4 text-gray-400" />
+                  </div>
+
+                  {/* Priority Badge */}
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
+                    {rule.priority}
+                  </div>
+
+                  {/* Toggle Switch */}
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={rule.isActive}
+                      onCheckedChange={() => handleToggleRule(rule.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="scale-75"
+                    />
+                  </div>
+                  
+                  {/* Rule Info */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-black text-sm">{rule.name}</h3>
+                  </div>
+
+                  {/* Assignment Info */}
+                  <div className="text-right">
+                    {rule.lastRun && (
+                      <p className="text-xs text-gray-400">
+                        Last update: {new Date(rule.lastRun).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleEditRule(rule)
+                      }}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        // Copy rule logic
+                      }}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        // Delete rule logic
+                      }}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
 
+                {/* Expanded Edit Section */}
+                {expandedRule === rule.id && (
+                  <div className="border-t bg-gray-50 p-4">
+                    <div className="space-y-4">
+                      {/* Conditions Section */}
+                      <div className="flex items-end gap-4">
+                        <div className="flex-1">
+                          <Label className="text-xs font-medium text-gray-700">Where</Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Select defaultValue={rule.conditions[0]?.field || "mail_category"}>
+                              <SelectTrigger className="h-8 text-xs w-80">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="mail_category">Mail Category</SelectItem>
+                                <SelectItem value="route">Orig. OE</SelectItem>
+                                <SelectItem value="weight">Weight (kg)</SelectItem>
+                                <SelectItem value="customer">Customer</SelectItem>
+                                <SelectItem value="flight_number">Flight Number</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Select defaultValue={rule.conditions[0]?.operator || "equals"}>
+                              <SelectTrigger className="h-8 text-xs w-16">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="equals">is</SelectItem>
+                                <SelectItem value="contains">contains</SelectItem>
+                                <SelectItem value="greater_than">&gt;</SelectItem>
+                                <SelectItem value="less_than">&lt;</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input 
+                              defaultValue={rule.conditions[0]?.value || "C"}
+                              className="h-8 text-xs w-48"
+                              placeholder="Value"
+                            />
+                          </div>
+                        </div>
 
+                        <div className="w-64">
+                          <Label className="text-xs font-medium text-gray-700">Customer</Label>
+                          <Select defaultValue="">
+                            <SelectTrigger className="h-8 text-xs mt-1">
+                              <SelectValue placeholder="Select customer..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="premium-express">Premium Express Ltd</SelectItem>
+                              <SelectItem value="nordic-post">Nordic Post AS</SelectItem>
+                              <SelectItem value="baltic-express">Baltic Express Network</SelectItem>
+                              <SelectItem value="cargo-masters">Cargo Masters International</SelectItem>
+                              <SelectItem value="general-mail">General Mail Services</SelectItem>
+                              <SelectItem value="euro-logistics">Euro Logistics GmbH</SelectItem>
+                              <SelectItem value="air-freight">Air Freight Solutions</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
 
-                {/* Actions */}
-                <div className="flex gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleEditRule(rule)
-                    }}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      // Copy rule logic
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      // Delete rule logic
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                      {/* Action Buttons */}
+                      <div className="flex justify-end gap-2 pt-2 border-t">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setExpandedRule(null)}
+                          className="h-7 text-xs"
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          size="sm"
+                          className="bg-black hover:bg-gray-800 text-white h-7 text-xs"
+                        >
+                          Save Changes
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1132,93 +1035,113 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
       {activeTab === "execute" && (
         <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-black flex items-center gap-2">
-              <Play className="h-5 w-5" />
-              Execute Automation Rules
-            </CardTitle>
-            <p className="text-gray-600 text-sm">
-              Run automation rules against your cargo data to automatically assign teams and process shipments.
-            </p>
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle className="text-black">Cargo Data Preview</CardTitle>
+                <p className="text-sm text-gray-600">Preview of cargo data that will be processed by automation rules</p>
+              </div>
+              <Button 
+                className="bg-black hover:bg-gray-800 text-white"
+                onClick={() => setCurrentView("results")}
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Execute All Rules
+              </Button>
+            </div>
+            <div className="flex justify-end">
+              <div className="flex gap-4 text-sm text-gray-600">
+                <span>Total Records: <strong className="text-black">1,000</strong></span>
+                <span>Total Weight: <strong className="text-black">25,432.5 kg</strong></span>
+                <span>Avg Weight: <strong className="text-black">25.4 kg</strong></span>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Execution Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="font-medium text-green-800">Ready to Execute</span>
-                </div>
-                <p className="text-sm text-green-700">
-                  {rules.filter(r => r.isActive).length} active rules will be applied to {data?.data?.length || 0} cargo records
-                </p>
-              </div>
-              
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Clock className="h-5 w-5 text-blue-600" />
-                  <span className="font-medium text-blue-800">Estimated Time</span>
-                </div>
-                <p className="text-sm text-blue-700">
-                  ~2-3 minutes for full processing
-                </p>
-              </div>
-              
-              <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Settings className="h-5 w-5 text-purple-600" />
-                  <span className="font-medium text-purple-800">Last Execution</span>
-                </div>
-                <p className="text-sm text-purple-700">
-                  Today at 12:00 PM
-                </p>
-              </div>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border border-gray-300">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Inb.Flight Date</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Outb.Flight Date</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Rec. ID</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Des. No.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Rec. Numb.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Orig. OE</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Dest. OE</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Inb. Flight No.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Outb. Flight No.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Mail Cat.</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Mail Class</th>
+                    <th className="border border-gray-300 p-1 text-right text-black font-medium">Total kg</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Invoice</th>
+                    <th className="border border-gray-300 p-2 text-left text-black font-medium bg-yellow-200">Customer</th>
+                    <th className="border border-gray-300 p-1 text-left text-black font-medium bg-yellow-200">Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 20 }, (_, index) => {
+                    const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM", "ESMADD", "NLAMS", "BEBRUB"]
+                    const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA", "USANC", "USHOU", "USDAL"]
+                    const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456", "BA789", "KL012", "IB345"]
+                    const mailCats = ["A", "B", "C", "D", "E"]
+                    const mailClasses = ["7C", "7D", "7E", "7F", "7G", "8A", "8B", "8C"]
+                    const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
+                    
+                    const year = 2025
+                    const month = Math.floor(Math.random() * 12) + 1
+                    const day = Math.floor(Math.random() * 28) + 1
+                    const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+                    
+                    const inbDate = `${year} ${monthNames[month - 1]} ${day.toString().padStart(2, '0')}`
+                    const outbDate = `${year} ${monthNames[month - 1]} ${(day + 1).toString().padStart(2, '0')}`
+                    
+                    const origOE = origins[Math.floor(Math.random() * origins.length)]
+                    const destOE = destinations[Math.floor(Math.random() * destinations.length)]
+                    const mailCat = mailCats[Math.floor(Math.random() * mailCats.length)]
+                    const mailClass = mailClasses[Math.floor(Math.random() * mailClasses.length)]
+                    
+                    const desNo = (50700 + Math.floor(Math.random() * 100)).toString()
+                    const recNumb = (Math.floor(Math.random() * 999) + 1).toString().padStart(3, '0')
+                    const recId = `${origOE}${destOE}${mailCat}${mailClass}${desNo}${recNumb}${(70000 + Math.floor(Math.random() * 9999)).toString()}`
+                    
+                    const customers = [
+                      "POST DANMARK A/S / QDKCPHA",
+                      "DIRECT LINK WORLWIDE INC. / QDLW", 
+                      "POSTNORD SVERIGE AB / QSTO",
+                      "Premium Express Ltd",
+                      "Nordic Post AS",
+                      "Baltic Express Network",
+                      "Cargo Masters International"
+                    ]
+                    
+                    return (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="border border-gray-300 p-1 text-gray-900">{inbDate}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{outbDate}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900 font-mono text-xs">{recId}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{desNo}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{recNumb}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{origOE}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{destOE}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{flightNos[Math.floor(Math.random() * flightNos.length)]}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{flightNos[Math.floor(Math.random() * flightNos.length)]}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{mailCat}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{mailClass}</td>
+                        <td className="border border-gray-300 p-1 text-right text-gray-900">{(Math.random() * 50 + 0.1).toFixed(1)}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900">{invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)]}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900 text-xs bg-yellow-200">{customers[Math.floor(Math.random() * customers.length)]}</td>
+                        <td className="border border-gray-300 p-1 text-gray-900 text-xs bg-yellow-200">{(Math.random() * 15 + 2.5).toFixed(2)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-
-            {/* Active Rules Preview */}
-            <div>
-              <h3 className="text-lg font-medium text-black mb-4">Rules to Execute ({rules.filter(r => r.isActive).length})</h3>
-              <div className="space-y-2">
-                {rules.filter(r => r.isActive).map((rule, index) => (
-                  <div key={rule.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600 text-xs font-semibold">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <p className="font-medium text-black">{rule.name}</p>
-                        <p className="text-sm text-gray-600">{rule.description}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-black">{rule.actions.assignTo}</p>
-                      <p className="text-xs text-gray-500">Expected: ~{rule.matchCount} matches</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Execution Actions */}
-            <div className="flex items-center justify-between pt-4 border-t">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                <p className="text-sm text-gray-600">
-                  This will process all cargo data and assign teams automatically
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Preview Results
-                </Button>
-                <Button 
-                  className="bg-black hover:bg-gray-800 text-white"
-                  onClick={() => setCurrentView("results")}
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Execute All Rules
-                </Button>
-              </div>
+            
+            <div className="mt-2 text-center">
+              <p className="text-sm text-gray-500">
+                This data will be processed by the active automation rules to assign customers and rates
+              </p>
             </div>
           </CardContent>
         </Card>

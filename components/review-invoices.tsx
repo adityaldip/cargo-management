@@ -286,65 +286,6 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
 
   return (
     <div className="space-y-4 pt-2">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-white border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <Receipt className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Invoices</p>
-                <p className="text-2xl font-bold text-black">{filteredInvoices.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-50 rounded-lg">
-                <Euro className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Amount</p>
-                <p className="text-2xl font-bold text-black">€{totalAmount.toFixed(2)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-50 rounded-lg">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Paid</p>
-                <p className="text-2xl font-bold text-green-600">€{paidAmount.toFixed(2)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-50 rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Overdue</p>
-                <p className="text-2xl font-bold text-red-600">€{overdueAmount.toFixed(2)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Invoices Table */}
       <Card className="bg-white border-gray-200 shadow-sm">
         <CardHeader>
@@ -373,10 +314,10 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
                   </Button>
                 </>
               )}
-              <Button className="bg-black hover:bg-gray-800 text-white">
+              {/* <Button className="bg-black hover:bg-gray-800 text-white">
                 <Receipt className="h-4 w-4 mr-2" />
                 Generate New Invoice
-              </Button>
+              </Button> */}
             </div>
           </div>
           
@@ -504,73 +445,6 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
             <div className="text-center py-8">
               <Receipt className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <p className="text-gray-500">No invoices found matching your criteria</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Customer Performance Overview */}
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-black flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Customer Performance Overview
-            </CardTitle>
-            <Select value={sortBy} onValueChange={(value: "revenue" | "weight" | "parcels") => setSortBy(value)}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="revenue">Sort by Revenue</SelectItem>
-                <SelectItem value="weight">Sort by Weight</SelectItem>
-                <SelectItem value="parcels">Sort by Parcels</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="text-sm text-gray-600">
-            Showing {customerAnalysis.length} customers sorted by {sortBy}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {customerAnalysis.slice(0, 10).map((customer, index) => (
-              <div
-                key={customer.customer}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <Badge
-                    variant="secondary"
-                    className="bg-black text-white w-8 h-8 rounded-full flex items-center justify-center font-bold"
-                  >
-                    {index + 1}
-                  </Badge>
-                  <div>
-                    <div className="text-black font-medium">{customer.customer}</div>
-                    <div className="text-gray-600 text-sm flex items-center gap-4">
-                      <span className="flex items-center gap-1">
-                        <Package className="h-3 w-3" />
-                        {customer.parcels} parcels
-                      </span>
-                      <span>{customer.totalKg.toFixed(1)} kg</span>
-                      <span>{customer.routes.size} routes</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-black font-bold text-lg">€{customer.totalEur.toFixed(2)}</div>
-                  <div className="text-gray-600 text-sm">
-                    EU: €{customer.euRevenue.toFixed(0)} | Non-EU: €{customer.nonEuRevenue.toFixed(0)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {customerAnalysis.length > 10 && (
-            <div className="text-center py-4 text-gray-500 text-sm">
-              Showing 10 of {customerAnalysis.length} customers
             </div>
           )}
         </CardContent>

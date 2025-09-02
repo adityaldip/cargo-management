@@ -139,7 +139,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   const [showColumnMapping, setShowColumnMapping] = useState(false)
   const [excelColumns, setExcelColumns] = useState<string[]>([])
   const [sampleData, setSampleData] = useState<Record<string, string[]>>({})
-  const [activeStep, setActiveStep] = useState<"upload" | "map" | "review">("upload")
+  const [activeStep, setActiveStep] = useState<"upload" | "map">("upload")
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -260,8 +260,8 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
 
   const handleMappingComplete = (mappings: any[]) => {
     setShowColumnMapping(false)
-    setActiveStep("review")
     onDataProcessed(processedData)
+    onContinue?.()
   }
 
   const removeFile = () => {
@@ -316,25 +316,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
             <Settings className="h-4 w-4 mr-2" />
             Map Headers
           </Button>
-          <Button
-            variant={activeStep === "review" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => {
-              if (processedData) {
-                setActiveStep("review")
-                setShowColumnMapping(false)
-              }
-            }}
-            disabled={!processedData}
-            className={
-              activeStep === "review"
-                ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
-            }
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            Review File
-          </Button>
+
         </div>
       </div>
 
@@ -403,68 +385,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         />
       )}
 
-      {/* Review Step */}
-      {activeStep === "review" && processedData && (
-        <Card className="bg-white border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-black flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              Data Verification Complete
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Summary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Total Records</p>
-                <p className="text-2xl font-bold text-black">{processedData.summary.totalRecords}</p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Total Weight</p>
-                <p className="text-2xl font-bold text-black">{processedData.summary.totalKg.toFixed(2)} kg</p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Missing Fields</p>
-                <p className="text-2xl font-bold text-red-600">{processedData.missingFields.length}</p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Total Value</p>
-                <p className="text-2xl font-bold text-black">€{processedData.summary.total.toFixed(2)}</p>
-              </div>
-            </div>
 
-            {/* Warnings and Missing Fields */}
-            {(processedData.warnings.length > 0 || processedData.missingFields.length > 0) && (
-              <div className="space-y-3">
-                {processedData.warnings.map((warning, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded"
-                  >
-                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                    <p className="text-sm text-yellow-800">{warning}</p>
-                  </div>
-                ))}
-                {processedData.missingFields.map((field, index) => (
-                  <div key={index} className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded">
-                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                    <p className="text-sm text-red-800">{field}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex justify-end">
-              <Button 
-                className="bg-black hover:bg-gray-800 text-white"
-                onClick={onContinue}
-              >
-                Continue to Next Step
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
