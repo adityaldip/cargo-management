@@ -72,93 +72,66 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        {/* <h2 className="text-3xl font-bold text-black mb-2">Map Your Columns</h2>
-        <p className="text-gray-600">Map your Excel columns to the final export format</p> */}
-      </div>
-
-      {/* Progress Header */}
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-black flex items-center justify-between">
-            <span>Column Mapping Progress</span>
-            <span className="text-sm font-normal text-gray-600">
-              {getMappedCount()} / {getTotalCount()} columns mapped
-            </span>
-          </CardTitle>
-        </CardHeader>
-      </Card>
-
+    <div className="space-y-4">
       {/* Column Mapping Interface */}
       <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <div className="grid grid-cols-3 gap-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-black text-lg">Column Mapping</CardTitle>
+          <div className="grid grid-cols-3 gap-4 mt-3">
             <div className="text-center">
-              <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium mb-2">
+              <div className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">
                 Excel Column
               </div>
-              <p className="text-xs text-gray-500">Column headers from raw Excel file</p>
             </div>
             <div className="text-center">
-              <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium mb-2">Mapped</div>
-              <p className="text-xs text-gray-500">
-                {getMappedCount()} / {getTotalCount()} mapped
-              </p>
+              <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                {getMappedCount()}/{getTotalCount()}
+              </div>
             </div>
             <div className="text-center">
-              <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium mb-2">
+              <div className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
                 Final Export Column
               </div>
-              <p className="text-xs text-gray-500">Column headers of final export file</p>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="pt-0">
+          <div className="space-y-2">
             {mappings.map((mapping, index) => (
               <div
                 key={index}
-                className="grid grid-cols-3 gap-6 items-center py-4 border-b border-gray-100 last:border-b-0"
+                className="grid grid-cols-3 gap-4 items-center py-2 border-b border-gray-100 last:border-b-0"
               >
                 {/* Excel Column */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gray-100 rounded text-xs flex items-center justify-center text-gray-600">
-                      {index + 1}
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 bg-gray-100 rounded text-xs flex items-center justify-center text-gray-600 flex-shrink-0">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-black text-sm truncate">{mapping.excelColumn}</div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {mapping.sampleData[0] && mapping.sampleData[0].substring(0, 20)}
+                      {mapping.sampleData[0] && mapping.sampleData[0].length > 20 && '...'}
                     </div>
-                    <span className="font-medium text-black">{mapping.excelColumn}</span>
-                  </div>
-                  <div className="text-xs text-gray-500 ml-8">
-                    {mapping.sampleData.slice(0, 2).map((sample, i) => (
-                      <div key={i} className="truncate">
-                        {sample}
-                      </div>
-                    ))}
                   </div>
                 </div>
 
                 {/* Mapping Status */}
                 <div className="flex items-center justify-center">
-                  <div className="flex items-center gap-2">
-                    {mapping.status === "mapped" ? (
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                    ) : mapping.status === "warning" ? (
-                      <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                    ) : (
-                      <div className="h-5 w-5 border-2 border-gray-300 rounded-full" />
-                    )}
-                    <ArrowRight className="h-4 w-4 text-gray-400" />
-                  </div>
+                  {mapping.status === "mapped" ? (
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <div className="h-4 w-4 border border-gray-300 rounded-full" />
+                  )}
                 </div>
 
                 {/* Final Export Column */}
-                <div className="space-y-2">
+                <div>
                   <Select
                     value={mapping.mappedTo || "unmapped"}
                     onValueChange={(value) => handleMappingChange(mapping.excelColumn, value)}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full h-8 text-sm">
                       <SelectValue placeholder="Select mapping" />
                     </SelectTrigger>
                     <SelectContent>
@@ -172,26 +145,20 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
                       ))}
                     </SelectContent>
                   </Select>
-                  {mapping.status === "mapped" && (
-                    <div className="text-xs text-green-600 flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      Mapped successfully
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="flex justify-between items-center mt-6 pt-6 border-t border-gray-200">
+          <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
             <div>
               {onCancel && (
-                <Button variant="outline" onClick={onCancel}>
+                <Button variant="outline" size="sm" onClick={onCancel}>
                   Cancel
                 </Button>
               )}
             </div>
-            <Button className="bg-black hover:bg-gray-800 text-white" onClick={handleContinue}>
+            <Button size="sm" className="bg-black hover:bg-gray-800 text-white" onClick={handleContinue}>
               Continue to Preview
             </Button>
           </div>
