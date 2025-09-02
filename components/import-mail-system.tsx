@@ -13,6 +13,7 @@ import { ColumnMapping } from "./column-mapping"
 
 interface ImportMailSystemProps {
   onDataProcessed: (data: ProcessedData | null) => void
+  onContinue?: () => void
 }
 
 const DEMO_EXAMPLES = [
@@ -97,7 +98,7 @@ const DEMO_EXAMPLES = [
   },
 ]
 
-export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
+export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSystemProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null)
@@ -439,7 +440,12 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
             )}
 
             <div className="flex justify-end">
-              <Button className="bg-black hover:bg-gray-800 text-white">Continue to Next Step</Button>
+              <Button 
+                className="bg-black hover:bg-gray-800 text-white"
+                onClick={onContinue}
+              >
+                Continue to Next Step
+              </Button>
             </div>
           </CardContent>
         </Card>

@@ -14,9 +14,10 @@ interface ReviewMergedExcelProps {
   mailAgentData: ProcessedData | null
   mailSystemData: ProcessedData | null
   onMergedData: (data: ProcessedData | null) => void
+  onContinue?: () => void
 }
 
-export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData }: ReviewMergedExcelProps) {
+export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData, onContinue }: ReviewMergedExcelProps) {
   const [mergedData, setMergedData] = useState<ProcessedData | null>(null)
   const [mergeConflicts, setMergeConflicts] = useState<string[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -402,7 +403,12 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData 
           </Card>
 
           <div className="flex justify-end">
-            <Button className="bg-black hover:bg-gray-800 text-white">Continue to Customer Review</Button>
+            <Button 
+              className="bg-black hover:bg-gray-800 text-white"
+              onClick={onContinue}
+            >
+              Continue to Customer Review
+            </Button>
           </div>
         </div>
       )}

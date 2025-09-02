@@ -52,15 +52,22 @@ export function MailProcessingDashboard() {
   const renderActiveStep = () => {
     switch (activeStep) {
       case "import-mail-agent":
-        return <ImportMailAgent onDataProcessed={setMailAgentData} />
+        return <ImportMailAgent 
+          onDataProcessed={setMailAgentData} 
+          onContinue={() => setActiveStep("import-mail-system")}
+        />
       case "import-mail-system":
-        return <ImportMailSystem onDataProcessed={setMailSystemData} />
+        return <ImportMailSystem 
+          onDataProcessed={setMailSystemData}
+          onContinue={() => setActiveStep("review-merged-excel")}
+        />
       case "review-merged-excel":
         return (
           <ReviewMergedExcel
             mailAgentData={mailAgentData}
             mailSystemData={mailSystemData}
             onMergedData={setMergedData}
+            onContinue={() => setActiveStep("review-customers")}
           />
         )
       case "review-customers":
@@ -69,6 +76,7 @@ export function MailProcessingDashboard() {
             data={mergedData}
             savedPriorityConditions={savedPriorityConditions}
             onSavePriorityConditions={setSavedPriorityConditions}
+            onContinue={() => setActiveStep("assign-customers")}
           />
         )
       case "assign-customers":

@@ -21,6 +21,7 @@ interface ReviewCustomersProps {
   data: ProcessedData | null
   savedPriorityConditions?: FilterCondition[]
   onSavePriorityConditions?: (conditions: FilterCondition[]) => void
+  onContinue?: () => void
 }
 
 const preExistingCustomers = [
@@ -95,6 +96,7 @@ export function ReviewCustomers({
   data,
   savedPriorityConditions = [],
   onSavePriorityConditions,
+  onContinue,
 }: ReviewCustomersProps) {
   const [selectedCustomer, setSelectedCustomer] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
@@ -738,7 +740,12 @@ export function ReviewCustomers({
       )}
 
       <div className="flex justify-end">
-        <Button className="bg-black hover:bg-gray-800 text-white">Continue to Rate Review</Button>
+        <Button 
+          className="bg-black hover:bg-gray-800 text-white"
+          onClick={onContinue}
+        >
+          Continue to Rate Review
+        </Button>
       </div>
     </div>
   )
