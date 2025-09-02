@@ -5,14 +5,97 @@ import type React from "react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, FileText, Loader2, AlertTriangle, CheckCircle } from "lucide-react"
+import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Shuffle, Settings, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { processFile } from "@/lib/file-processor"
 import type { ProcessedData } from "@/types/cargo-data"
+import { ColumnMapping } from "./column-mapping"
 
 interface ImportMailSystemProps {
   onDataProcessed: (data: ProcessedData | null) => void
 }
+
+const DEMO_EXAMPLES = [
+  {
+    name: "Mail System - Central Europe Routes.xlsx",
+    size: 3.2,
+    data: {
+      data: [
+        {
+          "Flight Date": "2025 OCT 10",
+          "Record ID": "CZPRGDEBERLA9C71010005600234",
+          "Destination": "71010",
+          "Record Number": "005",
+          "Origin OE": "CZPRG",
+          "Destination OE": "DEBER",
+          "Flight Number": "BT889",
+          "Outbound Flight": "BT445",
+          "Mail Category": "A",
+          "Mail Classification": "9C",
+          "Weight kg": "15.6",
+          "Invoice Type": "Priority",
+          "Customer Info": "Central Mail / CM2025",
+        },
+        {
+          "Flight Date": "2025 OCT 12",
+          "Record ID": "HUBUBDKCOPNHA8C71012003400156",
+          "Destination": "71012",
+          "Record Number": "003",
+          "Origin OE": "HUBUD",
+          "Destination OE": "DKCOP",
+          "Flight Number": "BT667",
+          "Outbound Flight": "BT778",
+          "Mail Category": "B",
+          "Mail Classification": "8C",
+          "Weight kg": "22.3",
+          "Invoice Type": "Express",
+          "Customer Info": "Nordic Express / NE456",
+        },
+      ],
+      summary: {
+        totalRecords: 42,
+        totalKg: 892.4,
+        euSubtotal: 4567.8,
+        nonEuSubtotal: 1234.5,
+        total: 5802.3,
+      },
+      warnings: [],
+      missingFields: [],
+    },
+  },
+  {
+    name: "System Data - Scandinavian Routes.xlsx",
+    size: 2.8,
+    data: {
+      data: [
+        {
+          "Flight Date": "2025 NOV 05",
+          "Record ID": "SEARNKOSLOGTA7C71105002100087",
+          "Destination": "71105",
+          "Record Number": "002",
+          "Origin OE": "SEARNK",
+          "Destination OE": "OSLOG",
+          "Flight Number": "BT234",
+          "Outbound Flight": "BT889",
+          "Mail Category": "A",
+          "Mail Classification": "7C",
+          "Weight kg": "18.9",
+          "Invoice Type": "Standard",
+          "Customer Info": "Scan Mail / SM789",
+        },
+      ],
+      summary: {
+        totalRecords: 28,
+        totalKg: 456.7,
+        euSubtotal: 2890.4,
+        nonEuSubtotal: 567.8,
+        total: 3458.2,
+      },
+      warnings: [],
+      missingFields: [],
+    },
+  },
+]
 
 export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -20,6 +103,10 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showColumnMapping, setShowColumnMapping] = useState(false)
+  const [excelColumns, setExcelColumns] = useState<string[]>([])
+  const [sampleData, setSampleData] = useState<Record<string, string[]>>({})
+  const [activeStep, setActiveStep] = useState<"upload" | "map" | "review">("upload")
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -56,8 +143,18 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
       const result = await processFile(uploadedFile, "mail-system")
 
       if (result.success && result.data) {
+        const columns = Object.keys(result.data.data[0] || {})
+        const samples: Record<string, string[]> = {}
+
+        columns.forEach((col) => {
+          samples[col] = result.data!.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
+        })
+
+        setExcelColumns(columns)
+        setSampleData(samples)
+        setShowColumnMapping(true)
         setProcessedData(result.data)
-        onDataProcessed(result.data)
+        setActiveStep("map")
       } else {
         setError(result.error || "Processing failed")
       }
@@ -68,28 +165,127 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
     }
   }
 
+  const handleMappingComplete = (mappings: any[]) => {
+    setShowColumnMapping(false)
+    setActiveStep("review")
+    onDataProcessed(processedData)
+  }
+
   const removeFile = () => {
     setUploadedFile(null)
     setProcessedData(null)
     setError(null)
+    setShowColumnMapping(false)
+    setExcelColumns([])
+    setSampleData({})
+    setActiveStep("upload")
     onDataProcessed(null)
+  }
+
+  const loadRandomExample = () => {
+    const randomExample = DEMO_EXAMPLES[Math.floor(Math.random() * DEMO_EXAMPLES.length)]
+
+    // Create a mock file object
+    const mockFile = new File([""], randomExample.name, {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
+    Object.defineProperty(mockFile, "size", { value: randomExample.size * 1024 * 1024 })
+
+    setUploadedFile(mockFile)
+
+    // Simulate processing delay
+    setIsProcessing(true)
+    setTimeout(() => {
+      const columns = Object.keys(randomExample.data.data[0] || {})
+      const samples: Record<string, string[]> = {}
+
+      columns.forEach((col) => {
+        samples[col] = randomExample.data.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
+      })
+
+      setExcelColumns(columns)
+      setSampleData(samples)
+      setProcessedData(randomExample.data as unknown as ProcessedData)
+      setShowColumnMapping(true)
+      setActiveStep("map")
+      setIsProcessing(false)
+    }, 1500)
   }
 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-black mb-2">Import Mail System Data</h2>
+        {/* <h2 className="text-3xl font-bold text-black mb-2">Import Mail System Data</h2> */}
         <p className="text-gray-600">Upload and verify mail system Excel files for processing</p>
       </div>
 
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-black">Upload Mail System File</CardTitle>
-          <p className="text-gray-600 text-sm">
-            Upload your mail system Excel file. The system will verify and assess each row of data.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      {/* Header Navigation */}
+      <div className="flex justify-center">
+        <div className="inline-flex bg-gray-100 rounded-lg p-1">
+          <Button
+            variant={activeStep === "upload" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveStep("upload")}
+            className={
+              activeStep === "upload"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Upload
+          </Button>
+          <Button
+            variant={activeStep === "map" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              if (uploadedFile && excelColumns.length > 0) {
+                setActiveStep("map")
+                setShowColumnMapping(true)
+              }
+            }}
+            disabled={!uploadedFile || excelColumns.length === 0}
+            className={
+              activeStep === "map"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+            }
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Map Headers
+          </Button>
+          <Button
+            variant={activeStep === "review" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              if (processedData) {
+                setActiveStep("review")
+                setShowColumnMapping(false)
+              }
+            }}
+            disabled={!processedData}
+            className={
+              activeStep === "review"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+            }
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Review File
+          </Button>
+        </div>
+      </div>
+
+      {/* Upload Step */}
+      {activeStep === "upload" && (
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-black">Upload Mail System File</CardTitle>
+            <p className="text-gray-600 text-sm">
+              Upload your mail system Excel file. The system will verify and assess each row of data.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
           {/* Upload Area */}
           <div
             className={cn(
@@ -103,18 +299,29 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
             <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
             <p className="text-gray-700 mb-2">Click to upload or drag and drop</p>
             <p className="text-gray-500 text-sm mb-4">.xlsx, .xls - Maximum file size 50 MB</p>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileSelect}
-              className="hidden"
-              id="mail-system-upload"
-            />
-            <label htmlFor="mail-system-upload">
-              <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-white" asChild>
-                <span>Choose File</span>
+            <div className="flex gap-3 justify-center">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="mail-system-upload"
+              />
+              <label htmlFor="mail-system-upload">
+                <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-white" asChild>
+                  <span>Choose File</span>
+                </Button>
+              </label>
+              <Button
+                variant="outline"
+                className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
+                onClick={loadRandomExample}
+                disabled={isProcessing}
+              >
+                <Shuffle className="h-4 w-4 mr-2" />
+                Try Demo Example
               </Button>
-            </label>
+            </div>
           </div>
 
           {/* Uploaded File */}
@@ -147,11 +354,17 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Processing Results */}
-      {processedData && (
+      {/* Map Headers Step */}
+      {activeStep === "map" && showColumnMapping && (
+        <ColumnMapping excelColumns={excelColumns} sampleData={sampleData} onMappingComplete={handleMappingComplete} />
+      )}
+
+      {/* Review Step */}
+      {activeStep === "review" && processedData && (
         <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-black flex items-center gap-2">
@@ -168,11 +381,11 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Total Weight</p>
-                <p className="text-2xl font-bold text-black">{processedData.summary.totalWeight} kg</p>
+                <p className="text-2xl font-bold text-black">{processedData.summary.totalKg} kg</p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Missing Data</p>
-                <p className="text-2xl font-bold text-red-600">{processedData.summary.missingData.incompleteRecords}</p>
+                <p className="text-sm text-gray-600">Missing Fields</p>
+                <p className="text-2xl font-bold text-red-600">{processedData.missingFields.length}</p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Total Value</p>

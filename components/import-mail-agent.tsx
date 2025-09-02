@@ -4,7 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Shuffle } from "lucide-react"
+import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Shuffle, Settings, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { processFile } from "@/lib/file-processor"
 import type { ProcessedData } from "@/types/cargo-data"
@@ -138,6 +138,7 @@ export function ImportMailAgent({ onDataProcessed }: ImportMailAgentProps) {
   const [showColumnMapping, setShowColumnMapping] = useState(false)
   const [excelColumns, setExcelColumns] = useState<string[]>([])
   const [sampleData, setSampleData] = useState<Record<string, string[]>>({})
+  const [activeStep, setActiveStep] = useState<"upload" | "map" | "review">("upload")
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -178,13 +179,14 @@ export function ImportMailAgent({ onDataProcessed }: ImportMailAgentProps) {
         const samples: Record<string, string[]> = {}
 
         columns.forEach((col) => {
-          samples[col] = result.data!.data.slice(0, 3).map((row) => String(row[col] || ""))
+          samples[col] = result.data!.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
         })
 
         setExcelColumns(columns)
         setSampleData(samples)
         setShowColumnMapping(true)
         setProcessedData(result.data)
+        setActiveStep("map")
       } else {
         setError(result.error || "Processing failed")
       }
@@ -197,6 +199,7 @@ export function ImportMailAgent({ onDataProcessed }: ImportMailAgentProps) {
 
   const handleMappingComplete = (mappings: any[]) => {
     setShowColumnMapping(false)
+    setActiveStep("review")
     onDataProcessed(processedData)
   }
 
@@ -207,6 +210,7 @@ export function ImportMailAgent({ onDataProcessed }: ImportMailAgentProps) {
     setShowColumnMapping(false)
     setExcelColumns([])
     setSampleData({})
+    setActiveStep("upload")
     onDataProcessed(null)
   }
 
@@ -228,38 +232,94 @@ export function ImportMailAgent({ onDataProcessed }: ImportMailAgentProps) {
       const samples: Record<string, string[]> = {}
 
       columns.forEach((col) => {
-        samples[col] = randomExample.data.data.slice(0, 3).map((row) => String(row[col] || ""))
+        samples[col] = randomExample.data.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
       })
 
       setExcelColumns(columns)
       setSampleData(samples)
-      setProcessedData(randomExample.data as ProcessedData)
+      setProcessedData(randomExample.data as unknown as ProcessedData)
       setShowColumnMapping(true)
+      setActiveStep("map")
       setIsProcessing(false)
     }, 1500)
   }
 
-  if (showColumnMapping) {
-    return (
-      <ColumnMapping excelColumns={excelColumns} sampleData={sampleData} onMappingComplete={handleMappingComplete} />
-    )
-  }
+  // Remove the early return - we'll handle column mapping within the main component structure
 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-black mb-2">Import Mail Agent Data</h2>
+        {/* <h2 className="text-3xl font-bold text-black mb-2">Import Mail Agent Data</h2> */}
         <p className="text-gray-600">Upload and verify mail agent Excel files for processing</p>
       </div>
 
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-black">Upload Mail Agent File</CardTitle>
-          <p className="text-gray-600 text-sm">
-            Upload your mail agent Excel file. The system will verify and assess each row of data.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      {/* Header Navigation */}
+      <div className="flex justify-center">
+        <div className="inline-flex bg-gray-100 rounded-lg p-1">
+          <Button
+            variant={activeStep === "upload" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveStep("upload")}
+            className={
+              activeStep === "upload"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Upload
+          </Button>
+          <Button
+            variant={activeStep === "map" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              if (uploadedFile && excelColumns.length > 0) {
+                setActiveStep("map")
+                setShowColumnMapping(true)
+              }
+            }}
+            disabled={!uploadedFile || excelColumns.length === 0}
+            className={
+              activeStep === "map"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+            }
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Map Headers
+          </Button>
+          <Button
+            variant={activeStep === "review" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              if (processedData) {
+                setActiveStep("review")
+                setShowColumnMapping(false)
+              }
+            }}
+            disabled={!processedData}
+            className={
+              activeStep === "review"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+            }
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Review File
+          </Button>
+        </div>
+      </div>
+
+      {/* Upload Step */}
+      {activeStep === "upload" && (
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-black">Upload Mail Agent File</CardTitle>
+            <p className="text-gray-600 text-sm">
+              Upload your mail agent Excel file. The system will verify and assess each row of data.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
           {/* Upload Area */}
           <div
             className={cn(
@@ -328,11 +388,17 @@ export function ImportMailAgent({ onDataProcessed }: ImportMailAgentProps) {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Processing Results */}
-      {processedData && (
+      {/* Map Headers Step */}
+      {activeStep === "map" && showColumnMapping && (
+        <ColumnMapping excelColumns={excelColumns} sampleData={sampleData} onMappingComplete={handleMappingComplete} />
+      )}
+
+      {/* Review Step */}
+      {activeStep === "review" && processedData && (
         <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-black flex items-center gap-2">
@@ -349,11 +415,11 @@ export function ImportMailAgent({ onDataProcessed }: ImportMailAgentProps) {
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Total Weight</p>
-                <p className="text-2xl font-bold text-black">{processedData.summary.totalWeight} kg</p>
+                <p className="text-2xl font-bold text-black">{processedData.summary.totalKg} kg</p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Missing Data</p>
-                <p className="text-2xl font-bold text-red-600">{processedData.summary.missingData.incompleteRecords}</p>
+                <p className="text-sm text-gray-600">Missing Fields</p>
+                <p className="text-2xl font-bold text-red-600">{processedData.missingFields.length}</p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Total Value</p>

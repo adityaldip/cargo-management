@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { FileUp, Users, DollarSign, FileSpreadsheet } from "lucide-react"
+import { FileUp, Users, DollarSign, FileSpreadsheet, Receipt } from "lucide-react"
 
 interface WorkflowNavigationProps {
   activeStep: string
@@ -15,12 +15,14 @@ export function WorkflowNavigation({ activeStep, onStepChange }: WorkflowNavigat
     { id: "review-merged-excel", label: "Review Merged Excel", icon: FileSpreadsheet },
     { id: "review-customers", label: "Review Customers", icon: Users },
     { id: "review-rates", label: "Review Rates", icon: DollarSign },
+    { id: "review-invoices", label: "Review Invoices", icon: Receipt },
   ]
 
   return (
-    <header className="border-b border-gray-200 bg-white shadow-sm">
-      <div className="container mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
+    <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 shadow-sm z-10">
+      <div className="flex flex-col h-full">
+        {/* Logo Header */}
+        <div className="p-6 border-b border-gray-200">
           <div className="flex items-center">
             <img
               src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-4GYJnWyvmaBOUlpBml9mYysmFFHLNN.png"
@@ -28,30 +30,36 @@ export function WorkflowNavigation({ activeStep, onStepChange }: WorkflowNavigat
               className="h-8"
             />
           </div>
-          <div className="flex items-center gap-0">
-            {steps.map((step) => {
+        </div>
+
+        {/* Navigation Steps */}
+        <nav className="flex-1 p-4">
+          <div className="space-y-2">
+            {steps.map((step, index) => {
               const Icon = step.icon
               const isActive = activeStep === step.id
               return (
                 <Button
                   key={step.id}
                   variant={isActive ? "default" : "ghost"}
-                  size="sm"
+                  size="default"
                   onClick={() => onStepChange(step.id)}
                   className={
                     isActive
-                      ? "bg-black hover:bg-gray-800 text-white rounded-none first:rounded-l-md last:rounded-r-md px-3 py-1 text-xs"
-                      : "text-gray-600 hover:text-black hover:bg-gray-100 rounded-none first:rounded-l-md last:rounded-r-md border-r border-gray-200 last:border-r-0 px-3 py-1 text-xs"
+                      ? "w-full justify-start bg-black hover:bg-gray-800 text-white px-4 py-3 text-sm font-medium"
+                      : "w-full justify-start text-gray-600 hover:text-black hover:bg-gray-100 px-4 py-3 text-sm font-medium"
                   }
                 >
-                  <Icon className="h-3 w-3 mr-1" />
-                  {step.label}
+                  <div className="flex items-center w-full">
+                    <Icon className="h-4 w-4 mr-3" />
+                    <span className="flex-1 text-left">{step.label}</span>
+                  </div>
                 </Button>
               )
             })}
           </div>
-        </div>
+        </nav>
       </div>
-    </header>
+    </aside>
   )
 }

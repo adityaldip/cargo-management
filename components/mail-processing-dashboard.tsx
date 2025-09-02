@@ -6,6 +6,7 @@ import { ImportMailSystem } from "@/components/import-mail-system"
 import { ReviewMergedExcel } from "@/components/review-merged-excel"
 import { ReviewCustomers } from "@/components/review-customers"
 import { ReviewRates } from "@/components/review-rates"
+import { ReviewInvoices } from "@/components/review-invoices"
 import { defaultRateSettings, type RateSettings } from "@/types/rate-settings"
 import type { ProcessedData } from "@/types/cargo-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -34,11 +35,10 @@ export function MailProcessingDashboard() {
         data: [...(mailAgentData?.data || []), ...(mailSystemData?.data || [])],
         summary: {
           totalRecords: (mailAgentData?.summary?.totalRecords || 0) + (mailSystemData?.summary?.totalRecords || 0),
-          totalWeight: (mailAgentData?.summary?.totalWeight || 0) + (mailSystemData?.summary?.totalWeight || 0),
+          totalKg: (mailAgentData?.summary?.totalKg || 0) + (mailSystemData?.summary?.totalKg || 0),
           euSubtotal: (mailAgentData?.summary?.euSubtotal || 0) + (mailSystemData?.summary?.euSubtotal || 0),
           nonEuSubtotal: (mailAgentData?.summary?.nonEuSubtotal || 0) + (mailSystemData?.summary?.nonEuSubtotal || 0),
           total: (mailAgentData?.summary?.total || 0) + (mailSystemData?.summary?.total || 0),
-          vatAmount: (mailAgentData?.summary?.vatAmount || 0) + (mailSystemData?.summary?.vatAmount || 0),
         },
         missingFields: [...(mailAgentData?.missingFields || []), ...(mailSystemData?.missingFields || [])],
         warnings: [...(mailAgentData?.warnings || []), ...(mailSystemData?.warnings || [])],
@@ -71,6 +71,8 @@ export function MailProcessingDashboard() {
         )
       case "review-rates":
         return <ReviewRates settings={rateSettings} onSettingsChange={setRateSettings} data={mergedData} />
+      case "review-invoices":
+        return <ReviewInvoices data={mergedData} />
       default:
         return <ImportMailAgent onDataProcessed={setMailAgentData} />
     }
@@ -79,7 +81,8 @@ export function MailProcessingDashboard() {
   return (
     <div className="min-h-screen bg-white text-black">
       <WorkflowNavigation activeStep={activeStep} onStepChange={setActiveStep} />
-      <div className="container mx-auto px-6 py-8">
+      <div className="ml-64 min-h-screen">
+        <div className="container mx-auto px-6 py-8">
         {savedPriorityConditions.length > 0 && (
           <Card className="bg-white border-gray-200 shadow-sm mb-6">
             <CardHeader>
@@ -118,6 +121,7 @@ export function MailProcessingDashboard() {
         )}
 
         {renderActiveStep()}
+        </div>
       </div>
     </div>
   )
