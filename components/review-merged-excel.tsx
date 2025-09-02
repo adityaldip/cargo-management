@@ -165,8 +165,8 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-black mb-2">Review Merged Excel Data</h2>
-        <p className="text-gray-600">Combine and review data from available sources</p>
+        {/* <h2 className="text-3xl font-bold text-black mb-2">Review Merged Excel Data</h2> */}
+        {/* <p className="text-gray-600">Combine and review data from available sources</p> */}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

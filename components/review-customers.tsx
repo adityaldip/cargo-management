@@ -279,7 +279,7 @@ export function ReviewCustomers({
     return (
       <div className="space-y-6">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-black mb-2">Review Customers</h2>
+          {/* <h2 className="text-3xl font-bold text-black mb-2">Review Customers</h2> */}
           <p className="text-gray-600">No customer data available.</p>
         </div>
       </div>
@@ -289,12 +289,12 @@ export function ReviewCustomers({
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-black mb-2">Review Customers</h2>
-        <p className="text-gray-600">
+        {/* <h2 className="text-3xl font-bold text-black mb-2">Review Customers</h2> */}
+        {/* <p className="text-gray-600">
           {data
             ? "Analyze customer performance and individual data breakdown"
             : "Review pre-existing customer database and set up filtering rules"}
-        </p>
+        </p> */}
       </div>
 
       <Card className="bg-white border-gray-200 shadow-sm">

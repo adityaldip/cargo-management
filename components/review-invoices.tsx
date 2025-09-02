@@ -162,7 +162,7 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <p className="text-gray-600">Review and manage generated invoices from processed cargo data</p>
+        {/* <p className="text-gray-600">Review and manage generated invoices from processed cargo data</p> */}
       </div>
 
       {/* Summary Cards */}

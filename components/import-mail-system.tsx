@@ -127,9 +127,39 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
     }
   }
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setUploadedFile(e.target.files[0])
+      const file = e.target.files[0]
+      setUploadedFile(file)
+      
+      // Automatically process the file and go to map headers
+      setIsProcessing(true)
+      setError(null)
+
+      try {
+        const result = await processFile(file, "mail-system")
+
+        if (result.success && result.data) {
+          const columns = Object.keys(result.data.data[0] || {})
+          const samples: Record<string, string[]> = {}
+
+          columns.forEach((col) => {
+            samples[col] = result.data!.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
+          })
+
+          setExcelColumns(columns)
+          setSampleData(samples)
+          setShowColumnMapping(true)
+          setProcessedData(result.data)
+          setActiveStep("map")
+        } else {
+          setError(result.error || "Processing failed")
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Processing failed")
+      } finally {
+        setIsProcessing(false)
+      }
     }
   }
 
@@ -216,11 +246,11 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
     <div className="space-y-6">
       <div className="text-center">
         {/* <h2 className="text-3xl font-bold text-black mb-2">Import Mail System Data</h2> */}
-        <p className="text-gray-600">Upload and verify mail system Excel files for processing</p>
+        {/* <p className="text-gray-600"></p> */}
       </div>
 
       {/* Header Navigation */}
-      <div className="flex justify-center">
+      <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
           <Button
             variant={activeStep === "upload" ? "default" : "ghost"}
@@ -299,29 +329,18 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
             <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
             <p className="text-gray-700 mb-2">Click to upload or drag and drop</p>
             <p className="text-gray-500 text-sm mb-4">.xlsx, .xls - Maximum file size 50 MB</p>
-            <div className="flex gap-3 justify-center">
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileSelect}
-                className="hidden"
-                id="mail-system-upload"
-              />
-              <label htmlFor="mail-system-upload">
-                <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-white" asChild>
-                  <span>Choose File</span>
-                </Button>
-              </label>
-              <Button
-                variant="outline"
-                className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-                onClick={loadRandomExample}
-                disabled={isProcessing}
-              >
-                <Shuffle className="h-4 w-4 mr-2" />
-                Try Demo Example
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileSelect}
+              className="hidden"
+              id="mail-system-upload"
+            />
+            <label htmlFor="mail-system-upload">
+              <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-white" asChild>
+                <span>Choose File</span>
               </Button>
-            </div>
+            </label>
           </div>
 
           {/* Uploaded File */}
@@ -360,7 +379,12 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
 
       {/* Map Headers Step */}
       {activeStep === "map" && showColumnMapping && (
-        <ColumnMapping excelColumns={excelColumns} sampleData={sampleData} onMappingComplete={handleMappingComplete} />
+        <ColumnMapping 
+          excelColumns={excelColumns} 
+          sampleData={sampleData} 
+          onMappingComplete={handleMappingComplete}
+          onCancel={() => setActiveStep("upload")}
+        />
       )}
 
       {/* Review Step */}
@@ -381,7 +405,7 @@ export function ImportMailSystem({ onDataProcessed }: ImportMailSystemProps) {
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Total Weight</p>
-                <p className="text-2xl font-bold text-black">{processedData.summary.totalKg} kg</p>
+                <p className="text-2xl font-bold text-black">{processedData.summary.totalKg.toFixed(2)} kg</p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Missing Fields</p>

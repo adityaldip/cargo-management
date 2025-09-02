@@ -17,6 +17,7 @@ interface ColumnMappingProps {
   excelColumns: string[]
   sampleData: Record<string, string[]>
   onMappingComplete: (mappings: ColumnMapping[]) => void
+  onCancel?: () => void
 }
 
 const FINAL_EXPORT_COLUMNS = [
@@ -36,7 +37,7 @@ const FINAL_EXPORT_COLUMNS = [
   "Customer name / number",
 ]
 
-export function ColumnMapping({ excelColumns, sampleData, onMappingComplete }: ColumnMappingProps) {
+export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onCancel }: ColumnMappingProps) {
   const [mappings, setMappings] = useState<ColumnMapping[]>(() => {
     return excelColumns.map((col, index) => ({
       excelColumn: col,
@@ -73,8 +74,8 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete }: C
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-black mb-2">Map Your Columns</h2>
-        <p className="text-gray-600">Map your Excel columns to the final export format</p>
+        {/* <h2 className="text-3xl font-bold text-black mb-2">Map Your Columns</h2>
+        <p className="text-gray-600">Map your Excel columns to the final export format</p> */}
       </div>
 
       {/* Progress Header */}
@@ -183,14 +184,11 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete }: C
           </div>
 
           <div className="flex justify-between items-center mt-6 pt-6 border-t border-gray-200">
-            <div className="text-sm text-gray-600">
-              {getMappedCount() === getTotalCount() ? (
-                <span className="text-green-600 flex items-center gap-1">
-                  <CheckCircle className="h-4 w-4" />
-                  All columns mapped successfully
-                </span>
-              ) : (
-                <span>{getTotalCount() - getMappedCount()} columns still need mapping</span>
+            <div>
+              {onCancel && (
+                <Button variant="outline" onClick={onCancel}>
+                  Cancel
+                </Button>
               )}
             </div>
             <Button className="bg-black hover:bg-gray-800 text-white" onClick={handleContinue}>

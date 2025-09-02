@@ -5,6 +5,8 @@ import { ImportMailAgent } from "@/components/import-mail-agent"
 import { ImportMailSystem } from "@/components/import-mail-system"
 import { ReviewMergedExcel } from "@/components/review-merged-excel"
 import { ReviewCustomers } from "@/components/review-customers"
+import { AssignCustomers } from "@/components/assign-customers"
+import { AssignRates } from "@/components/assign-rates"
 import { ReviewRates } from "@/components/review-rates"
 import { ReviewInvoices } from "@/components/review-invoices"
 import { defaultRateSettings, type RateSettings } from "@/types/rate-settings"
@@ -69,6 +71,22 @@ export function MailProcessingDashboard() {
             onSavePriorityConditions={setSavedPriorityConditions}
           />
         )
+      case "assign-customers":
+        return (
+          <AssignCustomers
+            data={mergedData}
+            savedPriorityConditions={savedPriorityConditions}
+            onSavePriorityConditions={setSavedPriorityConditions}
+          />
+        )
+      case "assign-rates":
+        return (
+          <AssignRates
+            data={mergedData}
+            savedRateConditions={savedPriorityConditions}
+            onSaveRateConditions={setSavedPriorityConditions}
+          />
+        )
       case "review-rates":
         return <ReviewRates settings={rateSettings} onSettingsChange={setRateSettings} data={mergedData} />
       case "review-invoices":
@@ -81,7 +99,7 @@ export function MailProcessingDashboard() {
   return (
     <div className="min-h-screen bg-white text-black">
       <WorkflowNavigation activeStep={activeStep} onStepChange={setActiveStep} />
-      <div className="ml-64 min-h-screen">
+      <div className="ml-60 min-h-screen">
         <div className="container mx-auto px-6 py-8">
         {savedPriorityConditions.length > 0 && (
           <Card className="bg-white border-gray-200 shadow-sm mb-6">

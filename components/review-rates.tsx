@@ -302,8 +302,8 @@ export function ReviewRates({ settings, onSettingsChange, data }: ReviewRatesPro
     <div className="min-h-screen bg-white">
       <div className="container mx-auto px-6 py-8 space-y-8">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-black">Rate Set Up</h1>
-          <p className="text-gray-600">Configure pricing for your routes and manage rate plans.</p>
+          {/* <h1 className="text-3xl font-bold text-black">Rate Set Up</h1> */}
+          {/* <p className="text-gray-600">Configure pricing for your routes and manage rate plans.</p> */}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
