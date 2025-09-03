@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Users, Package, TrendingUp, Plus, X, Filter, Download } from "lucide-react"
+import { Search, Users, Package, TrendingUp, Plus, X, Filter, Download, ChevronLeft, ChevronRight } from "lucide-react"
 import { useState, useMemo } from "react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 interface FilterCondition {
   id: string
@@ -101,11 +102,67 @@ export function ReviewCustomers({
   const [selectedCustomer, setSelectedCustomer] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<"revenue" | "weight" | "parcels">("revenue")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
   const [showAddFilter, setShowAddFilter] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string>("")
+
+  // Export function
+  const handleExport = () => {
+    // Create sample data for export
+    const sampleData = Array.from({ length: 100 }, (_, index) => {
+      const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM"]
+      const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA"]
+      const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456"]
+      const mailCats = ["A", "B", "C", "D", "E"]
+      const mailClasses = ["7C", "7D", "7E", "7F", "7G"]
+      const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
+      
+      const origOE = origins[index % origins.length]
+      const destOE = destinations[index % destinations.length]
+      const mailCat = mailCats[index % mailCats.length]
+      const mailClass = mailClasses[index % mailClasses.length]
+      
+      return {
+        "Inb.Flight Date": `2025 JUL ${(15 + index % 10).toString().padStart(2, '0')}`,
+        "Outb.Flight Date": `2025 JUL ${(16 + index % 10).toString().padStart(2, '0')}`,
+        "Rec. ID": `${origOE}${destOE}${mailCat}${mailClass}507${(index + 1).toString().padStart(2, '0')}${(70000 + index * 123).toString().slice(-4)}`,
+        "Des. No.": `507${(index + 1).toString().padStart(2, '0')}`,
+        "Rec. Numb.": (index + 1).toString().padStart(3, '0'),
+        "Orig. OE": origOE,
+        "Dest. OE": destOE,
+        "Inb. Flight No.": flightNos[index % flightNos.length],
+        "Outb. Flight No.": flightNos[(index + 1) % flightNos.length],
+        "Mail Cat.": mailCat,
+        "Mail Class": mailClass,
+        "Total kg": (Math.random() * 50 + 0.1).toFixed(1),
+        "Invoice": invoiceTypes[index % invoiceTypes.length],
+        "Customer": "POST DANMARK A/S / QDKCPHA",
+        "Rate": (Math.random() * 15 + 2.5).toFixed(2)
+      }
+    })
+
+    // Convert to CSV
+    const headers = Object.keys(sampleData[0])
+    const csvContent = [
+      headers.join(','),
+      ...sampleData.map(row => headers.map(header => `"${row[header as keyof typeof row]}"`).join(','))
+    ].join('\n')
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', 'cargo-data.csv')
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
   const [savedAssociations, setSavedAssociations] = useState<
     Array<{
       id: string
@@ -291,7 +348,7 @@ export function ReviewCustomers({
   return (
     <div className="space-y-4 pt-2">
       <Card className="bg-white border-gray-200 shadow-sm">
-                <CardContent className="space-y-1 pt-0 pb-4">
+        <CardContent className="space-y-1 pt-0 pb-4">
           <CardTitle className="text-black flex items-center gap-2 mb-2">
             <Filter className="h-5 w-5" />
             Rules
@@ -630,67 +687,129 @@ export function ReviewCustomers({
           </div>
         </CardHeader>
         <CardContent>
+          {/* Export Button */}
+          <div className="flex justify-end mb-4">
+            <Button onClick={handleExport} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
+          
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border border-gray-300">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Inb.Flight Date</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Outb.Flight Date</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Rec. ID</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Des. No.</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Rec. Numb.</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Orig. OE</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Dest. OE</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Inb. Flight No.</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Outb. Flight No.</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Mail Cat.</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Mail Class</th>
-                  <th className="border border-gray-300 p-2 text-right text-black font-medium">Total kg</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium">Invoice</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium bg-yellow-200">Customer</th>
-                  <th className="border border-gray-300 p-2 text-left text-black font-medium bg-yellow-200">Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...Array(20)].map((_, index) => {
-                  // Generate sample data for demonstration
-                  const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM"]
-                  const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA"]
-                  const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456"]
-                  const mailCats = ["A", "B", "C", "D", "E"]
-                  const mailClasses = ["7C", "7D", "7E", "7F", "7G"]
-                  const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
+            <Table className="border border-collapse">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="border">Inb.Flight Date</TableHead>
+                  <TableHead className="border">Outb.Flight Date</TableHead>
+                  <TableHead className="border">Rec. ID</TableHead>
+                  <TableHead className="border">Des. No.</TableHead>
+                  <TableHead className="border">Rec. Numb.</TableHead>
+                  <TableHead className="border">Orig. OE</TableHead>
+                  <TableHead className="border">Dest. OE</TableHead>
+                  <TableHead className="border">Inb. Flight No.</TableHead>
+                  <TableHead className="border">Outb. Flight No.</TableHead>
+                  <TableHead className="border">Mail Cat.</TableHead>
+                  <TableHead className="border">Mail Class</TableHead>
+                  <TableHead className="border text-right">Total kg</TableHead>
+                  <TableHead className="border">Invoice</TableHead>
+                  <TableHead className="border bg-yellow-200">Customer</TableHead>
+                  <TableHead className="border bg-yellow-200">Rate</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(() => {
+                  // Generate paginated data
+                  const totalItems = 100
+                  const startIndex = (currentPage - 1) * itemsPerPage
+                  const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
                   
-                  const origOE = origins[index % origins.length]
-                  const destOE = destinations[index % destinations.length]
-                  const mailCat = mailCats[index % mailCats.length]
-                  const mailClass = mailClasses[index % mailClasses.length]
+                  return Array.from({ length: endIndex - startIndex }, (_, i) => {
+                    const index = startIndex + i
+                    const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM"]
+                    const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA"]
+                    const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456"]
+                    const mailCats = ["A", "B", "C", "D", "E"]
+                    const mailClasses = ["7C", "7D", "7E", "7F", "7G"]
+                    const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
+                    
+                    const origOE = origins[index % origins.length]
+                    const destOE = destinations[index % destinations.length]
+                    const mailCat = mailCats[index % mailCats.length]
+                    const mailClass = mailClasses[index % mailClasses.length]
                   
                   return (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="border border-gray-300 p-2 text-gray-900">2025 JUL {(15 + index % 10).toString().padStart(2, '0')}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">2025 JUL {(16 + index % 10).toString().padStart(2, '0')}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900 font-mono text-xs">{origOE}{destOE}{mailCat}{mailClass}507{(index + 1).toString().padStart(2, '0')}{(70000 + index * 123).toString().slice(-4)}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">507{(index + 1).toString().padStart(2, '0')}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{(index + 1).toString().padStart(3, '0')}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{origOE}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{destOE}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{flightNos[index % flightNos.length]}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{flightNos[(index + 1) % flightNos.length]}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{mailCat}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{mailClass}</td>
-                      <td className="border border-gray-300 p-2 text-right text-gray-900">{(15.5 + (index * 2.3)).toFixed(1)}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900">{invoiceTypes[index % invoiceTypes.length]}</td>
-                      <td className="border border-gray-300 p-2 text-gray-900 text-xs bg-yellow-200"></td>
-                      <td className="border border-gray-300 p-2 text-gray-900 text-xs bg-yellow-200"></td>
-                    </tr>
+                    <TableRow key={index}>
+                      <TableCell className="border">2025 JUL {(15 + index % 10).toString().padStart(2, '0')}</TableCell>
+                      <TableCell className="border">2025 JUL {(16 + index % 10).toString().padStart(2, '0')}</TableCell>
+                      <TableCell className="border font-mono text-xs">{origOE}{destOE}{mailCat}{mailClass}507{(index + 1).toString().padStart(2, '0')}{(70000 + index * 123).toString().slice(-4)}</TableCell>
+                      <TableCell className="border">507{(index + 1).toString().padStart(2, '0')}</TableCell>
+                      <TableCell className="border">{(index + 1).toString().padStart(3, '0')}</TableCell>
+                      <TableCell className="border">{origOE}</TableCell>
+                      <TableCell className="border">{destOE}</TableCell>
+                      <TableCell className="border">{flightNos[index % flightNos.length]}</TableCell>
+                      <TableCell className="border">{flightNos[(index + 1) % flightNos.length]}</TableCell>
+                      <TableCell className="border">{mailCat}</TableCell>
+                      <TableCell className="border">{mailClass}</TableCell>
+                      <TableCell className="border text-right">{(15.5 + (index * 2.3)).toFixed(1)}</TableCell>
+                      <TableCell className="border">{invoiceTypes[index % invoiceTypes.length]}</TableCell>
+                      <TableCell className="border text-xs bg-yellow-200">POST DANMARK A/S / QDKCPHA</TableCell>
+                      <TableCell className="border text-xs bg-yellow-200">{(Math.random() * 15 + 2.5).toFixed(2)}</TableCell>
+                    </TableRow>
                   )
-                })}
-              </tbody>
-            </table>
+                  })
+                })()}
+              </TableBody>
+            </Table>
           </div>
           
           {/* Pagination Controls */}
+          <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Show</span>
+              <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                setItemsPerPage(Number(value))
+                setCurrentPage(1)
+              }}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-gray-600">entries</span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, 100)} of 100 entries
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="px-3 py-1 text-sm bg-gray-100 rounded">
+                  {currentPage}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(100 / itemsPerPage), prev + 1))}
+                  disabled={currentPage >= Math.ceil(100 / itemsPerPage)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
           <div className="mt-4 flex items-center justify-between">
             <div className="text-sm text-gray-600">
               Showing 1 to 20 of 1,000 records

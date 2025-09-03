@@ -20,7 +20,9 @@ import {
   Calendar,
   Euro,
   TrendingUp,
-  Package
+  Package,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ProcessedData } from "@/types/cargo-data"
@@ -163,6 +165,8 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([])
   const [sortBy, setSortBy] = useState<"revenue" | "weight" | "parcels">("revenue")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Filter invoices based on search and status
   const filteredInvoices = invoices.filter(invoice => {
@@ -172,6 +176,11 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
     const matchesStatus = statusFilter === "all" || invoice.status === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  // Paginated invoices
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedInvoices = filteredInvoices.slice(startIndex, startIndex + itemsPerPage)
 
   // Calculate summary statistics
   const totalAmount = filteredInvoices.reduce((sum, invoice) => sum + invoice.amount, 0)
@@ -284,6 +293,40 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
     // Here you would implement the bulk action logic
   }
 
+  // Export function
+  const handleExport = () => {
+    const csvData = filteredInvoices.map(invoice => ({
+      "Invoice Number": invoice.invoiceNumber,
+      "Customer": invoice.customer,
+      "Route": invoice.route,
+      "Date": invoice.date,
+      "Due Date": invoice.dueDate,
+      "Amount": `€${invoice.amount.toFixed(2)}`,
+      "Status": invoice.status,
+      "Items": invoice.items,
+      "Total Weight": `${invoice.totalWeight}kg`,
+      "Payment Method": invoice.paymentMethod || ""
+    }))
+
+    // Convert to CSV
+    const headers = Object.keys(csvData[0])
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => headers.map(header => `"${row[header as keyof typeof row]}"`).join(','))
+    ].join('\n')
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', 'invoices.csv')
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div className="space-y-4 pt-2">
       {/* Invoices Table */}
@@ -295,6 +338,10 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
               Invoice Management
             </CardTitle>
             <div className="flex gap-2">
+              <Button onClick={handleExport} variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
               {selectedInvoices.length > 0 && (
                 <>
                   <Button 
@@ -349,40 +396,40 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
         </CardHeader>
 
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
+          <div className="overflow-x-auto">
+            <Table className="border border-collapse text-sm">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12">
+                  <TableHead className="border w-8 p-1 text-center">
                     <input
                       type="checkbox"
-                      checked={selectedInvoices.length === filteredInvoices.length && filteredInvoices.length > 0}
+                      checked={selectedInvoices.length === paginatedInvoices.length && paginatedInvoices.length > 0}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedInvoices(filteredInvoices.map(inv => inv.id))
+                          setSelectedInvoices(paginatedInvoices.map(inv => inv.id))
                         } else {
                           setSelectedInvoices([])
                         }
                       }}
                       className="rounded border-gray-300"
-                      title="Select all invoices"
+                      title="Select all invoices on this page"
                     />
                   </TableHead>
-                  <TableHead>Invoice</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Route</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="border p-2">Invoice</TableHead>
+                  <TableHead className="border p-2">Customer</TableHead>
+                  <TableHead className="border p-2">Route</TableHead>
+                  <TableHead className="border p-2">Date</TableHead>
+                  <TableHead className="border p-2">Due Date</TableHead>
+                  <TableHead className="border p-2">Amount</TableHead>
+                  <TableHead className="border p-2">Status</TableHead>
+                  <TableHead className="border p-2">Items</TableHead>
+                  <TableHead className="border p-2 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInvoices.map((invoice) => (
+                {paginatedInvoices.map((invoice) => (
                   <TableRow key={invoice.id} className="hover:bg-gray-50">
-                    <TableCell>
+                    <TableCell className="border p-1 text-center">
                       <input
                         type="checkbox"
                         checked={selectedInvoices.includes(invoice.id)}
@@ -391,47 +438,47 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
                         title={`Select invoice ${invoice.invoiceNumber}`}
                       />
                     </TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-gray-500" />
-                        {invoice.invoiceNumber}
+                    <TableCell className="border p-2 font-medium">
+                      <div className="flex items-center gap-1">
+                        <FileText className="h-3 w-3 text-gray-500" />
+                        <span className="text-xs">{invoice.invoiceNumber}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{invoice.customer}</TableCell>
-                    <TableCell>
-                      <span className="font-mono text-sm">{invoice.route}</span>
+                    <TableCell className="border p-2 text-xs">{invoice.customer}</TableCell>
+                    <TableCell className="border p-2">
+                      <span className="font-mono text-xs">{invoice.route}</span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="border p-2">
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3 text-gray-400" />
-                        {new Date(invoice.date).toLocaleDateString()}
+                        <span className="text-xs">{new Date(invoice.date).toLocaleDateString()}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="border p-2">
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3 text-gray-400" />
-                        {new Date(invoice.dueDate).toLocaleDateString()}
+                        <span className="text-xs">{new Date(invoice.dueDate).toLocaleDateString()}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="font-semibold">
+                    <TableCell className="border p-2 font-semibold text-xs">
                       €{invoice.amount.toFixed(2)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="border p-2">
                       {getStatusBadge(invoice.status)}
                     </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
+                    <TableCell className="border p-2">
+                      <div className="text-xs">
                         <div>{invoice.items} items</div>
                         <div className="text-gray-500">{invoice.totalWeight}kg</div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
+                    <TableCell className="border p-1 text-right">
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                          <Eye className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                          <Download className="h-3 w-3" />
                         </Button>
                       </div>
                     </TableCell>
@@ -445,6 +492,59 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
             <div className="text-center py-8">
               <Receipt className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <p className="text-gray-500">No invoices found matching your criteria</p>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {filteredInvoices.length > 0 && (
+            <div className="flex items-center justify-between mt-2">
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-600">Show</span>
+                <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                  setItemsPerPage(Number(value))
+                  setCurrentPage(1)
+                }}>
+                  <SelectTrigger className="w-16 h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-gray-600">entries</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">
+                  Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredInvoices.length)} of {filteredInvoices.length} entries
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                  </Button>
+                  <span className="px-2 py-1 text-xs bg-gray-100 rounded">
+                    {currentPage}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage >= totalPages}
+                  >
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

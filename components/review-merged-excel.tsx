@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertTriangle, CheckCircle, RefreshCw, Download, Settings, Eye, GripVertical } from "lucide-react"
 import { combineProcessedData } from "@/lib/file-processor"
 import { ExportModal } from "@/components/export-modal"
@@ -51,8 +52,8 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
     { key: 'mailClass', label: 'Mail Class', visible: true, order: 11 },
     { key: 'totalKg', label: 'Total kg', visible: true, order: 12 },
     { key: 'invoiceExtend', label: 'Invoice', visible: true, order: 13 },
-    { key: 'customer', label: 'Customer', visible: false, order: 14 },
-    { key: 'rate', label: 'Rate', visible: false, order: 15 },
+    { key: 'customer', label: 'Customer', visible: true, order: 14 },
+    { key: 'rate', label: 'Rate', visible: true, order: 15 },
   ])
 
   // Drag and drop state
@@ -110,8 +111,8 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         mailClass: mailClass,
         totalKg: Math.round((Math.random() * 50 + 0.1) * 10) / 10,
         invoiceExtend: invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)],
-        customer: customers[Math.floor(Math.random() * customers.length)],
-        rate: Math.round((Math.random() * 50 + 0.1) * 10) / 10,
+        customer: "",
+        rate: "",
       })
     }
     return data
@@ -119,10 +120,9 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
 
   const sampleExcelData = useMemo(() => generateDummyData(), [])
   
-  // Get visible columns in order
+  // Get all columns in order (no filtering)
   const visibleColumns = useMemo(() => 
     columnConfigs
-      .filter(config => config.visible)
       .sort((a, b) => a.order - b.order),
     [columnConfigs]
   )
@@ -137,14 +137,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   const totalWeight = sampleExcelData.reduce((sum, record) => sum + record.totalKg, 0)
   const avgWeight = totalWeight / sampleExcelData.length
 
-  // Column configuration handlers
-  const toggleColumnVisibility = (key: string) => {
-    setColumnConfigs(prev => 
-      prev.map(config => 
-        config.key === key ? { ...config, visible: !config.visible } : config
-      )
-    )
-  }
+  // Column configuration handlers (visibility toggle removed)
 
   const updateColumnLabel = (key: string, label: string) => {
     setColumnConfigs(prev => 
@@ -289,37 +282,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
               <p className="text-sm text-gray-600">
                 Customize which columns to display and their order in the Excel export
               </p>
-                {/* Quick Actions */}
-                <div className="flex gap-2 mb-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setColumnConfigs(prev => 
-                      prev.map(config => ({ ...config, visible: true }))
-                    )}
-                  >
-                    Show All
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setColumnConfigs(prev => 
-                      prev.map(config => ({ ...config, visible: false }))
-                    )}
-                  >
-                    Hide All
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setColumnConfigs(prev => 
-                      prev.map((config, index) => ({ ...config, order: index + 1 }))
-                    )}
-                  >
-                    Reset Order
-                  </Button>
-                </div>
-
                 {/* Column Configuration List */}
                 <div className="space-y-1">
                   {columnConfigs.map((config, index) => (
@@ -337,22 +299,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                       <div className="cursor-grab hover:cursor-grabbing">
                         <GripVertical className="h-5 w-5 text-gray-400" />
                       </div>
-
-                      {/* Visibility Checkbox */}
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`column-${config.key}`}
-                          checked={config.visible}
-                          onCheckedChange={() => toggleColumnVisibility(config.key)}
-                        />
-                        <Label
-                          htmlFor={`column-${config.key}`}
-                          className={`text-sm ${config.visible ? 'text-black' : 'text-gray-500'}`}
-                        >
-                          {config.visible ? 'Visible' : 'Hidden'}
-                        </Label>
-                      </div>
-
                       {/* Column Label Input */}
                       <div className="flex-1">
                         <Input
@@ -362,36 +308,8 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                           placeholder="Column label"
                         />
                       </div>
-
-                      {/* Order Display */}
-                      <div className="text-sm text-gray-500 min-w-[60px]">
-                        Order: {config.order}
-                      </div>
-
-                      {/* Column Status Badge */}
-                      <Badge 
-                        variant={config.visible ? "default" : "secondary"}
-                        className="text-xs"
-                      >
-                        {config.visible ? "Shown" : "Hidden"}
-                      </Badge>
                     </div>
                   ))}
-                </div>
-
-                {/* Preview Summary */}
-                <div className="mt-2 p-2 bg-gray-50 rounded-lg">
-                  <h4 className="text-sm font-medium text-black mb-2">Export Preview</h4>
-                  <p className="text-sm text-gray-600 mb-2">
-                    {visibleColumns.length} of {columnConfigs.length} columns will be exported
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {visibleColumns.map((column, index) => (
-                      <Badge key={column.key} variant="outline" className="text-xs">
-                        {index + 1}. {column.label}
-                      </Badge>
-                    ))}
-                  </div>
                 </div>
               </div>
             </CardContent>
@@ -426,43 +344,40 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm border border-gray-300">
-                  <thead>
-                    <tr className="bg-gray-100">
+                <Table className="border border-collapse border-radius-lg">
+                  <TableHeader>
+                    <TableRow>
                       {visibleColumns.map((column) => (
-                        <th 
+                        <TableHead 
                           key={column.key}
-                          className={`border border-gray-300 p-1 text-left text-black font-medium ${
+                          className={`border ${
                             column.key === 'customer' || column.key === 'rate' ? 'bg-yellow-200' : ''
                           } ${column.key === 'totalKg' ? 'text-right' : ''}`}
                         >
                           {column.label}
-                        </th>
+                        </TableHead>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {currentRecords.map((record, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
+                      <TableRow key={index}>
                         {visibleColumns.map((column) => (
-                          <td 
+                          <TableCell 
                             key={column.key}
-                            className={`border border-gray-300 p-1 text-gray-900 ${
-                              column.key === 'customer' || column.key === 'rate' ? 'bg-yellow-200 text-xs' : ''
+                            className={`border ${
+                              column.key === 'customer' || column.key === 'rate' ? 'bg-yellow-200' : ''
                             } ${column.key === 'recId' ? 'font-mono text-xs' : ''} ${
                               column.key === 'totalKg' ? 'text-right' : ''
                             }`}
                           >
-                            {column.key === 'customer' || column.key === 'rate' 
-                              ? '' 
-                              : (record as any)[column.key] || ''
-                            }
-                          </td>
+                            {(record as any)[column.key] || ''}
+                          </TableCell>
                         ))}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             
             {/* Pagination Controls */}

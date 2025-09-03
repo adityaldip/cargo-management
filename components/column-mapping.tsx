@@ -3,6 +3,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { CheckCircle, AlertTriangle, ArrowRight } from "lucide-react"
 
 interface ColumnMapping {
@@ -72,82 +73,59 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
   }
 
   return (
-    <div className="space-y-4 pt-2">
+    <div className="space-y-4 pt-2 max-w-xl mx-auto">
       {/* Column Mapping Interface */}
       <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader className="pb-0">
-          <div className="grid grid-cols-3 gap-1 mt-1">
-            <div className="text-center">
-              <div className="bg-black text-white px-1 py-2 rounded text-xs font-medium">
-                Excel Column
-              </div>
-            </div>
-            <div className="text-center">
-              {/* <div className="bg-blue-100 text-blue-800 px-1 py-2 rounded text-xs font-medium">
-                {getMappedCount()}/{getTotalCount()}
-              </div> */}
-            </div>
-            <div className="text-center">
-              <div className="bg-black text-white px-1 py-2 rounded text-xs font-medium">
-                Final Export Column
-              </div>
-            </div>
-          </div>
-        </CardHeader> 
         <CardContent className="pt-0">
-          <div className="space-y-1">
-            {mappings.map((mapping, index) => (
-              <div
-                key={index}
-                className="grid grid-cols-3 gap-4 items-center py-1"
-              >
-                {/* Excel Column */}
-                <div className="flex items-center gap-1">
-                  <span className="w-5 h-5 bg-gray-100 rounded text-xs flex items-center justify-center text-gray-600 flex-shrink-0">
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="font-medium text-black text-sm truncate">{mapping.excelColumn}</div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {mapping.sampleData[0] && mapping.sampleData[0].substring(0, 20)}
-                      {mapping.sampleData[0] && mapping.sampleData[0].length > 20 && '...'}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12 text-center">No</TableHead>
+                <TableHead>Excel Column</TableHead>
+                <TableHead>Final Export Column</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {mappings.map((mapping, index) => (
+                <TableRow key={index}>
+                  <TableCell className="text-center">
+                    <span className="w-6 h-6 bg-gray-100 rounded text-xs flex items-center justify-center text-gray-600 mx-auto">
+                      {index + 1}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="min-w-0">
+                      <div className="font-medium text-black text-sm truncate">{mapping.excelColumn}</div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {mapping.sampleData[0] && mapping.sampleData[0].substring(0, 30)}
+                        {mapping.sampleData[0] && mapping.sampleData[0].length > 30 && '...'}
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Mapping Status */}
-                <div className="flex items-center justify-center">
-                  {mapping.status === "mapped" ? (
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <div className="h-4 w-4 border border-gray-300 rounded-full" />
-                  )}
-                </div>
-
-                {/* Final Export Column */}
-                <div>
-                  <Select
-                    value={mapping.mappedTo || "unmapped"}
-                    onValueChange={(value) => handleMappingChange(mapping.excelColumn, value)}
-                  >
-                    <SelectTrigger className="w-full h-8 text-sm">
-                      <SelectValue placeholder="Select mapping" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unmapped">
-                        <span className="text-gray-500">Don't map</span>
-                      </SelectItem>
-                      {FINAL_EXPORT_COLUMNS.map((col) => (
-                        <SelectItem key={col} value={col}>
-                          {col}
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={mapping.mappedTo || "unmapped"}
+                      onValueChange={(value) => handleMappingChange(mapping.excelColumn, value)}
+                    >
+                      <SelectTrigger className="w-full h-8 text-sm">
+                        <SelectValue placeholder="Select mapping" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unmapped">
+                          <span className="text-gray-500">Don't map</span>
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            ))}
-          </div>
+                        {FINAL_EXPORT_COLUMNS.map((col) => (
+                          <SelectItem key={col} value={col}>
+                            {col}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
 
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
             <div>

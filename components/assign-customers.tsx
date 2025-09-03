@@ -33,6 +33,8 @@ import {
   ArrowLeft
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { CARGO_CODES } from "@/lib/cargo-codes"
+import { SAMPLE_CUSTOMER_RULES, type CustomerRule } from "@/lib/sample-rules"
 import type { ProcessedData } from "@/types/cargo-data"
 
 interface AssignCustomersProps {
@@ -41,173 +43,7 @@ interface AssignCustomersProps {
   onSavePriorityConditions?: (conditions: any[]) => void
 }
 
-interface CustomerRule {
-  id: string
-  name: string
-  description: string
-  isActive: boolean
-  priority: number
-  conditions: {
-    field: "route" | "weight" | "mail_category" | "customer" | "flight_number"
-    operator: "equals" | "contains" | "greater_than" | "less_than" | "starts_with" | "ends_with"
-    value: string
-  }[]
-  actions: {
-    assignTo: string
-    priority: "high" | "medium" | "low"
-    tags: string[]
-  }
-  matchCount: number
-  lastRun?: string
-}
 
-// Sample airBaltic automation rules (based on Gorgias template)
-const SAMPLE_RULES: CustomerRule[] = [
-  {
-    id: "1",
-    name: "auto-close (general)",
-    description: "Automatically close general cargo shipments after processing completion",
-    isActive: true,
-    priority: 1,
-    conditions: [
-      { field: "mail_category", operator: "equals", value: "C" },
-      { field: "weight", operator: "less_than", value: "25" }
-    ],
-    actions: {
-      assignTo: "General Processing Team",
-      priority: "low",
-      tags: ["Auto-close", "General", "Standard"]
-    },
-    matchCount: 156,
-    lastRun: "2025-01-28T12:00:00Z"
-  },
-  {
-    id: "2", 
-    name: "Cargo Facts",
-    description: "Auto-populate cargo documentation with flight and route details",
-    isActive: true,
-    priority: 2,
-    conditions: [
-      { field: "route", operator: "contains", value: "RIX,TLL,VNO" },
-      { field: "mail_category", operator: "equals", value: "A" }
-    ],
-    actions: {
-      assignTo: "Documentation Team",
-      priority: "medium", 
-      tags: ["Documentation", "Auto-populate", "Facts"]
-    },
-    matchCount: 89,
-    lastRun: "2025-01-28T09:15:00Z"
-  },
-  {
-    id: "3",
-    name: "auto assign agent / team",
-    description: "Automatically assign cargo to appropriate handling agent based on route and priority",
-    isActive: true,
-    priority: 3,
-    conditions: [
-      { field: "route", operator: "contains", value: "FRANK,DEBER,CZPRG" },
-      { field: "mail_category", operator: "equals", value: "A" }
-    ],
-    actions: {
-      assignTo: "Premium Express Team",
-      priority: "high",
-      tags: ["Auto-assign", "Agent", "Priority"]
-    },
-    matchCount: 45,
-    lastRun: "2025-01-28T10:30:00Z"
-  },
-  {
-    id: "4",
-    name: "Whatsapp auto-message",
-    description: "Send automated WhatsApp notifications for high-priority cargo updates",
-    isActive: true,
-    priority: 4,
-    conditions: [
-      { field: "mail_category", operator: "equals", value: "A" },
-      { field: "weight", operator: "greater_than", value: "50" }
-    ],
-    actions: {
-      assignTo: "Communication Team",
-      priority: "high",
-      tags: ["WhatsApp", "Auto-message", "Notifications"]
-    },
-    matchCount: 34,
-    lastRun: "2025-01-28T11:45:00Z"
-  },
-  {
-    id: "5",
-    name: "#jeff-reading",
-    description: "Auto-tag cargo requiring special handling review by Jeff's team",
-    isActive: true,
-    priority: 5,
-    conditions: [
-      { field: "weight", operator: "greater_than", value: "100" },
-      { field: "mail_category", operator: "equals", value: "B" }
-    ],
-    actions: {
-      assignTo: "Special Handling Team",
-      priority: "medium",
-      tags: ["Jeff-reading", "Special", "Review"]
-    },
-    matchCount: 12,
-    lastRun: "2025-01-28T08:20:00Z"
-  },
-  {
-    id: "6",
-    name: "email campaigns",
-    description: "Trigger automated email campaigns for customer cargo status updates",
-    isActive: true,
-    priority: 6,
-    conditions: [
-      { field: "customer", operator: "contains", value: "Premium,Express" },
-      { field: "mail_category", operator: "equals", value: "A" }
-    ],
-    actions: {
-      assignTo: "Marketing Team",
-      priority: "medium",
-      tags: ["Email", "Campaign", "Customer-updates"]
-    },
-    matchCount: 67,
-    lastRun: "2025-01-28T07:30:00Z"
-  },
-  {
-    id: "7",
-    name: "auto-close (OTP's)",
-    description: "Automatically close One Time Password verified shipments",
-    isActive: true,
-    priority: 7,
-    conditions: [
-      { field: "customer", operator: "contains", value: "Verified" },
-      { field: "mail_category", operator: "equals", value: "A" }
-    ],
-    actions: {
-      assignTo: "Security Team",
-      priority: "high",
-      tags: ["Auto-close", "OTP", "Security"]
-    },
-    matchCount: 23,
-    lastRun: "2025-01-28T06:15:00Z"
-  },
-  {
-    id: "8",
-    name: "auto assign team [receipts] & [reimburse]",
-    description: "Auto-assign financial processing team for receipt handling and reimbursements",
-    isActive: true,
-    priority: 8,
-    conditions: [
-      { field: "customer", operator: "contains", value: "Corporate,Business" },
-      { field: "weight", operator: "greater_than", value: "10" }
-    ],
-    actions: {
-      assignTo: "Financial Processing Team",
-      priority: "medium",
-      tags: ["Receipts", "Reimburse", "Financial"]
-    },
-    matchCount: 41,
-    lastRun: "2025-01-28T05:45:00Z"
-  }
-]
 
 interface Customer {
   id: string
@@ -295,7 +131,7 @@ const SAMPLE_CUSTOMERS: Customer[] = [
 export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityConditions }: AssignCustomersProps) {
   const [activeTab, setActiveTab] = useState<"customers" | "configure" | "execute">("customers")
   const [currentView, setCurrentView] = useState<"rules" | "results">("rules")
-  const [rules, setRules] = useState<CustomerRule[]>(SAMPLE_RULES)
+  const [rules, setRules] = useState<CustomerRule[]>(SAMPLE_CUSTOMER_RULES)
   const [customers, setCustomers] = useState<Customer[]>(SAMPLE_CUSTOMERS)
   const [searchTerm, setSearchTerm] = useState("")
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
@@ -305,13 +141,68 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
   const [isCustomerEditorOpen, setIsCustomerEditorOpen] = useState(false)
   const [draggedRule, setDraggedRule] = useState<string | null>(null)
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [filterLogic, setFilterLogic] = useState<"AND" | "OR">("OR")
+  const [filterConditions, setFilterConditions] = useState<{
+    field: string
+    operator: string
+    value: string
+  }[]>([{ field: "orig_oe", operator: "equals", value: "" }])
+  
+  // State for expanded rule editing
+  const [editingRuleConditions, setEditingRuleConditions] = useState<{
+    field: string
+    operator: string
+    value: string
+  }[]>([])
+  const [editingRuleLogic, setEditingRuleLogic] = useState<"AND" | "OR">("AND")
 
-  // Filter rules based on search
-  const filteredRules = rules.filter(rule => 
+  // Filter rules based on search and conditions
+  const filteredRules = rules.filter(rule => {
+    // First apply search filter
+    const matchesSearch = !searchTerm || (
     rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     rule.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     rule.actions.assignTo.toLowerCase().includes(searchTerm.toLowerCase())
   )
+    
+    if (!matchesSearch) return false
+    
+    // Then apply condition filters if any are set
+    if (!showFilters || filterConditions.every(cond => !cond.value)) return true
+    
+    const activeConditions = filterConditions.filter(cond => cond.value.trim())
+    if (activeConditions.length === 0) return true
+    
+    const conditionResults = activeConditions.map((filterCond) => {
+      const ruleConditions = rule.conditions || []
+      return ruleConditions.some(ruleCond => {
+        const fieldMatch = ruleCond.field === filterCond.field
+        
+        if (!fieldMatch) return false
+        
+        const ruleValue = ruleCond.value.toLowerCase()
+        const filterValue = filterCond.value.toLowerCase()
+        
+        switch (filterCond.operator) {
+          case "contains":
+            return ruleValue.includes(filterValue)
+          case "equals":
+            return ruleValue === filterValue
+          case "starts_with":
+            return ruleValue.startsWith(filterValue)
+          case "ends_with":
+            return ruleValue.endsWith(filterValue)
+          default:
+            return false
+        }
+      })
+    })
+    
+    return filterLogic === "OR" 
+      ? conditionResults.some(result => result)
+      : conditionResults.every(result => result)
+  })
 
   // Filter customers based on search
   const filteredCustomers = customers.filter(customer => 
@@ -330,8 +221,17 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
   const handleEditRule = (rule: CustomerRule) => {
     if (expandedRule === rule.id) {
       setExpandedRule(null)
+      setEditingRuleConditions([])
     } else {
       setExpandedRule(rule.id)
+      // Initialize editing state with current rule conditions
+      const initialConditions = rule.conditions.map(cond => ({
+        field: cond.field,
+        operator: cond.operator,
+        value: cond.value
+      }))
+      setEditingRuleConditions(initialConditions.length > 0 ? initialConditions : [{ field: "orig_oe", operator: "equals", value: "" }])
+      setEditingRuleLogic("AND")
     }
   }
 
@@ -382,36 +282,47 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
     setDraggedRule(null)
   }
 
-  const getStatusIcon = (rule: CustomerRule) => {
-    if (!rule.isActive) return <Pause className="h-4 w-4 text-gray-400" />
-    if (rule.matchCount > 50) return <CheckCircle className="h-4 w-4 text-green-500" />
-    if (rule.matchCount > 10) return <Play className="h-4 w-4 text-blue-500" />
-    return <Clock className="h-4 w-4 text-yellow-500" />
+
+  const clearFilters = () => {
+    setFilterConditions([{ field: "orig_oe", operator: "equals", value: "" }])
+    setFilterLogic("OR")
+    setShowFilters(false)
   }
 
-  const getPriorityBadge = (priority: string) => {
-    const config = {
-      high: { label: "High", className: "bg-red-100 text-red-800" },
-      medium: { label: "Medium", className: "bg-yellow-100 text-yellow-800" },
-      low: { label: "Low", className: "bg-green-100 text-green-800" }
-    }
-    return (
-      <Badge className={config[priority as keyof typeof config].className}>
-        {config[priority as keyof typeof config].label}
-      </Badge>
+  // Get unique values for each field type from sample rules
+  const getFieldValues = (fieldType: string) => {
+    // Since we're using rule.where directly, we need to get all values from all rules
+    const allValues = SAMPLE_CUSTOMER_RULES.flatMap(rule => 
+      rule.conditions.map(cond => cond.value)
     )
+        
+    return [...new Set(allValues)]
   }
 
-  const getConditionIcon = (field: string) => {
-    const icons = {
-      route: MapPin,
-      weight: Weight,
-      mail_category: Package,
-      customer: UserCheck,
-      flight_number: Plane
-    }
-    const Icon = icons[field as keyof typeof icons] || Settings
-    return <Icon className="h-3 w-3" />
+  // Get unique where options from sample rules
+  const getWhereOptions = () => {
+    const allWhereOptions = SAMPLE_CUSTOMER_RULES.flatMap(rule => rule.where)
+    const uniqueOptions = [...new Set(allWhereOptions)].sort()
+    
+    return uniqueOptions.map(option => ({
+      label: option,
+      value: option.toLowerCase().replace(/\s+/g, '_').replace(/\./g, '')
+    }))
+  }
+
+  // Helper functions for editing rule conditions
+  const addEditingRuleCondition = () => {
+    // Use the first available field option from the current rule's where array
+    const firstField = getWhereOptions()[0]?.value || "orig_oe"
+    setEditingRuleConditions(prev => [...prev, { field: firstField, operator: "equals", value: "" }])
+  }
+
+  const removeEditingRuleCondition = (index: number) => {
+    setEditingRuleConditions(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const updateEditingRuleCondition = (index: number, updates: Partial<typeof editingRuleConditions[0]>) => {
+    setEditingRuleConditions(prev => prev.map((cond, i) => i === index ? { ...cond, ...updates } : cond))
   }
 
   return (
@@ -470,682 +381,528 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
       {/* Rules View */}
       {currentView === "rules" && (
         <>
-
-      {/* Configure Customers Tab */}
-      {activeTab === "customers" && (
-        <>
-          {/* Customer Management */}
-          <Card className="bg-white border-gray-200 shadow-sm">
-            <CardContent>
-            <div className="flex items-center justify-between pb-2">
-                <CardTitle className="text-black flex items-center gap-2">
-                  <UserCheck className="h-5 w-5" />
-                  Customer Management
-                </CardTitle>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setSelectedCustomer(null)
-                      setIsCustomerEditorOpen(true)
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Customer
-                  </Button>
+        {/* Configure Customers Tab */}
+        {activeTab === "customers" && (
+          <div className="max-w-3xl mx-auto">
+            {/* Customer Management */}
+            <Card className="bg-white border-gray-200 shadow-sm">
+              <CardContent>
+              <div className="flex items-center justify-between pb-2">
+                  <CardTitle className="text-black flex items-center gap-2">
+                    <UserCheck className="h-5 w-5" />
+                    Customer Management
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCustomer(null)
+                        setIsCustomerEditorOpen(true)
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Customer
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="h-8">
-                      <TableHead className="h-8 py-1 text-xs">Status</TableHead>
-                      <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
-                      <TableHead className="h-8 py-1 text-xs">Code</TableHead>
-                      <TableHead className="h-8 py-1 text-xs">Shipments</TableHead>
-                      <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCustomers.map((customer) => (
-                      <TableRow key={customer.id} className="h-10">
-                        <TableCell className="py-1 px-2">
-                          <div className="flex items-center gap-1">
-                            <Switch
-                              checked={customer.isActive}
-                              onCheckedChange={() => handleToggleCustomer(customer.id)}
-                              className="scale-75"
-                            />
-                            <span className={cn(
-                              "text-xs font-medium",
-                              customer.isActive ? "text-green-600" : "text-gray-400"
-                            )}>
-                              {customer.isActive ? "Active" : "Inactive"}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-2 px-3">
-                          <div>
-                            <p className="font-medium text-black text-sm leading-tight">{customer.name}</p>
-                            <p className="text-xs text-gray-500 leading-tight">{customer.address}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-2 px-3">
-                          <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
-                            {customer.code}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-2 px-3">
-                          <span className="font-medium text-sm">{customer.totalShipments}</span>
-                        </TableCell>
-                        <TableCell className="py-2 px-3">
-                          <div className="flex gap-0">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleEditCustomer(customer)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleDeleteCustomer(customer.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="h-8">
+                        <TableHead className="h-8 py-1 text-xs">Status</TableHead>
+                        <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
+                        <TableHead className="h-8 py-1 text-xs">Code</TableHead>
+                        <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {filteredCustomers.length === 0 && (
-                <div className="text-center py-8">
-                  <UserCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">No customers found matching your search criteria</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {/* Configure Rules Tab */}
-      {activeTab === "configure" && (
-        <>
-      {/* Rules Management */}
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-black flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Automation Rules
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  setSelectedRule(null)
-                  setIsRuleEditorOpen(true)
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Rule
-              </Button>
-              <Button className="bg-black hover:bg-gray-800 text-white">
-                <Play className="h-4 w-4 mr-2" />
-                Execute Automation
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          <div className="space-y-2">
-            {filteredRules.map((rule) => (
-              <div key={rule.id} className="border rounded-lg">
-                <div
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, rule.id)}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, rule.id)}
-                  className={cn(
-                    "flex items-center gap-4 p-3 transition-all cursor-pointer hover:bg-gray-50",
-                    rule.isActive ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
-                    draggedRule === rule.id && "opacity-50",
-                    expandedRule === rule.id && "bg-gray-50"
-                  )}
-                  onClick={() => handleEditRule(rule)}
-                >
-                  {/* Drag Handle */}
-                  <div className="cursor-grab hover:cursor-grabbing">
-                    <GripVertical className="h-4 w-4 text-gray-400" />
-                  </div>
-
-                  {/* Priority Badge */}
-                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
-                    {rule.priority}
-                  </div>
-
-                  {/* Toggle Switch */}
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={rule.isActive}
-                      onCheckedChange={() => handleToggleRule(rule.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="scale-75"
-                    />
-                  </div>
-                  
-                  {/* Rule Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-black text-sm">{rule.name}</h3>
-                  </div>
-
-                  {/* Assignment Info */}
-                  <div className="text-right">
-                    {rule.lastRun && (
-                      <p className="text-xs text-gray-400">
-                        Last update: {new Date(rule.lastRun).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-1">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleEditRule(rule)
-                      }}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        // Copy rule logic
-                      }}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        // Delete rule logic
-                      }}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCustomers.map((customer) => (
+                        <TableRow key={customer.id} className=" ">
+                          <TableCell className="py-1 px-1">
+                            <div className="flex items-center gap-1">
+                              <Switch
+                                checked={customer.isActive}
+                                onCheckedChange={() => handleToggleCustomer(customer.id)}
+                                className="scale-75"
+                              />
+                              <span className={cn(
+                                "text-xs font-medium",
+                                customer.isActive ? "text-green-600" : "text-gray-400"
+                              )}>
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2 px-3">
+                            <div>
+                              <p className="font-medium text-black text-sm leading-tight">{customer.name}</p>
+                              <p className="text-xs text-gray-500 leading-tight">{customer.address}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2 px-3">
+                            <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
+                              {customer.code}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-2 px-3">
+                            <div className="flex gap-0">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleEditCustomer(customer)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleDeleteCustomer(customer.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
 
-                {/* Expanded Edit Section */}
-                {expandedRule === rule.id && (
-                  <div className="border-t bg-gray-50 p-4">
-                    <div className="space-y-4">
-                      {/* Conditions Section */}
-                      <div className="flex items-end gap-4">
-                        <div className="flex-1">
-                          <Label className="text-xs font-medium text-gray-700">Where</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Select defaultValue={rule.conditions[0]?.field || "mail_category"}>
-                              <SelectTrigger className="h-8 text-xs w-80">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="mail_category">Mail Category</SelectItem>
-                                <SelectItem value="route">Orig. OE</SelectItem>
-                                <SelectItem value="weight">Weight (kg)</SelectItem>
-                                <SelectItem value="customer">Customer</SelectItem>
-                                <SelectItem value="flight_number">Flight Number</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Select defaultValue={rule.conditions[0]?.operator || "equals"}>
-                              <SelectTrigger className="h-8 text-xs w-16">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="equals">is</SelectItem>
-                                <SelectItem value="contains">contains</SelectItem>
-                                <SelectItem value="greater_than">&gt;</SelectItem>
-                                <SelectItem value="less_than">&lt;</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Input 
-                              defaultValue={rule.conditions[0]?.value || "C"}
-                              className="h-8 text-xs w-48"
-                              placeholder="Value"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="w-64">
-                          <Label className="text-xs font-medium text-gray-700">Customer</Label>
-                          <Select defaultValue="">
-                            <SelectTrigger className="h-8 text-xs mt-1">
-                              <SelectValue placeholder="Select customer..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="premium-express">Premium Express Ltd</SelectItem>
-                              <SelectItem value="nordic-post">Nordic Post AS</SelectItem>
-                              <SelectItem value="baltic-express">Baltic Express Network</SelectItem>
-                              <SelectItem value="cargo-masters">Cargo Masters International</SelectItem>
-                              <SelectItem value="general-mail">General Mail Services</SelectItem>
-                              <SelectItem value="euro-logistics">Euro Logistics GmbH</SelectItem>
-                              <SelectItem value="air-freight">Air Freight Solutions</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex justify-end gap-2 pt-2 border-t">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setExpandedRule(null)}
-                          className="h-7 text-xs"
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          size="sm"
-                          className="bg-black hover:bg-gray-800 text-white h-7 text-xs"
-                        >
-                          Save Changes
-                        </Button>
-                      </div>
-                    </div>
+                {filteredCustomers.length === 0 && (
+                  <div className="text-center py-8">
+                    <UserCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-500">No customers found matching your search criteria</p>
                   </div>
                 )}
-              </div>
-            ))}
+              </CardContent>
+            </Card>
           </div>
+        )}
 
-          {filteredRules.length === 0 && (
-            <div className="text-center py-8">
-              <UserCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500">No rules found matching your search criteria</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Rule Editor Modal */}
-      <Dialog open={isRuleEditorOpen} onOpenChange={setIsRuleEditorOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedRule ? `Edit Rule: ${selectedRule.name}` : "Create New Rule"}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            {/* Rule Basic Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="rule-name">Rule Name</Label>
-                <Input 
-                  id="rule-name"
-                  placeholder="e.g., High Priority EU Routes"
-                  defaultValue={selectedRule?.name}
-                />
-              </div>
-              <div>
-                <Label htmlFor="rule-customer">Assign To Customer</Label>
-                <Select defaultValue={selectedRule?.actions.assignTo}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Premium Express Ltd">Premium Express Ltd</SelectItem>
-                    <SelectItem value="Nordic Post AS">Nordic Post AS</SelectItem>
-                    <SelectItem value="Cargo Masters International">Cargo Masters International</SelectItem>
-                    <SelectItem value="Baltic Express Network">Baltic Express Network</SelectItem>
-                    <SelectItem value="General Mail Services">General Mail Services</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="rule-description">Description</Label>
-              <Textarea 
-                id="rule-description"
-                placeholder="Describe what this rule does..."
-                defaultValue={selectedRule?.description}
-              />
-            </div>
-
-            {/* Rule Conditions */}
-            <div>
-              <Label>Conditions</Label>
-              <div className="space-y-2 mt-2">
-                {(selectedRule?.conditions || [{ field: "route", operator: "equals", value: "" }]).map((condition, idx) => (
-                  <div key={idx} className="flex gap-2 items-center p-3 border rounded-lg">
-                    <Select defaultValue={condition.field}>
-                      <SelectTrigger className="w-40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="route">Route</SelectItem>
-                        <SelectItem value="weight">Weight (kg)</SelectItem>
-                        <SelectItem value="mail_category">Mail Category</SelectItem>
-                        <SelectItem value="customer">Customer</SelectItem>
-                        <SelectItem value="flight_number">Flight Number</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
-                    <Select defaultValue={condition.operator}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="equals">Equals</SelectItem>
-                        <SelectItem value="contains">Contains</SelectItem>
-                        <SelectItem value="starts_with">Starts with</SelectItem>
-                        <SelectItem value="ends_with">Ends with</SelectItem>
-                        <SelectItem value="greater_than">Greater than</SelectItem>
-                        <SelectItem value="less_than">Less than</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
-                    <Input 
-                      placeholder="Value"
-                      defaultValue={condition.value}
-                      className="flex-1"
-                    />
-                    
-                    <Button variant="ghost" size="sm">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                
-                <Button variant="outline" size="sm">
+        {/* Configure Rules Tab */}
+        {activeTab === "configure" && (
+          <>
+        {/* Rules Management */}
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-black flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Automation Rules
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setSelectedRule(null)
+                    setIsRuleEditorOpen(true)
+                  }}
+                >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Condition
+                  New Rule
+                </Button>
+                <Button className="bg-black hover:bg-gray-800 text-white">
+                  <Play className="h-4 w-4 mr-2" />
+                  Execute Automation
                 </Button>
               </div>
             </div>
-
-            {/* Rule Actions */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="rule-priority">Priority Level</Label>
-                <Select defaultValue={selectedRule?.actions.priority || "medium"}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="high">High Priority</SelectItem>
-                    <SelectItem value="medium">Medium Priority</SelectItem>
-                    <SelectItem value="low">Low Priority</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="rule-tags">Tags</Label>
-                <Input 
-                  id="rule-tags"
-                  placeholder="EU, Express, Priority (comma separated)"
-                  defaultValue={selectedRule?.actions.tags.join(", ")}
-                />
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setIsRuleEditorOpen(false)}>
-                Cancel
-              </Button>
-              <Button className="bg-black hover:bg-gray-800 text-white">
-                {selectedRule ? "Update Rule" : "Create Rule"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Customer Editor Modal */}
-      <Dialog open={isCustomerEditorOpen} onOpenChange={setIsCustomerEditorOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedCustomer ? `Edit Customer: ${selectedCustomer.name}` : "Create New Customer"}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            {/* Customer Basic Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="customer-name">Customer Name</Label>
-                <Input 
-                  id="customer-name"
-                  placeholder="e.g., Premium Express Ltd"
-                  defaultValue={selectedCustomer?.name}
-                />
-              </div>
-              <div>
-                <Label htmlFor="customer-code">Customer Code</Label>
-                <Input 
-                  id="customer-code"
-                  placeholder="e.g., PREM001"
-                  defaultValue={selectedCustomer?.code}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="customer-email">Email</Label>
-                <Input 
-                  id="customer-email"
-                  type="email"
-                  placeholder="contact@example.com"
-                  defaultValue={selectedCustomer?.email}
-                />
-              </div>
-              <div>
-                <Label htmlFor="customer-phone">Phone</Label>
-                <Input 
-                  id="customer-phone"
-                  placeholder="+371 2345 6789"
-                  defaultValue={selectedCustomer?.phone}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="customer-address">Address</Label>
-              <Input 
-                id="customer-address"
-                placeholder="City, Country"
-                defaultValue={selectedCustomer?.address}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="customer-contact">Contact Person</Label>
-                <Input 
-                  id="customer-contact"
-                  placeholder="John Doe"
-                  defaultValue={selectedCustomer?.contactPerson}
-                />
-              </div>
-              <div>
-                <Label htmlFor="customer-priority">Priority Level</Label>
-                <Select defaultValue={selectedCustomer?.priority || "medium"}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="high">High Priority</SelectItem>
-                    <SelectItem value="medium">Medium Priority</SelectItem>
-                    <SelectItem value="low">Low Priority</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Customer Status */}
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="customer-active"
-                defaultChecked={selectedCustomer?.isActive ?? true}
-              />
-              <Label htmlFor="customer-active">Active Customer</Label>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setIsCustomerEditorOpen(false)}>
-                Cancel
-              </Button>
-              <Button className="bg-black hover:bg-gray-800 text-white">
-                {selectedCustomer ? "Update Customer" : "Create Customer"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-        </>
-      )}
-
-      {/* Execute Rules Tab */}
-      {activeTab === "execute" && (
-        <Card className="bg-white border-gray-200 shadow-sm">
-          <CardHeader>
-            <div className="flex justify-between items-start">
-              <div>
-                <CardTitle className="text-black">Cargo Data Preview</CardTitle>
-                <p className="text-sm text-gray-600">Preview of cargo data that will be processed by automation rules</p>
-              </div>
-              <Button 
-                className="bg-black hover:bg-gray-800 text-white"
-                onClick={() => setCurrentView("results")}
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Execute All Rules
-              </Button>
-            </div>
-            <div className="flex justify-end">
-              <div className="flex gap-4 text-sm text-gray-600">
-                <span>Total Records: <strong className="text-black">1,000</strong></span>
-                <span>Total Weight: <strong className="text-black">25,432.5 kg</strong></span>
-                <span>Avg Weight: <strong className="text-black">25.4 kg</strong></span>
-              </div>
-            </div>
           </CardHeader>
+
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border border-gray-300">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Inb.Flight Date</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Outb.Flight Date</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Rec. ID</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Des. No.</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Rec. Numb.</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Orig. OE</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Dest. OE</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Inb. Flight No.</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Outb. Flight No.</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Mail Cat.</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Mail Class</th>
-                    <th className="border border-gray-300 p-1 text-right text-black font-medium">Total kg</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium">Invoice</th>
-                    <th className="border border-gray-300 p-2 text-left text-black font-medium bg-yellow-200">Customer</th>
-                    <th className="border border-gray-300 p-1 text-left text-black font-medium bg-yellow-200">Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from({ length: 20 }, (_, index) => {
-                    const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM", "ESMADD", "NLAMS", "BEBRUB"]
-                    const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA", "USANC", "USHOU", "USDAL"]
-                    const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456", "BA789", "KL012", "IB345"]
-                    const mailCats = ["A", "B", "C", "D", "E"]
-                    const mailClasses = ["7C", "7D", "7E", "7F", "7G", "8A", "8B", "8C"]
-                    const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
-                    
-                    const year = 2025
-                    const month = Math.floor(Math.random() * 12) + 1
-                    const day = Math.floor(Math.random() * 28) + 1
-                    const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-                    
-                    const inbDate = `${year} ${monthNames[month - 1]} ${day.toString().padStart(2, '0')}`
-                    const outbDate = `${year} ${monthNames[month - 1]} ${(day + 1).toString().padStart(2, '0')}`
-                    
-                    const origOE = origins[Math.floor(Math.random() * origins.length)]
-                    const destOE = destinations[Math.floor(Math.random() * destinations.length)]
-                    const mailCat = mailCats[Math.floor(Math.random() * mailCats.length)]
-                    const mailClass = mailClasses[Math.floor(Math.random() * mailClasses.length)]
-                    
-                    const desNo = (50700 + Math.floor(Math.random() * 100)).toString()
-                    const recNumb = (Math.floor(Math.random() * 999) + 1).toString().padStart(3, '0')
-                    const recId = `${origOE}${destOE}${mailCat}${mailClass}${desNo}${recNumb}${(70000 + Math.floor(Math.random() * 9999)).toString()}`
-                    
-                    const customers = [
-                      "POST DANMARK A/S / QDKCPHA",
-                      "DIRECT LINK WORLWIDE INC. / QDLW", 
-                      "POSTNORD SVERIGE AB / QSTO",
-                      "Premium Express Ltd",
-                      "Nordic Post AS",
-                      "Baltic Express Network",
-                      "Cargo Masters International"
-                    ]
-                    
-                    return (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="border border-gray-300 p-1 text-gray-900">{inbDate}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{outbDate}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900 font-mono text-xs">{recId}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{desNo}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{recNumb}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{origOE}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{destOE}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{flightNos[Math.floor(Math.random() * flightNos.length)]}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{flightNos[Math.floor(Math.random() * flightNos.length)]}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{mailCat}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{mailClass}</td>
-                        <td className="border border-gray-300 p-1 text-right text-gray-900">{(Math.random() * 50 + 0.1).toFixed(1)}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900">{invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)]}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900 text-xs bg-yellow-200">{customers[Math.floor(Math.random() * customers.length)]}</td>
-                        <td className="border border-gray-300 p-1 text-gray-900 text-xs bg-yellow-200">{(Math.random() * 15 + 2.5).toFixed(2)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            {/* Filter Section - Notion Style */}
+            <div className="mb-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {showFilters && filterConditions.some(c => c.value) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="text-xs h-8 px-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    >
+                      Clear all
+                    </Button>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {filteredRules.length} of {rules.length} rules
+                </div>
+              </div>
             </div>
-            
-            <div className="mt-2 text-center">
-              <p className="text-sm text-gray-500">
-                This data will be processed by the active automation rules to assign customers and rates
-              </p>
+            <div className="space-y-2">
+              {filteredRules.map((rule) => (
+                <div key={rule.id} className="border rounded-lg">
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, rule.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, rule.id)}
+                    className={cn(
+                      "flex items-center gap-4 p-3 transition-all cursor-pointer hover:bg-gray-50",
+                      rule.isActive ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
+                      draggedRule === rule.id && "opacity-50",
+                      expandedRule === rule.id && "bg-gray-50"
+                    )}
+                    onClick={() => handleEditRule(rule)}
+                  >
+                    {/* Drag Handle */}
+                    <div className="cursor-grab hover:cursor-grabbing">
+                      <GripVertical className="h-4 w-4 text-gray-400" />
+                    </div>
+
+                    {/* Priority Badge */}
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
+                      {rule.priority}
+                    </div>
+
+                    {/* Toggle Switch */}
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={rule.isActive}
+                        onCheckedChange={() => handleToggleRule(rule.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="scale-75"
+                      />
+                    </div>
+                    
+                    {/* Rule Info */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-black text-sm">{rule.name}</h3>
+                    </div>
+
+                    {/* Assignment Info */}
+                    <div className="text-right">
+                      {rule.lastRun && (
+                        <p className="text-xs text-gray-400">
+                          Last update: {new Date(rule.lastRun).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleEditRule(rule)
+                        }}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          // Copy rule logic
+                        }}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          // Delete rule logic
+                        }}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Expanded Edit Section */}
+                  {expandedRule === rule.id && (
+                    <div className="border-t bg-gray-50 p-4">
+                      <div className="space-y-4">
+                        {/* Notion-Style Filter Section */}
+                        <div className="border border-gray-200 rounded-lg bg-white shadow-sm">
+                          {/* Filter Conditions */}
+                          <div className="p-4 space-y-2">
+                            {editingRuleConditions.map((condition, index) => (
+                              <div key={index} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 group">
+                                {index === 0 ? (
+                                  <span className="text-sm font-medium text-gray-700 min-w-12">Where</span>
+                                ) : (
+                                  <Select 
+                                    value={editingRuleLogic}
+                                    onValueChange={(value) => setEditingRuleLogic(value as "AND" | "OR")}
+                                  >
+                                    <SelectTrigger className="h-8 min-w-16 max-w-16 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                      <SelectItem value="AND">And</SelectItem>
+                                      <SelectItem value="OR">Or</SelectItem>
+                                </SelectContent>
+                              </Select>
+                                )}
+
+                                <Select 
+                                  value={condition.field}
+                                  onValueChange={(value) => {
+                                    // When field changes, clear the value since it may not be valid for the new field
+                                    updateEditingRuleCondition(index, { field: value, value: "" })
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 min-w-32 max-w-64 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
+                                    <SelectValue/>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {rule.where.map((option) => (
+                                      <SelectItem key={option} value={option}>
+                                        {option}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+
+                                <Select 
+                                  value={condition.operator}
+                                  onValueChange={(value) => updateEditingRuleCondition(index, { operator: value })}
+                                >
+                                  <SelectTrigger className="h-8 min-w-24 max-w-32 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="equals">Is</SelectItem>
+                                    <SelectItem value="contains">Contains</SelectItem>
+                                    <SelectItem value="starts_with">Starts with</SelectItem>
+                                    <SelectItem value="ends_with">Ends with</SelectItem>
+                                </SelectContent>
+                              </Select>
+
+                                <Select 
+                                  value={condition.value}
+                                  onValueChange={(value) => updateEditingRuleCondition(index, { value })}
+                                >
+                                  <SelectTrigger className="h-8 min-w-32 max-w-64 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500 flex-1">
+                                    <SelectValue/>
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-60">
+                                    {(() => {
+                                      const values = getFieldValues(condition.field)
+                                      console.log(`Rendering values for field ${condition.field}:`, values)
+                                      return values.map((value) => (
+                                        <SelectItem key={value} value={value}>
+                                          {value}
+                                        </SelectItem>
+                                      ))
+                                    })()}
+                                  </SelectContent>
+                                </Select>
+
+                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {editingRuleConditions.length > 1 && index > 0 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => removeEditingRuleCondition(index)}
+                                      className="h-8 w-8 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                            </div>
+                          </div>
+                            ))}
+
+                            {/* Customer Assignment Row */}
+                            <div className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
+                              <div className="flex items-center gap-2 flex-1">
+                                <span className="text-sm font-medium text-gray-700 min-w-12">Customer</span>
+                                <Select defaultValue={rule.actions.assignTo}>
+                                  <SelectTrigger className="h-8 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500 flex-1 min-w-32 max-w-64">
+                                <SelectValue placeholder="Select customer..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="premium-express">Premium Express Ltd</SelectItem>
+                                <SelectItem value="nordic-post">Nordic Post AS</SelectItem>
+                                <SelectItem value="baltic-express">Baltic Express Network</SelectItem>
+                                <SelectItem value="cargo-masters">Cargo Masters International</SelectItem>
+                                <SelectItem value="general-mail">General Mail Services</SelectItem>
+                                <SelectItem value="euro-logistics">Euro Logistics GmbH</SelectItem>
+                                <SelectItem value="air-freight">Air Freight Solutions</SelectItem>
+                              </SelectContent>
+                            </Select>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Add Filter Button */}
+                          <div className="px-4 pb-4">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={addEditingRuleCondition}
+                              className="h-8 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                            >
+                              <Plus className="h-3 w-3 mr-2" />
+                              Add filter rule
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex justify-end gap-2 pt-2 border-t">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setExpandedRule(null)}
+                            className="h-7 text-xs"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            size="sm"
+                            className="bg-black hover:bg-gray-800 text-white h-7 text-xs"
+                          >
+                            Save Changes
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
+
+            {filteredRules.length === 0 && (
+              <div className="text-center py-8">
+                <UserCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-500">No rules found matching your search criteria</p>
+              </div>
+            )}
           </CardContent>
         </Card>
-      )}
+          </>
+        )}
+
+        {/* Execute Rules Tab */}
+        {activeTab === "execute" && (
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-black">Cargo Data Preview</CardTitle>
+                  <p className="text-sm text-gray-600">Preview of cargo data that will be processed by automation rules</p>
+                </div>
+                <Button 
+                  className="bg-black hover:bg-gray-800 text-white"
+                  onClick={() => setCurrentView("results")}
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Execute All Rules
+                </Button>
+              </div>
+              <div className="flex justify-end">
+                <div className="flex gap-4 text-sm text-gray-600">
+                  <span>Total Records: <strong className="text-black">1,000</strong></span>
+                  <span>Total Weight: <strong className="text-black">25,432.5 kg</strong></span>
+                  <span>Avg Weight: <strong className="text-black">25.4 kg</strong></span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table className="border border-collapse">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="border">Inb.Flight Date</TableHead>
+                      <TableHead className="border">Outb.Flight Date</TableHead>
+                      <TableHead className="border">Rec. ID</TableHead>
+                      <TableHead className="border">Des. No.</TableHead>
+                      <TableHead className="border">Rec. Numb.</TableHead>
+                      <TableHead className="border">Orig. OE</TableHead>
+                      <TableHead className="border">Dest. OE</TableHead>
+                      <TableHead className="border">Inb. Flight No.</TableHead>
+                      <TableHead className="border">Outb. Flight No.</TableHead>
+                      <TableHead className="border">Mail Cat.</TableHead>
+                      <TableHead className="border">Mail Class</TableHead>
+                      <TableHead className="border text-right">Total kg</TableHead>
+                      <TableHead className="border">Invoice</TableHead>
+                      <TableHead className="border bg-yellow-200">Customer</TableHead>
+                      <TableHead className="border bg-yellow-200">Rate</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: 20 }, (_, index) => {
+                      const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM", "ESMADD", "NLAMS", "BEBRUB"]
+                      const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA", "USANC", "USHOU", "USDAL"]
+                      const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456", "BA789", "KL012", "IB345"]
+                      const mailCats = ["A", "B", "C", "D", "E"]
+                      const mailClasses = ["7C", "7D", "7E", "7F", "7G", "8A", "8B", "8C"]
+                      const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
+                      
+                      const year = 2025
+                      const month = Math.floor(Math.random() * 12) + 1
+                      const day = Math.floor(Math.random() * 28) + 1
+                      const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+                      
+                      const inbDate = `${year} ${monthNames[month - 1]} ${day.toString().padStart(2, '0')}`
+                      const outbDate = `${year} ${monthNames[month - 1]} ${(day + 1).toString().padStart(2, '0')}`
+                      
+                      const origOE = origins[Math.floor(Math.random() * origins.length)]
+                      const destOE = destinations[Math.floor(Math.random() * destinations.length)]
+                      const mailCat = mailCats[Math.floor(Math.random() * mailCats.length)]
+                      const mailClass = mailClasses[Math.floor(Math.random() * mailClasses.length)]
+                      
+                      const desNo = (50700 + Math.floor(Math.random() * 100)).toString()
+                      const recNumb = (Math.floor(Math.random() * 999) + 1).toString().padStart(3, '0')
+                      const recId = `${origOE}${destOE}${mailCat}${mailClass}${desNo}${recNumb}${(70000 + Math.floor(Math.random() * 9999)).toString()}`
+                      
+                      const customers = [
+                        "POST DANMARK A/S / QDKCPHA",
+                        "DIRECT LINK WORLWIDE INC. / QDLW", 
+                        "POSTNORD SVERIGE AB / QSTO",
+                        "Premium Express Ltd",
+                        "Nordic Post AS",
+                        "Baltic Express Network",
+                        "Cargo Masters International"
+                      ]
+                      
+                      return (
+                        <TableRow key={index}>
+                          <TableCell className="border">{inbDate}</TableCell>
+                          <TableCell className="border">{outbDate}</TableCell>
+                          <TableCell className="border font-mono text-xs">{recId}</TableCell>
+                          <TableCell className="border">{desNo}</TableCell>
+                          <TableCell className="border">{recNumb}</TableCell>
+                          <TableCell className="border">{origOE}</TableCell>
+                          <TableCell className="border">{destOE}</TableCell>
+                          <TableCell className="border">{flightNos[Math.floor(Math.random() * flightNos.length)]}</TableCell>
+                          <TableCell className="border">{flightNos[Math.floor(Math.random() * flightNos.length)]}</TableCell>
+                          <TableCell className="border">{mailCat}</TableCell>
+                          <TableCell className="border">{mailClass}</TableCell>
+                          <TableCell className="border text-right">{(Math.random() * 50 + 0.1).toFixed(1)}</TableCell>
+                          <TableCell className="border">{invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)]}</TableCell>
+                          <TableCell className="border text-xs bg-yellow-200">{customers[Math.floor(Math.random() * customers.length)]}</TableCell>
+                          <TableCell className="border text-xs bg-yellow-200">{(Math.random() * 15 + 2.5).toFixed(2)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              <div className="mt-2 text-center">
+                <p className="text-sm text-gray-500">
+                  This data will be processed by the active automation rules to assign customers and rates
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         </>
       )}
 
