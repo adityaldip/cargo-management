@@ -5,8 +5,8 @@ import { ImportMailAgent } from "@/components/import-mail-agent"
 import { ImportMailSystem } from "@/components/import-mail-system"
 import { ReviewMergedExcel } from "@/components/review-merged-excel"
 import { ReviewCustomers } from "@/components/review-customers"
-import { AssignCustomers } from "@/components/assign-customers"
-import { AssignRates } from "@/components/assign-rates"
+import { AssignCustomers } from "@/components/assign-customers-modules"
+import { AssignRates } from "@/components/assign-rates-modules"
 import { ReviewRates } from "@/components/review-rates"
 import { ReviewInvoices } from "@/components/review-invoices"
 import { defaultRateSettings, type RateSettings } from "@/types/rate-settings"
@@ -70,15 +70,15 @@ export function MailProcessingDashboard() {
             onContinue={() => setActiveStep("review-customers")}
           />
         )
-      case "review-customers":
-        return (
-          <ReviewCustomers
-            data={mergedData}
-            savedPriorityConditions={savedPriorityConditions}
-            onSavePriorityConditions={setSavedPriorityConditions}
-            onContinue={() => setActiveStep("assign-customers")}
-          />
-        )
+      // case "review-customers":
+      //   return (
+      //     <ReviewCustomers
+      //       data={mergedData}
+      //       savedPriorityConditions={savedPriorityConditions}
+      //       onSavePriorityConditions={setSavedPriorityConditions}
+      //       onContinue={() => setActiveStep("assign-customers")}
+      //     />
+      //   )
       case "assign-customers":
         return (
           <AssignCustomers

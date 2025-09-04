@@ -1,6 +1,0 @@
-export { AssignCustomers } from './AssignCustomers'
-export { CustomerManagement } from './CustomerManagement'
-export { RulesConfiguration } from './RulesConfiguration'
-export { ExecuteRules } from './ExecuteRules'
-export * from './types'
-export * from './hooks'

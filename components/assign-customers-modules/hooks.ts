@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { customerOperations, customerRulesOperations } from "@/lib/supabase-operations"
+import { customerAPI, rulesAPI } from "@/lib/api-client"
 import { Customer, CustomerRuleExtended } from "./types"
 
 export function useCustomerData() {
@@ -9,7 +9,7 @@ export function useCustomerData() {
 
   const fetchCustomers = async () => {
     try {
-      const { data: customerData, error } = await customerOperations.getAll()
+      const { data: customerData, error } = await customerAPI.getAll()
       if (error) {
         setError(`Failed to fetch customers: ${error}`)
         return
@@ -27,7 +27,7 @@ export function useCustomerData() {
     if (!customer) return
 
     try {
-      const { data: updatedCustomer, error } = await customerOperations.toggleActive(customerId, !customer.is_active)
+      const { data: updatedCustomer, error } = await customerAPI.toggleActive(customerId, !customer.is_active)
       if (error) {
         setError(`Failed to update customer: ${error}`)
         return
@@ -47,7 +47,7 @@ export function useCustomerData() {
     if (!confirm('Are you sure you want to delete this customer?')) return
 
     try {
-      const { error } = await customerOperations.delete(customerId)
+      const { error } = await customerAPI.delete(customerId)
       if (error) {
         setError(`Failed to delete customer: ${error}`)
         return
@@ -56,6 +56,46 @@ export function useCustomerData() {
       setCustomers(prev => prev.filter(customer => customer.id !== customerId))
     } catch (err) {
       setError(`Failed to delete customer: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  const createCustomer = async (customerData: any) => {
+    try {
+      const { data: newCustomer, error } = await customerAPI.create(customerData)
+      if (error) {
+        setError(`Failed to create customer: ${error}`)
+        return { success: false, error }
+      }
+      
+      if (newCustomer) {
+        setCustomers(prev => [newCustomer as Customer, ...prev])
+        return { success: true, data: newCustomer }
+      }
+    } catch (err) {
+      const errorMessage = `Failed to create customer: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  const updateCustomer = async (customerId: string, updates: any) => {
+    try {
+      const { data: updatedCustomer, error } = await customerAPI.update(customerId, updates)
+      if (error) {
+        setError(`Failed to update customer: ${error}`)
+        return { success: false, error }
+      }
+      
+      if (updatedCustomer) {
+        setCustomers(prev => prev.map(customer => 
+          customer.id === customerId ? updatedCustomer as Customer : customer
+        ))
+        return { success: true, data: updatedCustomer }
+      }
+    } catch (err) {
+      const errorMessage = `Failed to update customer: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
     }
   }
 
@@ -77,6 +117,8 @@ export function useCustomerData() {
     setError,
     toggleCustomer,
     deleteCustomer,
+    createCustomer,
+    updateCustomer,
     loadData,
     refetch: loadData
   }
@@ -105,7 +147,7 @@ export function useCustomerRules() {
   const fetchCustomerRules = async () => {
     try {
       console.log('Fetching customer rules...')
-      const { data: rulesData, error } = await customerRulesOperations.getAll()
+      const { data: rulesData, error } = await rulesAPI.getAll()
       console.log('Rules data:', rulesData, 'Error:', error)
       
       if (error) {
@@ -139,7 +181,7 @@ export function useCustomerRules() {
     if (!rule) return
 
     try {
-      const { data: updatedRule, error } = await customerRulesOperations.toggleActive(ruleId, !rule.is_active)
+      const { data: updatedRule, error } = await rulesAPI.toggleActive(ruleId, !rule.is_active)
       if (error) {
         setError(`Failed to update rule: ${error}`)
         return
@@ -157,15 +199,11 @@ export function useCustomerRules() {
 
   const updateRulePriorities = async (updatedRules: CustomerRuleExtended[]) => {
     try {
-      const updatePromises = updatedRules.map(rule => 
-        customerRulesOperations.updatePriority(rule.id, rule.priority)
-      )
+      // Use server-side API that handles the two-phase update strategy
+      const { error } = await rulesAPI.updatePriorities(updatedRules)
       
-      const results = await Promise.all(updatePromises)
-      const hasErrors = results.some(result => result.error)
-      
-      if (hasErrors) {
-        setError('Failed to update rule priorities')
+      if (error) {
+        setError(`Failed to update rule priorities: ${error}`)
         return false
       }
       
@@ -193,6 +231,86 @@ export function useCustomerRules() {
     loadData()
   }, [])
 
+  const createRule = async (ruleData: any) => {
+    try {
+      setError(null)
+
+      // Transform component data to database format
+      const dbRuleData = {
+        name: ruleData.name,
+        description: ruleData.description,
+        is_active: ruleData.isActive ?? true,
+        priority: ruleData.priority ?? rules.length + 1,
+        conditions: ruleData.conditions || [],
+        actions: ruleData.actions || { assignTo: "" },
+        where_fields: ruleData.where || []
+      }
+
+      const { data, error } = await rulesAPI.create(dbRuleData)
+      
+      if (error) {
+        setError(error)
+        return { success: false, error }
+      }
+
+      if (data) {
+        // Transform database data to component format
+        const dbRule = data as any
+        const newRule: CustomerRuleExtended = {
+          id: dbRule.id,
+          name: dbRule.name,
+          description: dbRule.description || "",
+          is_active: dbRule.is_active,
+          priority: dbRule.priority,
+          match_count: dbRule.match_count || 0,
+          created_at: dbRule.created_at,
+          updated_at: dbRule.updated_at,
+          last_run: dbRule.last_run,
+          conditions: dbRule.conditions || [],
+          actions: dbRule.actions || { assignTo: "" },
+          where: dbRule.where_fields || []
+        }
+
+        // Update local state
+        setRules(prev => [newRule, ...prev])
+        
+        // Update cache
+        const updatedRules = [newRule, ...rules]
+        localStorage.setItem('customer-rules-cache', JSON.stringify(updatedRules))
+      }
+      
+      return { success: true, data }
+    } catch (err) {
+      const errorMsg = `Failed to create rule: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      return { success: false, error: errorMsg }
+    }
+  }
+
+  const deleteRule = async (ruleId: string) => {
+    try {
+      const { error } = await rulesAPI.delete(ruleId)
+      
+      if (error) {
+        setError(error)
+        return { success: false, error }
+      }
+
+      // Update local state
+      setRules(prev => prev.filter(r => r.id !== ruleId))
+      
+      // Update cache
+      const updatedRules = rules.filter(r => r.id !== ruleId)
+      localStorage.setItem('customer-rules-cache', JSON.stringify(updatedRules))
+      
+      return { success: true }
+    } catch (err) {
+      const errorMsg = `Failed to delete rule: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      return { success: false, error: errorMsg }
+    }
+  }
+
   return {
     rules,
     setRules,
@@ -202,6 +320,8 @@ export function useCustomerRules() {
     setError,
     toggleRule,
     updateRulePriorities,
+    createRule,
+    deleteRule,
     loadData,
     refetch: () => loadData(true)
   }

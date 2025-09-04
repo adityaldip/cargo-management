@@ -24,9 +24,10 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCustomerRules } from "./hooks"
-import { customerRulesOperations } from "@/lib/supabase-operations"
+import { rulesAPI } from "@/lib/api-client"
 import { CustomerRuleExtended } from "./types"
 import { SAMPLE_CUSTOMER_RULES } from "@/lib/sample-rules"
+import { CreateCustomerRuleModal } from "./CreateCustomerRuleModal"
 import { useEffect } from "react"
 
 export function RulesConfiguration() {
@@ -39,6 +40,8 @@ export function RulesConfiguration() {
     setError,
     toggleRule,
     updateRulePriorities,
+    createRule,
+    deleteRule,
     refetch
   } = useCustomerRules()
 
@@ -68,6 +71,8 @@ export function RulesConfiguration() {
   const [editingRuleName, setEditingRuleName] = useState("")
   const [editingRuleAssignTo, setEditingRuleAssignTo] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [isReordering, setIsReordering] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   // Filter rules based on search and conditions
   const filteredRules = rules.filter(rule => {
@@ -161,29 +166,49 @@ export function RulesConfiguration() {
   const handleDrop = async (e: React.DragEvent, targetRuleId: string) => {
     e.preventDefault()
     
-    if (!draggedRule || draggedRule === targetRuleId) return
+    if (!draggedRule || draggedRule === targetRuleId || isReordering) return
 
     const draggedIndex = rules.findIndex(r => r.id === draggedRule)
     const targetIndex = rules.findIndex(r => r.id === targetRuleId)
     
-    const newRules = [...rules]
-    const [draggedItem] = newRules.splice(draggedIndex, 1)
-    newRules.splice(targetIndex, 0, draggedItem)
+    if (draggedIndex === -1 || targetIndex === -1) return
+
+    setIsReordering(true)
+    setError(null)
     
-    // Update priorities based on new order
-    const updatedRules = newRules.map((rule, index) => ({
-      ...rule,
-      priority: index + 1
-    }))
-    
-    // Update in database
-    const success = await updateRulePriorities(updatedRules)
-    if (!success) {
-      // Revert on failure
-      return
+    try {
+      const newRules = [...rules]
+      const [draggedItem] = newRules.splice(draggedIndex, 1)
+      newRules.splice(targetIndex, 0, draggedItem)
+      
+      // Update priorities based on new order
+      const updatedRules = newRules.map((rule, index) => ({
+        ...rule,
+        priority: index + 1
+      }))
+      
+      // Optimistically update UI first
+      setRules(updatedRules)
+      
+      // Update in database
+      const success = await updateRulePriorities(updatedRules)
+      if (!success) {
+        // Revert on failure
+        await refetch() // Reload from database to get correct state
+        return
+      }
+      
+      // Update cache with new order
+      localStorage.setItem('customer-rules-cache', JSON.stringify(updatedRules))
+      
+    } catch (err) {
+      setError(`Failed to reorder rules: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      // Reload from database on error
+      await refetch()
+    } finally {
+      setDraggedRule(null)
+      setIsReordering(false)
     }
-    
-    setDraggedRule(null)
   }
 
   const clearFilters = () => {
@@ -249,7 +274,7 @@ export function RulesConfiguration() {
       }
 
       // Update in Supabase
-      const { data: updatedRule, error: updateError } = await customerRulesOperations.update(currentRule.id, updateData)
+      const { data: updatedRule, error: updateError } = await rulesAPI.update(currentRule.id, updateData)
       
       if (updateError) {
         setError(`Failed to save changes: ${updateError}`)
@@ -359,20 +384,24 @@ export function RulesConfiguration() {
 
       {/* Rules Management */}
       <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
+        <CardContent>
+        <div className="flex items-center justify-between">
             <CardTitle className="text-black flex items-center gap-2">
               <Settings className="h-5 w-5" />
               Automation Rules
+              {isReordering && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 ml-4">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                  <span className="text-xs">Reordering...</span>
+                </div>
+              )}
             </CardTitle>
             <div className="flex gap-2">
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => {
-                  setSelectedRule(null)
-                  setIsRuleEditorOpen(true)
-                }}
+                onClick={() => setIsCreateModalOpen(true)}
+                disabled={isReordering}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 New Rule
@@ -395,31 +424,16 @@ export function RulesConfiguration() {
               </Button>
             </div>
           </div>
-        </CardHeader>
-
-        <CardContent>
           {/* Filter Section - Notion Style */}
-          <div className="mb-4 space-y-3">
+          <div className="mb-4 space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {showFilters && filterConditions.some(c => c.value) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearFilters}
-                    className="text-xs h-8 px-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                  >
-                    Clear all
-                  </Button>
-                )}
-              </div>
               <div className="text-xs text-gray-500">
                 {filteredRules.length} of {rules.length} rules
               </div>
             </div>
           </div>
           
-          <div className="space-y-2">
+          <div className="space-y-1">
             {filteredRules.map((rule) => (
               <div key={rule.id} className="border rounded-lg">
                 <div
@@ -428,10 +442,11 @@ export function RulesConfiguration() {
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, rule.id)}
                   className={cn(
-                    "flex items-center gap-4 p-3 transition-colors duration-150 cursor-pointer hover:bg-gray-50",
+                    "flex items-center gap-4 p-1 transition-colors duration-150 cursor-pointer hover:bg-gray-50",
                     rule.is_active ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
                     draggedRule === rule.id && "opacity-50",
-                    (expandedRule === rule.id || expandingRuleId === rule.id) && "bg-gray-50"
+                    (expandedRule === rule.id || expandingRuleId === rule.id) && "bg-gray-50",
+                    isReordering && "pointer-events-none opacity-75"
                   )}
                   onClick={() => handleEditRule(rule)}
                 >
@@ -482,34 +497,17 @@ export function RulesConfiguration() {
                   <div className="flex gap-1">
                     <Button 
                       variant="ghost" 
-                      size="sm" 
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleEditRule(rule)
-                      }}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
                       size="sm"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation()
-                        // Copy rule logic
+                        if (confirm(`Are you sure you want to delete "${rule.name}"? This action cannot be undone.`)) {
+                          const result = await deleteRule(rule.id)
+                          if (!result.success) {
+                            alert(`Failed to delete rule: ${result.error}`)
+                          }
+                        }
                       }}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        // Delete rule logic
-                      }}
-                      className="h-6 w-6 p-0"
+                      className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -701,6 +699,13 @@ export function RulesConfiguration() {
           )}
         </CardContent>
       </Card>
+
+      {/* Create Customer Rule Modal */}
+      <CreateCustomerRuleModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSave={createRule}
+      />
     </>
   )
 }
