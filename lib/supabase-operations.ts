@@ -1,0 +1,492 @@
+import { supabase, safeSupabaseOperation } from './supabase'
+import { Database } from '@/types/database'
+
+type Tables = Database['public']['Tables']
+type Customer = Tables['customers']['Row']
+type CustomerRule = Tables['customer_rules']['Row']
+type RateRule = Tables['rate_rules']['Row']
+type CargoData = Tables['cargo_data']['Row']
+type ColumnMapping = Tables['column_mappings']['Row']
+type Invoice = Tables['invoices']['Row']
+
+// Customer Operations
+export const customerOperations = {
+  // Get all customers
+  async getAll() {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false })
+    )
+  },
+
+  // Get customer by ID
+  async getById(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customers')
+        .select('*')
+        .eq('id', id)
+        .single()
+    )
+  },
+
+  // Create new customer
+  async create(customer: Tables['customers']['Insert']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customers')
+        .insert(customer)
+        .select()
+        .single()
+    )
+  },
+
+  // Update customer
+  async update(id: string, updates: Tables['customers']['Update']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customers')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Delete customer
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customers')
+        .delete()
+        .eq('id', id)
+    )
+  },
+
+  // Toggle customer active status
+  async toggleActive(id: string, isActive: boolean) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customers')
+        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+}
+
+// Customer Rules Operations
+export const customerRulesOperations = {
+  // Get all customer rules
+  async getAll() {
+    const result = await safeSupabaseOperation(() =>
+      supabase
+        .from('customer_rules')
+        .select('*')
+        .order('priority', { ascending: true })
+    )
+    console.log('Supabase operations result:', result)
+    return result
+  },
+
+  // Get rule by ID
+  async getById(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customer_rules')
+        .select('*')
+        .eq('id', id)
+        .single()
+    )
+  },
+
+  // Create new rule
+  async create(rule: Tables['customer_rules']['Insert']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customer_rules')
+        .insert(rule)
+        .select()
+        .single()
+    )
+  },
+
+  // Update rule
+  async update(id: string, updates: Tables['customer_rules']['Update']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customer_rules')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Delete rule
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customer_rules')
+        .delete()
+        .eq('id', id)
+    )
+  },
+
+  // Toggle rule active status
+  async toggleActive(id: string, isActive: boolean) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customer_rules')
+        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Update rule priority (for drag & drop reordering)
+  async updatePriority(id: string, priority: number) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('customer_rules')
+        .update({ priority, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+}
+
+// Rate Rules Operations
+export const rateRulesOperations = {
+  // Get all rate rules
+  async getAll() {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('rate_rules')
+        .select('*')
+        .order('priority', { ascending: true })
+    )
+  },
+
+  // Get rule by ID
+  async getById(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('rate_rules')
+        .select('*')
+        .eq('id', id)
+        .single()
+    )
+  },
+
+  // Create new rule
+  async create(rule: Tables['rate_rules']['Insert']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('rate_rules')
+        .insert(rule)
+        .select()
+        .single()
+    )
+  },
+
+  // Update rule
+  async update(id: string, updates: Tables['rate_rules']['Update']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('rate_rules')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Delete rule
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('rate_rules')
+        .delete()
+        .eq('id', id)
+    )
+  },
+
+  // Toggle rule active status
+  async toggleActive(id: string, isActive: boolean) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('rate_rules')
+        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Update rule priority
+  async updatePriority(id: string, priority: number) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('rate_rules')
+        .update({ priority, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+}
+
+// Cargo Data Operations
+export const cargoDataOperations = {
+  // Get all cargo data with pagination
+  async getAll(page: number = 1, limit: number = 50) {
+    const offset = (page - 1) * limit
+    
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1)
+    )
+  },
+
+  // Get cargo data by ID
+  async getById(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .select('*')
+        .eq('id', id)
+        .single()
+    )
+  },
+
+  // Bulk insert cargo data
+  async bulkInsert(cargoData: Tables['cargo_data']['Insert'][]) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .insert(cargoData)
+        .select()
+    )
+  },
+
+  // Update cargo data
+  async update(id: string, updates: Tables['cargo_data']['Update']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Delete cargo data
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .delete()
+        .eq('id', id)
+    )
+  },
+
+  // Search cargo data
+  async search(query: string, limit: number = 50) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .select('*')
+        .or(`rec_id.ilike.%${query}%,orig_oe.ilike.%${query}%,dest_oe.ilike.%${query}%,inb_flight_no.ilike.%${query}%,outb_flight_no.ilike.%${query}%`)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+    )
+  },
+
+  // Get unprocessed cargo data
+  async getUnprocessed(limit: number = 100) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .select('*')
+        .is('assigned_customer', null)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+    )
+  },
+}
+
+// Column Mapping Operations
+export const columnMappingOperations = {
+  // Get all column mappings
+  async getAll() {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('column_mappings')
+        .select('*')
+        .order('order_index', { ascending: true })
+    )
+  },
+
+  // Create or update column mapping
+  async upsert(mapping: Tables['column_mappings']['Insert']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('column_mappings')
+        .upsert(mapping, { onConflict: 'original_name' })
+        .select()
+        .single()
+    )
+  },
+
+  // Bulk upsert column mappings
+  async bulkUpsert(mappings: Tables['column_mappings']['Insert'][]) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('column_mappings')
+        .upsert(mappings, { onConflict: 'original_name' })
+        .select()
+    )
+  },
+
+  // Delete column mapping
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('column_mappings')
+        .delete()
+        .eq('id', id)
+    )
+  },
+}
+
+// Invoice Operations
+export const invoiceOperations = {
+  // Get all invoices
+  async getAll() {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('invoices')
+        .select(`
+          *,
+          customers (
+            name,
+            code,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false })
+    )
+  },
+
+  // Get invoice by ID
+  async getById(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('invoices')
+        .select(`
+          *,
+          customers (
+            name,
+            code,
+            email,
+            address,
+            contact_person
+          )
+        `)
+        .eq('id', id)
+        .single()
+    )
+  },
+
+  // Create new invoice
+  async create(invoice: Tables['invoices']['Insert']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('invoices')
+        .insert(invoice)
+        .select()
+        .single()
+    )
+  },
+
+  // Update invoice
+  async update(id: string, updates: Tables['invoices']['Update']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('invoices')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Delete invoice
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('invoices')
+        .delete()
+        .eq('id', id)
+    )
+  },
+
+  // Update invoice status
+  async updateStatus(id: string, status: Database['public']['Enums']['invoice_status']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('invoices')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+}
+
+// Utility Functions
+export const utilityOperations = {
+  // Execute customer assignment rules
+  async executeCustomerRules() {
+    // This would contain the logic to process cargo data against customer rules
+    // For now, return a placeholder
+    return { data: { processed: 0, assigned: 0 }, error: null }
+  },
+
+  // Execute rate assignment rules
+  async executeRateRules() {
+    // This would contain the logic to process cargo data against rate rules
+    // For now, return a placeholder
+    return { data: { processed: 0, rates_assigned: 0 }, error: null }
+  },
+
+  // Get dashboard statistics
+  async getDashboardStats() {
+    return safeSupabaseOperation(async () => {
+      const [customersResult, cargoResult, invoicesResult] = await Promise.all([
+        supabase.from('customers').select('id', { count: 'exact' }),
+        supabase.from('cargo_data').select('id', { count: 'exact' }),
+        supabase.from('invoices').select('id', { count: 'exact' })
+      ])
+
+      return {
+        data: {
+          total_customers: customersResult.count || 0,
+          total_cargo_records: cargoResult.count || 0,
+          total_invoices: invoicesResult.count || 0,
+        },
+        error: null
+      }
+    })
+  },
+}
