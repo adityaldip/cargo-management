@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -167,6 +167,9 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
   const [sortBy, setSortBy] = useState<"revenue" | "weight" | "parcels">("revenue")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
+  
+  // Track if component has hydrated to prevent hydration mismatch
+  const [isHydrated, setIsHydrated] = useState(false)
 
   // Filter invoices based on search and status
   const filteredInvoices = invoices.filter(invoice => {
@@ -188,8 +191,28 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
   const pendingAmount = filteredInvoices.filter(inv => inv.status === "pending").reduce((sum, invoice) => sum + invoice.amount, 0)
   const overdueAmount = filteredInvoices.filter(inv => inv.status === "overdue").reduce((sum, invoice) => sum + invoice.amount, 0)
 
-  // Customer analysis logic
+  // Add hydration effect
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+
+  // Customer analysis logic - prevent hydration mismatch
   const customerAnalysis = useMemo(() => {
+    if (!isHydrated) {
+      // Before hydration, always use pre-existing customers to prevent hydration mismatch
+      return preExistingCustomers
+        .sort((a, b) => {
+          switch (sortBy) {
+            case "weight":
+              return b.totalKg - a.totalKg
+            case "parcels":
+              return b.parcels - a.parcels
+            default:
+              return b.totalEur - a.totalEur
+          }
+        })
+    }
+    
     if (data) {
       const analysis = data.data.reduce(
         (acc, record) => {
@@ -259,7 +282,7 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
             return b.totalEur - a.totalEur
         }
       })
-  }, [data, sortBy])
+  }, [isHydrated, data, sortBy])
 
   const getStatusBadge = (status: Invoice["status"]) => {
     const statusConfig = {

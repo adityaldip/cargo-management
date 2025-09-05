@@ -198,6 +198,14 @@ export function SetupRates() {
                     />
                   </div>
 
+                  {/* Rate Info */}
+                  <div className="text-right min-w-20">
+                    <p className="text-xs font-medium text-black">
+                      {rule.actions.currency} {rule.actions.baseRate.toFixed(2)}
+                      {rule.actions.rateType === "per_kg" && "/kg"}
+                    </p>
+                  </div>
+
                 </div>
               ))}
             </div>

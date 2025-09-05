@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Check } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { 
   Settings, 
@@ -20,7 +23,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  UserCheck
+  UserCheck,
+  ChevronDown
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCustomerRules } from "./hooks"
@@ -29,6 +33,7 @@ import { CustomerRuleExtended } from "./types"
 import { SAMPLE_CUSTOMER_RULES } from "@/lib/sample-rules"
 import { CreateCustomerRuleModal } from "./CreateCustomerRuleModal"
 import { useEffect } from "react"
+import { supabase } from "@/lib/supabase"
 
 export function RulesConfiguration() {
   const {
@@ -73,6 +78,57 @@ export function RulesConfiguration() {
   const [isSaving, setIsSaving] = useState(false)
   const [isReordering, setIsReordering] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [customers, setCustomers] = useState<{id: string, name: string, code: string}[]>([])
+  const [loadingCustomers, setLoadingCustomers] = useState(false)
+  const [openCustomerSelect, setOpenCustomerSelect] = useState(false)
+  const [openFieldSelects, setOpenFieldSelects] = useState<Record<number, boolean>>({})
+  const [openOperatorSelects, setOpenOperatorSelects] = useState<Record<number, boolean>>({})
+  
+  // Available field options from cargo_data columns (matching review-merged-excel.tsx)
+  const cargoDataFields = [
+    { key: 'inb_flight_date', label: 'Inb. Flight Date' },
+    { key: 'outb_flight_date', label: 'Outb. Flight Date' },
+    { key: 'rec_id', label: 'Rec. ID' },
+    { key: 'des_no', label: 'Des. No.' },
+    { key: 'rec_numb', label: 'Rec. Number' },
+    { key: 'orig_oe', label: 'Orig. OE' },
+    { key: 'dest_oe', label: 'Dest. OE' },
+    { key: 'inb_flight_no', label: 'Inb. Flight No.' },
+    { key: 'outb_flight_no', label: 'Outb. Flight No.' },
+    { key: 'mail_cat', label: 'Mail Category' },
+    { key: 'mail_class', label: 'Mail Class' },
+    { key: 'total_kg', label: 'Total Weight (kg)' },
+    { key: 'invoice', label: 'Invoice' },
+    { key: 'assigned_customer', label: 'Customer' },
+    { key: 'assigned_rate', label: 'Rate' }
+  ]
+
+  // Load customers from Supabase
+  useEffect(() => {
+    const loadCustomers = async () => {
+      setLoadingCustomers(true)
+      try {
+        const { data, error } = await supabase
+          .from('customers')
+          .select('id, name, code')
+          .eq('is_active', true)
+          .order('name')
+        
+        if (error) {
+          console.error('Error loading customers:', error)
+          return
+        }
+        
+        setCustomers(data || [])
+      } catch (err) {
+        console.error('Error loading customers:', err)
+      } finally {
+        setLoadingCustomers(false)
+      }
+    }
+    
+    loadCustomers()
+  }, [])
 
   // Filter rules based on search and conditions
   const filteredRules = rules.filter(rule => {
@@ -146,7 +202,7 @@ export function RulesConfiguration() {
           operator: cond.operator,
           value: cond.value
         }))
-        setEditingRuleConditions(initialConditions.length > 0 ? initialConditions : [{ field: "orig_oe", operator: "equals", value: "" }])
+        setEditingRuleConditions(initialConditions.length > 0 ? initialConditions : [{ field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }])
         setEditingRuleLogic("AND")
         setExpandingRuleId(null)
       }, 0)
@@ -212,7 +268,7 @@ export function RulesConfiguration() {
   }
 
   const clearFilters = () => {
-    setFilterConditions([{ field: "orig_oe", operator: "equals", value: "" }])
+    setFilterConditions([{ field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }])
     setFilterLogic("OR")
     setShowFilters(false)
   }
@@ -243,8 +299,8 @@ export function RulesConfiguration() {
 
   // Helper functions for editing rule conditions
   const addEditingRuleCondition = () => {
-    // Use the first available field option from the current rule's where array
-    const firstField = whereOptions[0]?.value || "orig_oe"
+    // Use the first available field option from cargo data fields
+    const firstField = cargoDataFields[0]?.key || "orig_oe"
     setEditingRuleConditions(prev => [...prev, { field: firstField, operator: "equals", value: "" }])
   }
 
@@ -323,41 +379,39 @@ export function RulesConfiguration() {
   // Show loading state with skeleton
   if (loading) {
     return (
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-black flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Automation Rules
-            </CardTitle>
-            <div className="flex gap-2">
-              <div className="h-9 w-20 bg-gray-200 rounded animate-pulse"></div>
-              <div className="h-9 w-16 bg-gray-200 rounded animate-pulse"></div>
-              <div className="h-9 w-32 bg-gray-200 rounded animate-pulse"></div>
+      <div className="max-w-4xl mx-auto">
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-black flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Automation Rules
+              </CardTitle>
+              <div className="flex gap-2">
+                <div className="h-9 w-20 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-9 w-16 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-9 w-32 bg-gray-200 rounded animate-pulse"></div>
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="border rounded-lg p-3 animate-pulse">
-                <div className="flex items-center gap-4">
-                  <div className="w-4 h-4 bg-gray-200 rounded"></div>
-                  <div className="w-6 h-6 bg-gray-200 rounded-full"></div>
-                  <div className="w-8 h-4 bg-gray-200 rounded"></div>
-                  <div className="flex-1 h-4 bg-gray-200 rounded"></div>
-                  <div className="w-20 h-3 bg-gray-200 rounded"></div>
-                  <div className="flex gap-1">
-                    <div className="w-6 h-6 bg-gray-200 rounded"></div>
-                    <div className="w-6 h-6 bg-gray-200 rounded"></div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="border rounded-lg p-1 animate-pulse">
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 bg-gray-200 rounded"></div>
+                    <div className="w-5 h-5 bg-gray-200 rounded-full"></div>
+                    <div className="w-6 h-4 bg-gray-200 rounded scale-75"></div>
+                    <div className="w-48 h-4 bg-gray-200 rounded"></div>
+                    <div className="flex-1"></div>
                     <div className="w-6 h-6 bg-gray-200 rounded"></div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
@@ -521,18 +575,31 @@ export function RulesConfiguration() {
 
                       {/* Notion-Style Filter Section */}
                       <div className="border border-gray-200 rounded-lg bg-white shadow-sm">
+                        {/* Add Condition Button - Moved to top */}
+                        <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={addEditingRuleCondition}
+                            className="h-8 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                          >
+                            <Plus className="h-3 w-3 mr-2" />
+                            Add condition
+                          </Button>
+                        </div>
+                        
                         {/* Filter Conditions */}
                         <div className="p-4 space-y-2">
                           {editingRuleConditions.map((condition, index) => (
-                            <div key={index} className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group">
+                            <div key={index} className="flex flex-wrap items-center gap-2 p-2 rounded-md hover:bg-gray-50 group">
                               {index === 0 ? (
-                                <span className="text-xs font-medium text-gray-700 min-w-10">Where</span>
+                                <span className="text-xs font-medium text-gray-700 w-18 flex-shrink-0">Where</span>
                               ) : (
                                 <Select 
                                   value={editingRuleLogic}
                                   onValueChange={(value) => setEditingRuleLogic(value as "AND" | "OR")}
                                 >
-                                  <SelectTrigger className="h-7 w-24 text-xs border-gray-200">
+                                  <SelectTrigger className="h-7 w-18 text-xs border-gray-200 flex-shrink-0">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -542,54 +609,115 @@ export function RulesConfiguration() {
                                 </Select>
                               )}
 
-                              <Select 
-                                value={condition.field}
-                                onValueChange={(value) => {
-                                  updateEditingRuleCondition(index, { field: value, value: "" })
-                                }}
+                              <Popover 
+                                open={openFieldSelects[index]} 
+                                onOpenChange={(open) => setOpenFieldSelects(prev => ({ ...prev, [index]: open }))}
                               >
-                                <SelectTrigger className="h-7 w-32 text-xs border-gray-200">
-                                  <SelectValue placeholder="Field"/>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {rule.where.map((option) => (
-                                    <SelectItem key={option} value={option}>
-                                      {option}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={openFieldSelects[index]}
+                                    className="h-7 w-36 text-xs border-gray-200 justify-between font-normal"
+                                  >
+                                    <span className="truncate">
+                                      {condition.field
+                                        ? cargoDataFields.find((field) => field.key === condition.field)?.label
+                                        : "Field..."}
+                                    </span>
+                                    <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-48 p-0">
+                                  <Command>
+                                    <CommandInput placeholder="Search field..." className="h-8 text-xs" />
+                                    <CommandEmpty>No field found.</CommandEmpty>
+                                    <CommandGroup className="max-h-48 overflow-auto">
+                                      {cargoDataFields.map((field) => (
+                                        <CommandItem
+                                          key={field.key}
+                                          value={field.label}
+                                          onSelect={() => {
+                                            updateEditingRuleCondition(index, { field: field.key, value: "" })
+                                            setOpenFieldSelects(prev => ({ ...prev, [index]: false }))
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-3 w-3",
+                                              condition.field === field.key ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          {field.label}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
 
-                              <Select 
-                                value={condition.operator}
-                                onValueChange={(value) => updateEditingRuleCondition(index, { operator: value })}
+                              <Popover 
+                                open={openOperatorSelects[index]} 
+                                onOpenChange={(open) => setOpenOperatorSelects(prev => ({ ...prev, [index]: open }))}
                               >
-                                <SelectTrigger className="h-7 w-24 text-xs border-gray-200">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="equals">Is</SelectItem>
-                                  <SelectItem value="contains">Contains</SelectItem>
-                                  <SelectItem value="starts_with">Starts</SelectItem>
-                                  <SelectItem value="ends_with">Ends</SelectItem>
-                                </SelectContent>
-                              </Select>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={openOperatorSelects[index]}
+                                    className="h-7 w-28 text-xs border-gray-200 justify-between font-normal"
+                                  >
+                                    <span className="truncate">
+                                      {condition.operator === "equals" && "Is"}
+                                      {condition.operator === "contains" && "Contains"}
+                                      {condition.operator === "starts_with" && "Starts"}
+                                      {condition.operator === "ends_with" && "Ends"}
+                                      {!condition.operator && "Operator..."}
+                                    </span>
+                                    <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-32 p-0">
+                                  <Command>
+                                    <CommandInput placeholder="Search..." className="h-8 text-xs" />
+                                    <CommandEmpty>No operator found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {[
+                                        { value: "equals", label: "Is" },
+                                        { value: "contains", label: "Contains" },
+                                        { value: "starts_with", label: "Starts" },
+                                        { value: "ends_with", label: "Ends" }
+                                      ].map((operator) => (
+                                        <CommandItem
+                                          key={operator.value}
+                                          value={operator.label}
+                                          onSelect={() => {
+                                            updateEditingRuleCondition(index, { operator: operator.value })
+                                            setOpenOperatorSelects(prev => ({ ...prev, [index]: false }))
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-3 w-3",
+                                              condition.operator === operator.value ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          {operator.label}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
 
-                              <Select 
+                              <Input
                                 value={condition.value}
-                                onValueChange={(value) => updateEditingRuleCondition(index, { value })}
-                              >
-                                <SelectTrigger className="h-7 w-24 text-xs border-gray-200 flex-1 min-w-20">
-                                  <SelectValue placeholder="Value"/>
-                                </SelectTrigger>
-                                <SelectContent className="max-h-60">
-                                  {getFieldValues(condition.field).map((value) => (
-                                    <SelectItem key={value} value={value}>
-                                      {value}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                onChange={(e) => updateEditingRuleCondition(index, { value: e.target.value })}
+                                placeholder="Enter value..."
+                                className="h-7 text-xs border-gray-200 flex-1 min-w-20"
+                              />
 
                               {editingRuleConditions.length > 1 && index > 0 && (
                                 <Button
@@ -605,40 +733,62 @@ export function RulesConfiguration() {
                           ))}
 
                           {/* Customer Assignment Row */}
-                          <div className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
-                            <span className="text-xs font-medium text-gray-700 min-w-10">Customer</span>
-                            <Select 
-                              value={editingRuleAssignTo}
-                              onValueChange={setEditingRuleAssignTo}
-                            >
-                              <SelectTrigger className="h-7 text-xs border-gray-200 flex-1 min-w-32 max-w-48">
-                                <SelectValue placeholder="Select customer..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="premium-express">Premium Express Ltd</SelectItem>
-                                <SelectItem value="nordic-post">Nordic Post AS</SelectItem>
-                                <SelectItem value="baltic-express">Baltic Express Network</SelectItem>
-                                <SelectItem value="cargo-masters">Cargo Masters International</SelectItem>
-                                <SelectItem value="general-mail">General Mail Services</SelectItem>
-                                <SelectItem value="euro-logistics">Euro Logistics GmbH</SelectItem>
-                                <SelectItem value="air-freight">Air Freight Solutions</SelectItem>
-                              </SelectContent>
-                            </Select>
+                          <div className="flex flex-wrap items-center gap-2 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
+                            <span className="text-xs font-medium text-gray-700 w-12 flex-shrink-0">Customer</span>
+                            <Popover open={openCustomerSelect} onOpenChange={setOpenCustomerSelect}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openCustomerSelect}
+                                  className="h-7 text-xs border-gray-200 flex-1 min-w-32 max-w-48 justify-between font-normal"
+                                  disabled={loadingCustomers}
+                                >
+                                  <span className="truncate">
+                                    {editingRuleAssignTo
+                                      ? customers.find((customer) => customer.id === editingRuleAssignTo)?.name
+                                      : loadingCustomers 
+                                        ? "Loading customers..." 
+                                        : "Select customer..."}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-0">
+                                <Command>
+                                  <CommandInput placeholder="Search customer..." className="h-8 text-xs" />
+                                  <CommandEmpty>
+                                    {loadingCustomers ? "Loading..." : "No customer found."}
+                                  </CommandEmpty>
+                                  <CommandGroup className="max-h-48 overflow-auto">
+                                    {customers.map((customer) => (
+                                      <CommandItem
+                                        key={customer.id}
+                                        value={`${customer.name} ${customer.code}`}
+                                        onSelect={() => {
+                                          setEditingRuleAssignTo(customer.id)
+                                          setOpenCustomerSelect(false)
+                                        }}
+                                        className="text-xs"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-3 w-3",
+                                            editingRuleAssignTo === customer.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="font-medium">{customer.name}</span>
+                                          <span className="text-gray-500">({customer.code})</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
                           </div>
 
-                        </div>
-
-                        {/* Add Filter Button */}
-                        <div className="px-4 pb-4">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={addEditingRuleCondition}
-                            className="h-8 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                          >
-                            <Plus className="h-3 w-3 mr-2" />
-                            Add filter rule
-                          </Button>
                         </div>
                       </div>
 

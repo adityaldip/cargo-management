@@ -7,11 +7,13 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertTriangle, RefreshCw, Download, Settings, Eye, GripVertical, Loader2, Trash2 } from "lucide-react"
+import { AlertTriangle, RefreshCw, Download, Settings, Eye, GripVertical, Loader2, Trash2, Filter } from "lucide-react"
 import { combineProcessedData } from "@/lib/file-processor"
 import { getCurrentSession, clearAllData } from "@/lib/storage-utils"
 import type { ProcessedData, CargoData } from "@/types/cargo-data"
 import type { Database } from "@/types/database"
+import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
+import { usePageFilters } from "@/store/filter-store"
 
 interface ReviewMergedExcelProps {
   mailAgentData: ProcessedData | null
@@ -105,6 +107,21 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   
   // Track if data has been intentionally cleared
   const [dataCleared, setDataCleared] = useState(false)
+  
+  // Track if component has hydrated to prevent hydration mismatch
+  const [isHydrated, setIsHydrated] = useState(false)
+  
+  // Filter state - now persistent
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const { conditions: filterConditions, logic: filterLogic, hasActiveFilters, setFilters, clearFilters } = usePageFilters("review-merged-excel")
+  
+  // Define filter fields based on column configurations
+  const filterFields: FilterField[] = columnConfigs.map(config => ({
+    key: config.key,
+    label: config.label,
+    type: config.key === 'total_kg' || config.key === 'assigned_rate' ? 'number' : 
+          config.key.includes('date') ? 'date' : 'text'
+  }))
 
   // Load real data from current session or merged data
   const loadRealData = () => {
@@ -145,10 +162,10 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         
         if (datasets.length > 0) {
           const combined = datasets.length > 1 ? combineProcessedData(datasets) : datasets[0]
-          // Ensure unique IDs for all records
+          // Ensure unique IDs for all records - use stable IDs to prevent hydration mismatch
           const dataWithUniqueIds = combined.data.map((record, index) => ({
             ...record,
-            id: `session-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+            id: record.id || `session-${index}`
           }))
           setRealData(dataWithUniqueIds)
           setDataSource(sourceName)
@@ -162,7 +179,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           const combined = combineProcessedData([mailAgentData, mailSystemData])
           const dataWithUniqueIds = combined.data.map((record, index) => ({
             ...record,
-            id: `props-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+            id: record.id || `props-${index}`
           }))
           setRealData(dataWithUniqueIds)
           setDataSource("Mail Agent + Mail System")
@@ -170,7 +187,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         } else if (mailAgentData) {
           const dataWithUniqueIds = mailAgentData.data.map((record, index) => ({
             ...record,
-            id: `agent-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+            id: record.id || `agent-${index}`
           }))
           setRealData(dataWithUniqueIds)
           setDataSource("Mail Agent Only")
@@ -178,7 +195,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         } else if (mailSystemData) {
           const dataWithUniqueIds = mailSystemData.data.map((record, index) => ({
             ...record,
-            id: `system-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+            id: record.id || `system-${index}`
           }))
           setRealData(dataWithUniqueIds)
           setDataSource("Mail System Only")
@@ -194,8 +211,53 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
     }
   }
 
-  // Use real data instead of dummy data, but respect cleared state
-  const sampleExcelData = useMemo(() => dataCleared ? [] : realData, [realData, dataCleared])
+  // Apply filters to the data
+  const applyFilters = (data: CargoData[], conditions: FilterCondition[], logic: "AND" | "OR"): CargoData[] => {
+    if (conditions.length === 0) return data
+
+    return data.filter(record => {
+      const conditionResults = conditions.map(condition => {
+        const value = formatCellValue(record, condition.field).toLowerCase()
+        const filterValue = condition.value.toLowerCase()
+
+        switch (condition.operator) {
+          case "equals":
+            return value === filterValue
+          case "contains":
+            return value.includes(filterValue)
+          case "starts_with":
+            return value.startsWith(filterValue)
+          case "ends_with":
+            return value.endsWith(filterValue)
+          case "greater_than":
+            return parseFloat(value) > parseFloat(filterValue)
+          case "less_than":
+            return parseFloat(value) < parseFloat(filterValue)
+          case "not_empty":
+            return value.trim() !== ""
+          case "is_empty":
+            return value.trim() === ""
+          default:
+            return false
+        }
+      })
+
+      return logic === "OR" 
+        ? conditionResults.some(result => result)
+        : conditionResults.every(result => result)
+    })
+  }
+
+  // Use real data instead of dummy data, but respect cleared state and apply filters
+  // Prevent hydration mismatch by ensuring consistent initial state
+  const sampleExcelData = useMemo(() => {
+    if (!isHydrated) {
+      // Before hydration, always return empty array to prevent hydration mismatch
+      return []
+    }
+    const baseData = dataCleared ? [] : realData
+    return applyFilters(baseData, filterConditions, filterLogic)
+  }, [isHydrated, realData, dataCleared, filterConditions, filterLogic])
   
   // Get only visible columns in order
   const visibleColumns = useMemo(() => 
@@ -217,9 +279,16 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   const endIndex = startIndex + recordsPerPage
   const currentRecords = sampleExcelData.slice(startIndex, endIndex)
   
-  // Calculate summary statistics
-  const totalWeight = sampleExcelData.reduce((sum, record) => sum + record.totalKg, 0)
-  const avgWeight = totalWeight / sampleExcelData.length
+  // Calculate summary statistics - prevent hydration mismatch
+  const totalWeight = useMemo(() => {
+    if (!isHydrated || sampleExcelData.length === 0) return 0
+    return sampleExcelData.reduce((sum, record) => sum + record.totalKg, 0)
+  }, [isHydrated, sampleExcelData])
+  
+  const avgWeight = useMemo(() => {
+    if (!isHydrated || sampleExcelData.length === 0) return 0
+    return totalWeight / sampleExcelData.length
+  }, [isHydrated, totalWeight, sampleExcelData.length])
 
   // Column configuration handlers (visibility toggle removed)
 
@@ -268,6 +337,16 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   const handleExportExcel = () => {
     // Demo function - just shows alert
     alert("Excel file would be exported here (demo mode)")
+  }
+
+  const handleApplyFilters = (conditions: FilterCondition[], logic: "AND" | "OR") => {
+    setFilters(conditions, logic)
+    setCurrentPage(1) // Reset to first page when filters change
+  }
+
+  const handleClearFilters = () => {
+    clearFilters()
+    setCurrentPage(1)
   }
 
   const handleClearData = async () => {
@@ -361,8 +440,16 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   }, [mailAgentData, mailSystemData])
 
   useEffect(() => {
-    loadRealData()
-  }, [mergedData, mailAgentData, mailSystemData])
+    // Mark as hydrated on client side
+    setIsHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    // Only load data after hydration to prevent hydration mismatch
+    if (isHydrated) {
+      loadRealData()
+    }
+  }, [isHydrated, mergedData, mailAgentData, mailSystemData])
 
   const handleMergeData = async () => {
     if (!mailAgentData && !mailSystemData) return
@@ -421,11 +508,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             variant={activeStep === "configure" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveStep("configure")}
-            className={
-              activeStep === "configure"
-                ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50"
-            }
+            className={activeStep === "configure" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Settings className="h-4 w-4 mr-2" />
             Configure Columns
@@ -434,11 +517,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             variant={activeStep === "preview" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveStep("preview")}
-            className={
-              activeStep === "preview"
-                ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50"
-            }
+            className={activeStep === "preview" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Eye className="h-4 w-4 mr-2" />
             Excel Preview
@@ -509,9 +588,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                       onDragStart={(e) => handleDragStart(e, config.key)}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, config.key)}
-                      className={`flex items-center gap-4 p-1 border border-gray-200 rounded-lg transition-all cursor-pointer hover:bg-gray-50 ${
-                        draggedColumn === config.key ? 'opacity-50' : ''
-                      }`}
+                      className={`flex items-center gap-4 p-1 border border-gray-200 rounded-lg transition-all cursor-pointer hover:bg-gray-50 ${draggedColumn === config.key ? 'opacity-50' : ''}`}
                     >
                       {/* Drag Handle */}
                       <div className="cursor-grab hover:cursor-grabbing">
@@ -551,6 +628,35 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <div className="relative">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsFilterOpen(!isFilterOpen)}
+                      className={hasActiveFilters ? "border-blue-300 bg-blue-50 text-blue-700" : ""}
+                    >
+                      <Filter className="w-4 h-4 mr-2" />
+                      Filter
+                      {hasActiveFilters && (
+                        <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-200 text-blue-800 rounded-full">
+                          {filterConditions.length}
+                        </span>
+                      )}
+                    </Button>
+                    
+                    {/* Filter Popup */}
+                    {isFilterOpen && (
+                      <FilterPopup
+                        isOpen={isFilterOpen}
+                        onClose={() => setIsFilterOpen(false)}
+                        onApply={handleApplyFilters}
+                        fields={filterFields}
+                        initialConditions={filterConditions}
+                        initialLogic={filterLogic}
+                        title="Filter Excel Data"
+                      />
+                    )}
+                  </div>                  
                   <Button
                     variant="outline"
                     size="sm"
@@ -592,9 +698,31 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                 </Button>
                 </div>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-between">
+                <div className="flex gap-2 items-center">
+                  {hasActiveFilters && (
+                    <div className="flex gap-2 items-center">
+                      <Badge variant="secondary" className="text-xs">
+                        {filterConditions.length} filter{filterConditions.length !== 1 ? 's' : ''} active
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearFilters}
+                        className="h-6 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Clear filters
+                      </Button>
+                    </div>
+                  )}
+                </div>
                 <div className="flex gap-4 text-sm text-gray-600">
-                  <span>Total Records: <strong className="text-black">{sampleExcelData.length.toLocaleString()}</strong></span>
+                  {hasActiveFilters && (
+                    <span>Filtered: <strong className="text-black">{sampleExcelData.length.toLocaleString()}</strong> / <strong className="text-gray-500">{realData.length.toLocaleString()}</strong></span>
+                  )}
+                  {!hasActiveFilters && (
+                    <span>Total Records: <strong className="text-black">{sampleExcelData.length.toLocaleString()}</strong></span>
+                  )}
                   <span>Total Weight: <strong className="text-black">{totalWeight.toFixed(1)} kg</strong></span>
                   <span>Avg Weight: <strong className="text-black">{avgWeight.toFixed(1)} kg</strong></span>
                 </div>
@@ -629,9 +757,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                       {visibleColumns.map((column) => (
                         <TableHead 
                           key={column.key}
-                          className={`border ${
-                              column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''
-                            } ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                          className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
                         >
                           {column.label}
                         </TableHead>
@@ -644,11 +770,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                         {visibleColumns.map((column) => (
                           <TableCell 
                             key={`cell-${startIndex + index}-${column.key}`}
-                            className={`border ${
-                                column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''
-                              } ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${
-                                column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''
-                              }`}
+                            className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
                             >
                               {formatCellValue(record, column.key)}
                           </TableCell>

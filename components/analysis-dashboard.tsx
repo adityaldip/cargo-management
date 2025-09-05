@@ -270,7 +270,7 @@ export function AnalysisDashboard({ data }: AnalysisDashboardProps) {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value, percent }) => `${name}: €${value.toFixed(0)} (${(percent * 100).toFixed(1)}%)`}
+                  label={({ name, value, percent }) => `${name}: €${value?.toFixed(0)} (${(percent ? percent * 100 : 0).toFixed(1)}%)`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"

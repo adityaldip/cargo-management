@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import type { CargoData, ProcessedData, FileProcessingResult } from "@/types/cargo-data"
+import { applyIgnoreRules, type IgnoreRule } from "./ignore-rules-utils"
 
 // Column mapping for different file types
 const MAIL_AGENT_COLUMN_MAP: Record<string, keyof CargoData> = {
@@ -37,6 +38,94 @@ const MAIL_SYSTEM_COLUMN_MAP: Record<string, keyof CargoData> = {
 
 interface ExcelRow {
   [key: string]: any
+}
+
+function parseCSVFile(file: File): Promise<ExcelRow[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result as string
+        if (!data) {
+          reject(new Error('Failed to read CSV file'))
+          return
+        }
+
+        // Split into lines and handle different line endings
+        const lines = data.split(/\r?\n/).filter(line => line.trim() !== '')
+        
+        if (lines.length < 2) {
+          reject(new Error('CSV file must contain at least a header row and one data row'))
+          return
+        }
+
+        // Parse CSV with basic comma separation (handles quoted values)
+        const parseCSVLine = (line: string): string[] => {
+          const result: string[] = []
+          let current = ''
+          let inQuotes = false
+          
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i]
+            
+            if (char === '"') {
+              inQuotes = !inQuotes
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim())
+              current = ''
+            } else {
+              current += char
+            }
+          }
+          
+          result.push(current.trim())
+          return result
+        }
+
+        // Get headers from first line
+        const headers = parseCSVLine(lines[0])
+        
+        // Convert remaining lines to objects
+        const rows: ExcelRow[] = lines.slice(1).map(line => {
+          const values = parseCSVLine(line)
+          const obj: ExcelRow = {}
+          
+          headers.forEach((header, index) => {
+            obj[header] = values[index] || ''
+          })
+          
+          return obj
+        }).filter(row => {
+          // Filter out completely empty rows
+          return Object.values(row).some(value => value !== '')
+        })
+
+        resolve(rows)
+      } catch (error) {
+        reject(new Error(`Failed to parse CSV file: ${error instanceof Error ? error.message : 'Unknown error'}`))
+      }
+    }
+
+    reader.onerror = () => {
+      reject(new Error('Failed to read CSV file'))
+    }
+
+    reader.readAsText(file, 'utf-8')
+  })
+}
+
+// Unified file parser that handles both Excel and CSV files
+function parseFile(file: File): Promise<ExcelRow[]> {
+  const fileExtension = file.name.toLowerCase().split('.').pop()
+  
+  if (fileExtension === 'csv') {
+    return parseCSVFile(file)
+  } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+    return parseExcelFile(file)
+  } else {
+    return Promise.reject(new Error('Unsupported file format. Please upload .xlsx, .xls, or .csv files'))
+  }
 }
 
 function parseExcelFile(file: File): Promise<ExcelRow[]> {
@@ -151,10 +240,14 @@ function mapExcelRowToCargoData(row: ExcelRow, columnMap: Record<string, keyof C
   }
 }
 
-export async function processFile(file: File, fileType: "mail-system" | "mail-agent"): Promise<FileProcessingResult> {
+export async function processFile(
+  file: File, 
+  fileType: "mail-system" | "mail-agent",
+  ignoreRules?: IgnoreRule[]
+): Promise<FileProcessingResult> {
   try {
-    // Parse the Excel file
-    const excelRows = await parseExcelFile(file)
+    // Parse the file (Excel or CSV)
+    const excelRows = await parseFile(file)
     
     if (excelRows.length === 0) {
       return {
@@ -167,9 +260,20 @@ export async function processFile(file: File, fileType: "mail-system" | "mail-ag
     const columnMap = fileType === "mail-system" ? MAIL_SYSTEM_COLUMN_MAP : MAIL_AGENT_COLUMN_MAP
     
     // Convert Excel rows to CargoData
-    const processedData: CargoData[] = excelRows.map((row, index) => 
+    let processedData: CargoData[] = excelRows.map((row, index) => 
       mapExcelRowToCargoData(row, columnMap, index)
     )
+
+    // Apply ignore rules if provided
+    if (ignoreRules && ignoreRules.length > 0) {
+      const originalCount = processedData.length
+      processedData = applyIgnoreRules(processedData, ignoreRules)
+      const ignoredCount = originalCount - processedData.length
+      
+      if (ignoredCount > 0) {
+        console.log(`✓ Applied ignore rules: ${ignoredCount} records filtered out (${originalCount} → ${processedData.length})`)
+      }
+    }
 
     // Identify missing fields and warnings
     const missingFields: string[] = []
@@ -253,24 +357,24 @@ export function combineProcessedData(datasets: ProcessedData[]): ProcessedData {
   }
 }
 
-// Helper function to get available columns from an Excel file
+// Helper function to get available columns from a file (Excel or CSV)
 export async function getExcelColumns(file: File): Promise<string[]> {
   try {
-    const excelRows = await parseExcelFile(file)
+    const excelRows = await parseFile(file)
     if (excelRows.length > 0) {
       return Object.keys(excelRows[0])
     }
     return []
   } catch (error) {
-    console.error('Error getting Excel columns:', error)
+    console.error('Error getting file columns:', error)
     return []
   }
 }
 
-// Helper function to get sample data from Excel file
+// Helper function to get sample data from a file (Excel or CSV)
 export async function getExcelSampleData(file: File, maxSamples: number = 3): Promise<Record<string, string[]>> {
   try {
-    const excelRows = await parseExcelFile(file)
+    const excelRows = await parseFile(file)
     const sampleData: Record<string, string[]> = {}
     
     if (excelRows.length > 0) {
@@ -285,7 +389,7 @@ export async function getExcelSampleData(file: File, maxSamples: number = 3): Pr
     
     return sampleData
   } catch (error) {
-    console.error('Error getting Excel sample data:', error)
+    console.error('Error getting file sample data:', error)
     return {}
   }
 }
@@ -303,16 +407,17 @@ export interface ColumnMappingRule {
 export async function processFileWithMappings(
   file: File, 
   fileType: "mail-system" | "mail-agent",
-  mappings: ColumnMappingRule[]
+  mappings: ColumnMappingRule[],
+  ignoreRules?: IgnoreRule[]
 ): Promise<FileProcessingResult> {
   try {
-    // Parse the Excel file
-    const excelRows = await parseExcelFile(file)
+    // Parse the file (Excel or CSV)
+    const excelRows = await parseFile(file)
     
     if (excelRows.length === 0) {
       return {
         success: false,
-        error: "No data found in Excel file"
+        error: "No data found in file"
       }
     }
 
@@ -323,9 +428,10 @@ export async function processFileWithMappings(
         mappingLookup[mapping.excelColumn] = mapping.mappedTo
       }
     })
+    
 
     // Convert Excel rows to CargoData using the user's mappings
-    const processedData: CargoData[] = excelRows.map((row, index) => {
+    let processedData: CargoData[] = excelRows.map((row, index) => {
       const timestamp = Date.now()
       const random = Math.random().toString(36).substr(2, 9)
       const cargoData: Partial<CargoData> = {
@@ -379,6 +485,17 @@ export async function processFileWithMappings(
       }
     })
 
+    // Apply ignore rules if provided
+    if (ignoreRules && ignoreRules.length > 0) {
+      const originalCount = processedData.length
+      processedData = applyIgnoreRules(processedData, ignoreRules)
+      const ignoredCount = originalCount - processedData.length
+      
+      if (ignoredCount > 0) {
+        console.log(`✓ Applied ignore rules: ${ignoredCount} records filtered out (${originalCount} → ${processedData.length})`)
+      }
+    }
+
     // Identify missing fields and warnings
     const missingFields: string[] = []
     const warnings: string[] = []
@@ -431,6 +548,7 @@ export async function processFileWithMappings(
 // Helper function to map display column names to CargoData field names
 function getCargoFieldFromMappedColumn(mappedColumn: string): keyof CargoData | null {
   const mappingTable: Record<string, keyof CargoData> = {
+    // Mail Agent column mappings
     'Inb.Flight Date': 'date',
     'Outb.Flight Date': 'outbDate',
     'Rec. ID': 'recordId',
@@ -445,7 +563,7 @@ function getCargoFieldFromMappedColumn(mappedColumn: string): keyof CargoData | 
     'Total kg': 'totalKg',
     'Invoice': 'invoiceExtend',
     'Customer name / number': 'customer',
-    // Additional mappings for mail system
+    // Mail System column mappings (original predefined)
     'Flight Date': 'date',
     'Record ID': 'recordId',
     'Destination': 'desNo',

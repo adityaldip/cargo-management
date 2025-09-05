@@ -23,8 +23,12 @@ import {
   Package,
   DollarSign,
   Plane,
-  Settings
+  Settings,
+  ChevronDown
 } from "lucide-react"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RateRule } from "./types"
 import { SAMPLE_RATE_RULES } from "./sample-data"
@@ -73,6 +77,27 @@ export function ConfigureRates() {
     value: string
   }[]>([])
   const [editingRuleLogic, setEditingRuleLogic] = useState<"AND" | "OR">("AND")
+  const [openFieldSelects, setOpenFieldSelects] = useState<Record<number, boolean>>({})
+  const [openOperatorSelects, setOpenOperatorSelects] = useState<Record<number, boolean>>({})
+  
+  // Available field options from cargo_data columns (matching RulesConfiguration.tsx)
+  const cargoDataFields = [
+    { key: 'inb_flight_date', label: 'Inb. Flight Date' },
+    { key: 'outb_flight_date', label: 'Outb. Flight Date' },
+    { key: 'rec_id', label: 'Rec. ID' },
+    { key: 'des_no', label: 'Des. No.' },
+    { key: 'rec_numb', label: 'Rec. Number' },
+    { key: 'orig_oe', label: 'Orig. OE' },
+    { key: 'dest_oe', label: 'Dest. OE' },
+    { key: 'inb_flight_no', label: 'Inb. Flight No.' },
+    { key: 'outb_flight_no', label: 'Outb. Flight No.' },
+    { key: 'mail_cat', label: 'Mail Category' },
+    { key: 'mail_class', label: 'Mail Class' },
+    { key: 'total_kg', label: 'Total Weight (kg)' },
+    { key: 'invoice', label: 'Invoice' },
+    { key: 'assigned_customer', label: 'Customer' },
+    { key: 'assigned_rate', label: 'Rate' }
+  ]
 
   // Use local rules if available, fallback to database rules
   const displayRules = localRules.length > 0 ? localRules : rules
@@ -140,7 +165,7 @@ export function ConfigureRates() {
         operator: cond.operator,
         value: cond.value
       }))
-      setEditingRuleConditions(initialConditions.length > 0 ? initialConditions : [{ field: "route", operator: "equals", value: "" }])
+      setEditingRuleConditions(initialConditions.length > 0 ? initialConditions : [{ field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }])
       setEditingRuleLogic("AND")
     }
   }
@@ -222,7 +247,9 @@ export function ConfigureRates() {
 
   // Helper functions for editing rule conditions
   const addEditingRuleCondition = () => {
-    setEditingRuleConditions(prev => [...prev, { field: "route", operator: "equals", value: "" }])
+    // Use the first available field option from cargo data fields
+    const firstField = cargoDataFields[0]?.key || "orig_oe"
+    setEditingRuleConditions(prev => [...prev, { field: firstField, operator: "equals", value: "" }])
   }
 
   const removeEditingRuleCondition = (index: number) => {
@@ -381,13 +408,6 @@ export function ConfigureRates() {
                   <h3 className="font-medium text-black text-sm">{rule.name}</h3>
                 </div>
 
-                {/* Rate Info */}
-                <div className="text-right min-w-20">
-                  <p className="text-xs font-medium text-black">
-                    {rule.actions.currency} {rule.actions.baseRate.toFixed(2)}
-                    {rule.actions.rateType === "per_kg" && "/kg"}
-                  </p>
-                </div>
 
                 {/* Actions */}
                 <Button 
@@ -414,18 +434,31 @@ export function ConfigureRates() {
                   <div className="space-y-4">
                     {/* Notion-Style Filter Section */}
                     <div className="border border-gray-200 rounded-lg bg-white shadow-sm">
+                      {/* Add Condition Button - Moved to top */}
+                      <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={addEditingRuleCondition}
+                          className="h-8 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                        >
+                          <Plus className="h-3 w-3 mr-2" />
+                          Add condition
+                        </Button>
+                      </div>
+                      
                       {/* Filter Conditions */}
                       <div className="p-4 space-y-2">
                         {editingRuleConditions.map((condition, index) => (
                           <div key={index} className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group">
                             {index === 0 ? (
-                              <span className="text-xs font-medium text-gray-700 min-w-10">Where</span>
+                              <span className="text-xs font-medium text-gray-700 w-18">Where</span>
                             ) : (
                               <Select 
                                 value={editingRuleLogic}
                                 onValueChange={(value) => setEditingRuleLogic(value as "AND" | "OR")}
                               >
-                                <SelectTrigger className="h-7 w-12 text-xs border-gray-200">
+                                <SelectTrigger className="h-7 w-18 text-xs border-gray-200">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -435,54 +468,115 @@ export function ConfigureRates() {
                               </Select>
                             )}
 
-                            <Select 
-                              value={condition.field}
-                              onValueChange={(value) => {
-                                updateEditingRuleCondition(index, { field: value, value: "" })
-                              }}
+                            <Popover 
+                              open={openFieldSelects[index]} 
+                              onOpenChange={(open) => setOpenFieldSelects(prev => ({ ...prev, [index]: open }))}
                             >
-                              <SelectTrigger className="h-7 w-24 text-xs border-gray-200">
-                                <SelectValue placeholder="Field" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="route">Route</SelectItem>
-                                <SelectItem value="weight">Weight</SelectItem>
-                                <SelectItem value="mail_category">Category</SelectItem>
-                                <SelectItem value="customer">Customer</SelectItem>
-                                <SelectItem value="flight_number">Flight</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openFieldSelects[index]}
+                                  className="h-7 w-32 text-xs border-gray-200 justify-between font-normal"
+                                >
+                                  <span className="truncate">
+                                    {condition.field
+                                      ? cargoDataFields.find((field) => field.key === condition.field)?.label
+                                      : "Field..."}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-48 p-0">
+                                <Command>
+                                  <CommandInput placeholder="Search field..." className="h-8 text-xs" />
+                                  <CommandEmpty>No field found.</CommandEmpty>
+                                  <CommandGroup className="max-h-48 overflow-auto">
+                                    {cargoDataFields.map((field) => (
+                                      <CommandItem
+                                        key={field.key}
+                                        value={field.label}
+                                        onSelect={() => {
+                                          updateEditingRuleCondition(index, { field: field.key, value: "" })
+                                          setOpenFieldSelects(prev => ({ ...prev, [index]: false }))
+                                        }}
+                                        className="text-xs"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-3 w-3",
+                                            condition.field === field.key ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        {field.label}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
 
-                            <Select 
-                              value={condition.operator}
-                              onValueChange={(value) => updateEditingRuleCondition(index, { operator: value })}
+                            <Popover 
+                              open={openOperatorSelects[index]} 
+                              onOpenChange={(open) => setOpenOperatorSelects(prev => ({ ...prev, [index]: open }))}
                             >
-                              <SelectTrigger className="h-7 w-16 text-xs border-gray-200">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="equals">Is</SelectItem>
-                                <SelectItem value="contains">Has</SelectItem>
-                                <SelectItem value="starts_with">Starts</SelectItem>
-                                <SelectItem value="ends_with">Ends</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openOperatorSelects[index]}
+                                  className="h-7 w-28 text-xs border-gray-200 justify-between font-normal"
+                                >
+                                  <span className="truncate">
+                                    {condition.operator === "equals" && "Is"}
+                                    {condition.operator === "contains" && "Contains"}
+                                    {condition.operator === "starts_with" && "Starts"}
+                                    {condition.operator === "ends_with" && "Ends"}
+                                    {!condition.operator && "Operator..."}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-32 p-0">
+                                <Command>
+                                  <CommandInput placeholder="Search..." className="h-8 text-xs" />
+                                  <CommandEmpty>No operator found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {[
+                                      { value: "equals", label: "Is" },
+                                      { value: "contains", label: "Contains" },
+                                      { value: "starts_with", label: "Starts" },
+                                      { value: "ends_with", label: "Ends" }
+                                    ].map((operator) => (
+                                      <CommandItem
+                                        key={operator.value}
+                                        value={operator.label}
+                                        onSelect={() => {
+                                          updateEditingRuleCondition(index, { operator: operator.value })
+                                          setOpenOperatorSelects(prev => ({ ...prev, [index]: false }))
+                                        }}
+                                        className="text-xs"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-3 w-3",
+                                            condition.operator === operator.value ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        {operator.label}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
 
-                            <Select 
+                            <Input
                               value={condition.value}
-                              onValueChange={(value) => updateEditingRuleCondition(index, { value })}
-                            >
-                              <SelectTrigger className="h-7 w-24 text-xs border-gray-200 flex-1 min-w-20">
-                                <SelectValue placeholder="Value" />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-60">
-                                {getFieldValues(condition.field).map((value) => (
-                                  <SelectItem key={value} value={value}>
-                                    {value}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              onChange={(e) => updateEditingRuleCondition(index, { value: e.target.value })}
+                              placeholder="Enter value..."
+                              className="h-7 text-xs border-gray-200 flex-1 min-w-20"
+                            />
 
                             {editingRuleConditions.length > 1 && index > 0 && (
                               <Button
@@ -500,46 +594,25 @@ export function ConfigureRates() {
                         {/* Rate Assignment Row */}
                         <div className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
                           <span className="text-xs font-medium text-gray-700 min-w-8">Rate</span>
-                          <Input 
-                            placeholder="Rate"
-                            defaultValue={rule.actions.baseRate}
-                            className="h-7 text-xs border-gray-200 w-16"
-                          />
-                          <Select defaultValue={rule.actions.currency}>
-                            <SelectTrigger className="h-7 w-16 text-xs border-gray-200">
-                              <SelectValue />
+                          <Select defaultValue={rule.id}>
+                            <SelectTrigger className="h-7 text-xs border-gray-200 flex-1 min-w-48 max-w-72">
+                              <SelectValue placeholder="Select rate rule" />
                             </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="EUR">EUR</SelectItem>
-                              <SelectItem value="USD">USD</SelectItem>
-                              <SelectItem value="GBP">GBP</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Select defaultValue={rule.actions.rateType}>
-                            <SelectTrigger className="h-7 text-xs border-gray-200 flex-1 min-w-20 max-w-32">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="fixed">Fixed</SelectItem>
-                              <SelectItem value="per_kg">Per kg</SelectItem>
-                              <SelectItem value="distance_based">Distance</SelectItem>
-                              <SelectItem value="zone_based">Zone</SelectItem>
+                            <SelectContent className="max-h-60">
+                              {displayRules.map((rateRule) => (
+                                <SelectItem key={rateRule.id} value={rateRule.id}>
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>{rateRule.name}</span>
+                                    <span className="ml-2 text-xs text-gray-500">
+                                      {rateRule.actions.currency} {rateRule.actions.baseRate.toFixed(2)}
+                                      {rateRule.actions.rateType === "per_kg" && "/kg"}
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>
-                      </div>
-
-                      {/* Add Filter Button */}
-                      <div className="px-4 pb-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={addEditingRuleCondition}
-                          className="h-8 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                        >
-                          <Plus className="h-3 w-3 mr-2" />
-                          Add condition
-                        </Button>
                       </div>
                     </div>
 

@@ -11,6 +11,8 @@ import { processFile, getExcelColumns, getExcelSampleData, processFileWithMappin
 import { saveDataset, generateDatasetId, saveCurrentSession, getCurrentSession, shouldTriggerSupabaseSave, saveMergedDataToSupabase } from "@/lib/storage-utils"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
+import { IgnoreTrackingRules } from "./ignore-tracking-rules"
+import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 
 interface ImportMailSystemProps {
   onDataProcessed: (data: ProcessedData | null) => void
@@ -27,7 +29,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   const [showColumnMapping, setShowColumnMapping] = useState(false)
   const [excelColumns, setExcelColumns] = useState<string[]>([])
   const [sampleData, setSampleData] = useState<Record<string, string[]>>({})
-  const [activeStep, setActiveStep] = useState<"upload" | "map">("upload")
+  const [activeStep, setActiveStep] = useState<"upload" | "map" | "ignore">("upload")
+  const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
+  const [showIgnoreRules, setShowIgnoreRules] = useState(false)
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -63,7 +67,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         const samples = await getExcelSampleData(file, 3)
 
         if (columns.length === 0) {
-          setError("No columns found in Excel file")
+          setError("No columns found in file")
           return
         }
 
@@ -73,7 +77,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         setActiveStep("map")
 
         // Process the file for data validation
-        const result = await processFile(file, "mail-system")
+        const result = await processFile(file, "mail-system", ignoreRules)
         if (result.success && result.data) {
           setProcessedData(result.data)
         } else {
@@ -94,7 +98,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     setError(null)
 
     try {
-      const result = await processFile(uploadedFile, "mail-system")
+      const result = await processFile(uploadedFile, "mail-system", ignoreRules)
 
       if (result.success && result.data) {
         const columns = Object.keys(result.data.data[0] || {})
@@ -127,7 +131,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     
     try {
       // Process file with user's column mappings
-      const result = await processFileWithMappings(uploadedFile, "mail-system", mappings)
+      const result = await processFileWithMappings(uploadedFile, "mail-system", mappings, ignoreRules)
       
       if (result.success && result.data) {
         // Create dataset to save
@@ -237,6 +241,22 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             <Settings className="h-4 w-4 mr-2" />
             Map Headers
           </Button>
+          <Button
+            variant={activeStep === "ignore" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              setActiveStep("ignore")
+              setShowIgnoreRules(true)
+            }}
+            className={
+              activeStep === "ignore"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Rules
+          </Button>
 
         </div>
       </div>
@@ -263,10 +283,10 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
           >
             <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
             <p className="text-gray-700 mb-2">Click to upload or drag and drop</p>
-            <p className="text-gray-500 text-sm mb-4">.xlsx, .xls - Maximum file size 50 MB</p>
+            <p className="text-gray-500 text-sm mb-4">.xlsx, .xls, .csv - Maximum file size 50 MB</p>
             <input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               onChange={handleFileSelect}
               className="hidden"
               id="mail-system-upload"
@@ -322,6 +342,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         />
       )}
 
+      {/* Ignore Rules Step */}
+      {activeStep === "ignore" && showIgnoreRules && (
+        <IgnoreTrackingRules 
+          onRulesChange={setIgnoreRules}
+        />
+      )}
 
     </div>
   )

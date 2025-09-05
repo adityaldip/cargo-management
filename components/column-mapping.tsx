@@ -15,18 +15,18 @@ interface ColumnMappingProps {
 }
 
 const FINAL_EXPORT_COLUMNS = [
-  "Inb.Flight Date.",
-  "Outb.Flight Date.",
-  "Rec. ID.",
+  "Inb.Flight Date",
+  "Outb.Flight Date", 
+  "Rec. ID",
   "Des. No.",
   "Rec. Numb.",
-  "Orig. OE.",
-  "Dest. OE.",
-  "Inb. Flight No. | STA.",
-  "Outb. Flight No. | STD.",
+  "Orig. OE",
+  "Dest. OE",
+  "Inb. Flight No. | STA",
+  "Outb. Flight No. | STD",
   "Mail Cat.",
-  "Mail Class.",
-  "Total Weight (kg).",
+  "Mail Class",
+  "Total kg",
 ]
 
 export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onCancel }: ColumnMappingProps) {

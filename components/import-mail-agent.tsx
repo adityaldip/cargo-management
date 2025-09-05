@@ -56,7 +56,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         const samples = await getExcelSampleData(file, 3)
 
         if (columns.length === 0) {
-          setError("No columns found in Excel file")
+          setError("No columns found in file")
           return
         }
 
@@ -95,7 +95,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         const samples = await getExcelSampleData(file, 3)
 
         if (columns.length === 0) {
-          setError("No columns found in Excel file")
+          setError("No columns found in file")
           return
         }
 
@@ -274,10 +274,10 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
           >
             <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
             <p className="text-gray-700 mb-2">Click to upload or drag and drop</p>
-            <p className="text-gray-500 text-sm mb-4">.xlsx, .xls - Maximum file size 50 MB</p>
+            <p className="text-gray-500 text-sm mb-4">.xlsx, .xls, .csv - Maximum file size 50 MB</p>
             <input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               onChange={handleFileSelect}
               className="hidden"
               id="mail-agent-upload"

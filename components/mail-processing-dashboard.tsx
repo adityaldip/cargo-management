@@ -14,6 +14,7 @@ import type { ProcessedData } from "@/types/cargo-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Filter, Eye } from "lucide-react"
+import { useWorkflowStore } from "@/store/workflow-store"
 
 interface FilterCondition {
   id: string
@@ -24,7 +25,7 @@ interface FilterCondition {
 }
 
 export function MailProcessingDashboard() {
-  const [activeStep, setActiveStep] = useState("import-mail-agent")
+  const { activeStep, setActiveStep } = useWorkflowStore()
   const [rateSettings, setRateSettings] = useState<RateSettings>(defaultRateSettings)
   const [mailAgentData, setMailAgentData] = useState<ProcessedData | null>(null)
   const [mailSystemData, setMailSystemData] = useState<ProcessedData | null>(null)
