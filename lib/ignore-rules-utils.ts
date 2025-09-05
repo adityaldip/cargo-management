@@ -122,3 +122,45 @@ export function getIgnoreRuleStats(originalCount: number, filteredCount: number,
     hasIgnoredRecords: ignoredCount > 0
   }
 }
+
+/**
+ * Apply ignore rules with multiple conditions from localStorage
+ * @param data Array of CargoData records
+ * @param rules Array of IgnoreRule objects
+ * @param persistedConditions Array of conditions from localStorage
+ * @returns Filtered array of CargoData records
+ */
+export function applyIgnoreRulesWithConditions(
+  data: CargoData[], 
+  rules: IgnoreRule[], 
+  persistedConditions: Array<{field: string, operator: string, value: string}> = []
+): CargoData[] {
+  if (!data || data.length === 0) return data
+  
+  // If we have persisted conditions, use them instead of the rules
+  if (persistedConditions.length > 0) {
+    return data.filter(record => {
+      // Check if record matches any of the persisted conditions
+      return !persistedConditions.some(condition => {
+        const recordValue = getFieldValue(record, condition.field)
+        const conditionValues = condition.value.split(',').map(v => v.trim())
+        
+        switch (condition.operator) {
+          case 'equals':
+            return conditionValues.includes(String(recordValue))
+          case 'contains':
+            return conditionValues.some(v => String(recordValue).includes(v))
+          case 'starts_with':
+            return conditionValues.some(v => String(recordValue).startsWith(v))
+          case 'ends_with':
+            return conditionValues.some(v => String(recordValue).endsWith(v))
+          default:
+            return false
+        }
+      })
+    })
+  }
+  
+  // Fallback to original rules logic
+  return applyIgnoreRules(data, rules)
+}

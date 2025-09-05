@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { 
   Settings, 
@@ -15,26 +17,35 @@ import {
   Play,
   AlertTriangle,
   CheckCircle,
-  ChevronDown
+  ChevronDown,
+  EyeOff,
+  Check,
+  ChevronsUpDown,
+  X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
+import type { ProcessedData } from "@/types/cargo-data"
 
 interface IgnoreTrackingRulesProps {
   onRulesChange?: (rules: IgnoreRule[]) => void
+  uploadedData?: ProcessedData | null
+  onRulesApplied?: () => void
+  onViewIgnored?: () => void
+  dataSource?: "mail-agent" | "mail-system"
 }
 
-export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps) {
+export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplied, onViewIgnored, dataSource = "mail-system" }: IgnoreTrackingRulesProps) {
   const [rules, setRules] = useState<IgnoreRule[]>([
     {
-      id: "rule-1",
-      name: "ignore trucking numbers",
+      id: "ignore-tracking-rules",
+      name: "Ignore Tracking Rules",
       is_active: true,
       priority: 1,
       field: "inb_flight_no",
       operator: "equals",
-      value: "BT100, BT9935",
-      description: "Ignore BT100 and BT9935 trucking numbers"
+      value: "",
+      description: "Ignore tracking rules for flight numbers"
     }
   ])
   
@@ -53,22 +64,54 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
   const [editingRuleLogic, setEditingRuleLogic] = useState<"AND" | "OR">("AND")
   const [editingRuleAction, setEditingRuleAction] = useState<"ignore" | "remove">("ignore")
   const [isSaving, setIsSaving] = useState(false)
+  const [openSelects, setOpenSelects] = useState<Record<number, boolean>>({})
 
   // Available field options for tracking data
   const trackingFields = [
     { key: 'inb_flight_no', label: 'Inb. Flight No.' },
-    { key: 'outb_flight_no', label: 'Outb. Flight No.' },
-    { key: 'rec_numb', label: 'Rec. Number' },
-    { key: 'rec_id', label: 'Rec. ID' },
-    { key: 'des_no', label: 'Des. No.' },
   ]
 
   const operators = [
     { value: "equals", label: "Is" },
-    { value: "contains", label: "Contains" },
-    { value: "starts_with", label: "Starts with" },
-    { value: "ends_with", label: "Ends with" },
   ]
+
+  // Extract unique values from uploaded data for inb_flight_no field
+  const getFieldOptions = (fieldKey: string): string[] => {
+    if (!uploadedData?.data || fieldKey !== 'inb_flight_no') return []
+    
+    const values = new Set<string>()
+    
+    uploadedData.data.forEach(record => {
+      const value = record.inbFlightNo
+      if (value && value.trim()) {
+        values.add(value.trim())
+      }
+    })
+    
+    return Array.from(values).sort()
+  }
+
+  // Load expanded rule conditions from localStorage on component mount
+  useEffect(() => {
+    const storageKey = `ignore-rules-conditions-${dataSource}`
+    const savedConditions = localStorage.getItem(storageKey)
+    if (savedConditions) {
+      try {
+        const parsedConditions = JSON.parse(savedConditions)
+        setEditingRuleConditions(parsedConditions)
+      } catch (error) {
+        console.error('Error loading saved ignore rule conditions:', error)
+      }
+    }
+  }, [dataSource])
+
+  // Save expanded rule conditions to localStorage when they change
+  useEffect(() => {
+    if (editingRuleConditions.length > 0) {
+      const storageKey = `ignore-rules-conditions-${dataSource}`
+      localStorage.setItem(storageKey, JSON.stringify(editingRuleConditions))
+    }
+  }, [editingRuleConditions, dataSource])
 
   // Notify parent component when rules change
   useEffect(() => {
@@ -100,12 +143,30 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
         
         // Initialize editing state with current rule data
         setEditingRuleName(rule.name)
-        // Convert single rule to conditions format
-        setEditingRuleConditions([{
-          field: rule.field,
-          operator: rule.operator,
-          value: rule.value
-        }])
+        
+        // Load persisted conditions or create from current rule
+        const storageKey = `ignore-rules-conditions-${dataSource}`
+        const savedConditions = localStorage.getItem(storageKey)
+        if (savedConditions) {
+          try {
+            const parsedConditions = JSON.parse(savedConditions)
+            setEditingRuleConditions(parsedConditions)
+          } catch (error) {
+            // Fallback to current rule data
+            setEditingRuleConditions([{
+              field: rule.field,
+              operator: rule.operator,
+              value: rule.value
+            }])
+          }
+        } else {
+          // Convert single rule to conditions format
+          setEditingRuleConditions([{
+            field: rule.field,
+            operator: rule.operator,
+            value: rule.value
+          }])
+        }
         setEditingRuleAction("ignore") // Default action
         setExpandingRuleId(null)
       }, 0)
@@ -183,15 +244,15 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
 
     // Simulate save delay
     setTimeout(() => {
-      // For now, we'll save the first condition as the main rule
-      // In a real implementation, you'd want to handle multiple conditions
-      const firstCondition = editingRuleConditions[0]
-      if (firstCondition) {
+      // Update the single rule with the first condition (for display purposes)
+      // The multiple conditions are stored in editingRuleConditions and persisted separately
+      if (editingRuleConditions.length > 0) {
+        const firstCondition = editingRuleConditions[0]
         setRules(prev => prev.map(rule => 
           rule.id === currentRule.id 
             ? { 
                 ...rule, 
-                name: editingRuleName.trim(),
+                name: editingRuleName.trim() || "Ignore Tracking Rules",
                 field: firstCondition.field,
                 operator: firstCondition.operator,
                 value: firstCondition.value.trim()
@@ -203,9 +264,11 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
       // Close editor
       setExpandedRule(null)
       setEditingRuleName("")
-      setEditingRuleConditions([])
       setEditingRuleAction("ignore")
       setIsSaving(false)
+      
+      // Trigger rules applied callback
+      onRulesApplied?.()
     }, 500)
   }
 
@@ -216,7 +279,7 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
           <div className="flex items-center justify-between">
             <CardTitle className="text-black flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              Ignore Tracking Rules
+                Automation Rules
               {isReordering && (
                 <div className="flex items-center gap-2 text-sm text-gray-600 ml-4">
                   <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
@@ -225,10 +288,27 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
               )}
             </CardTitle>
             <div className="flex flex-wrap gap-2">
-              <Button className="bg-black hover:bg-gray-800 text-white">
+              <Button 
+                className="bg-black hover:bg-gray-800 text-white"
+                onClick={() => {
+                  // Apply rules logic would go here
+                  console.log('Applying ignore rules:', rules)
+                  onRulesApplied?.()
+                }}
+              >
                 <Play className="h-4 w-4 mr-2" />
                 Apply Rules
               </Button>
+              {onViewIgnored && (
+                <Button 
+                  variant="outline"
+                  onClick={onViewIgnored}
+                  className="border-gray-300 hover:bg-gray-50"
+                >
+                  <EyeOff className="h-4 w-4 mr-2" />
+                  View Ignored Data
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -237,8 +317,33 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
             <div className="flex items-center justify-between">
               <div className="text-xs text-gray-500">
                 {rules.length} rule{rules.length !== 1 ? 's' : ''} configured
+                {uploadedData && (
+                  <span className="ml-2">• {uploadedData.data.length} records available</span>
+                )}
               </div>
             </div>
+            {!uploadedData && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <p className="text-amber-800 text-sm font-medium">No data uploaded yet</p>
+                </div>
+                <p className="text-amber-700 text-sm mt-1">
+                  Upload and map your Mail System file first to see available values for filtering.
+                </p>
+              </div>
+            )}
+            {uploadedData && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-blue-600" />
+                  <p className="text-blue-800 text-sm font-medium">Data ready for filtering</p>
+                </div>
+                <p className="text-blue-700 text-sm mt-1">
+                  Configure ignore rules to filter out unwanted Inb. Flight No. records before reviewing the merged data.
+                </p>
+              </div>
+            )}
           </div>
           
           <div className="space-y-1">
@@ -341,7 +446,8 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
                         {/* Filter Conditions */}
                         <div className="p-4 space-y-2">
                           {editingRuleConditions.map((condition, index) => (
-                            <div key={index} className="flex flex-wrap items-center gap-2 p-2 rounded-md hover:bg-gray-50 group">
+                            <div key={index}>
+                              <div className="flex flex-wrap items-center gap-2 p-2 rounded-md hover:bg-gray-50 group">
                               {index === 0 ? (
                                 <span className="text-xs font-medium text-gray-700 w-18 flex-shrink-0">Where</span>
                               ) : (
@@ -391,13 +497,81 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
                                 </SelectContent>
                               </Select>
 
-                              <Input
-                                value={condition.value}
-                                onChange={(e) => updateEditingRuleCondition(index, { value: e.target.value })}
-                                placeholder="Enter value..."
-                                className="h-7 text-xs border-gray-200 flex-1 min-w-20"
-                              />
+                              <Popover 
+                                open={openSelects[index] || false} 
+                                onOpenChange={(open) => setOpenSelects(prev => ({ ...prev, [index]: open }))}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={openSelects[index] || false}
+                                    className="h-7 text-xs border-gray-200 flex-1 min-w-32 justify-between"
+                                  >
+                                    {condition.value || "Select value..."}
+                                    <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[300px] p-0" align="start">
+                                  <Command>
+                                    <CommandInput placeholder="Search flight numbers..." className="h-8" />
+                                    <CommandList className="max-h-48">
+                                      <CommandEmpty>
+                                        {uploadedData ? 'No flight numbers found' : 'Upload data first to see options'}
+                                      </CommandEmpty>
+                                      <CommandGroup>
+                                        {getFieldOptions(condition.field).map((option) => (
+                                          <CommandItem
+                                            key={option}
+                                            value={option}
+                                            onSelect={(currentValue) => {
+                                              updateEditingRuleCondition(index, { value: currentValue })
+                                              setOpenSelects(prev => ({ ...prev, [index]: false }))
+                                            }}
+                                            className="text-xs"
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-3 w-3",
+                                                condition.value === option ? "opacity-100" : "opacity-0"
+                                              )}
+                                            />
+                                            {option}
+                                          </CommandItem>
+                                        ))}
+                                        {getFieldOptions(condition.field).length > 0 && (
+                                          <CommandItem
+                                            value="__custom__"
+                                            onSelect={() => {
+                                              const customValue = prompt("Enter custom flight number:")
+                                              if (customValue && customValue.trim()) {
+                                                updateEditingRuleCondition(index, { value: customValue.trim() })
+                                              }
+                                              setOpenSelects(prev => ({ ...prev, [index]: false }))
+                                            }}
+                                            className="text-xs text-blue-600"
+                                          >
+                                            <Plus className="mr-2 h-3 w-3" />
+                                            Add custom value...
+                                          </CommandItem>
+                                        )}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
 
+                              {condition.value && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => updateEditingRuleCondition(index, { value: "" })}
+                                  className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600"
+                                  title="Clear selection"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
                               {editingRuleConditions.length > 1 && (
                                 <Button
                                   variant="ghost"
@@ -407,6 +581,17 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
+                              )}
+                              </div>
+                              
+                              {/* Show preview of available values for this field */}
+                              {condition.field && uploadedData && (
+                                <div className="text-xs text-gray-500 pl-20 pb-2">
+                                  Available values: {getFieldOptions(condition.field).length > 0 
+                                    ? `${getFieldOptions(condition.field).slice(0, 3).join(', ')}${getFieldOptions(condition.field).length > 3 ? ` (+${getFieldOptions(condition.field).length - 3} more)` : ''}`
+                                    : 'No values found'
+                                  }
+                                </div>
                               )}
                             </div>
                           ))}
@@ -476,3 +661,4 @@ export function IgnoreTrackingRules({ onRulesChange }: IgnoreTrackingRulesProps)
     </div>
   )
 }
+

@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertTriangle, RefreshCw, Download, Settings, Eye, GripVertical, Loader2, Trash2, Filter } from "lucide-react"
 import { combineProcessedData } from "@/lib/file-processor"
 import { getCurrentSession, clearAllData } from "@/lib/storage-utils"
+import { cargoDataOperations } from "@/lib/supabase-operations"
 import type { ProcessedData, CargoData } from "@/types/cargo-data"
 import type { Database } from "@/types/database"
 import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
@@ -123,8 +124,8 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           config.key.includes('date') ? 'date' : 'text'
   }))
 
-  // Load real data from current session or merged data
-  const loadRealData = () => {
+  // Load real data from database only
+  const loadRealData = async () => {
     setIsLoadingData(true)
     setRealData([]) // Clear existing data first
     setDataSource("")
@@ -136,71 +137,41 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
     }
     
     try {
-      // First check if we have merged data
-      if (mergedData) {
-        setRealData(mergedData.data)
-        setDataSource("Merged Data")
-        setDataCleared(false) // Reset cleared flag when data is found
-        return
-      }
-
-      // Then check current session
-      const currentSession = getCurrentSession()
-      if (currentSession) {
-        const datasets = []
-        let sourceName = ""
-        
-        if (currentSession.mailAgent) {
-          datasets.push(currentSession.mailAgent.data)
-          sourceName = "Mail Agent"
-        }
-        
-        if (currentSession.mailSystem) {
-          datasets.push(currentSession.mailSystem.data)
-          sourceName = sourceName ? `${sourceName} + Mail System` : "Mail System"
-        }
-        
-        if (datasets.length > 0) {
-          const combined = datasets.length > 1 ? combineProcessedData(datasets) : datasets[0]
-          // Ensure unique IDs for all records - use stable IDs to prevent hydration mismatch
-          const dataWithUniqueIds = combined.data.map((record, index) => ({
-            ...record,
-            id: record.id || `session-${index}`
-          }))
-          setRealData(dataWithUniqueIds)
-          setDataSource(sourceName)
-          setDataCleared(false) // Reset cleared flag when data is found
-        }
-      }
+      // Load data from Supabase database
+      const result = await cargoDataOperations.getAll(1, 1000) // Load first 1000 records
       
-      // Fallback to prop data if no session data
-      if (realData.length === 0) {
-        if (mailAgentData && mailSystemData) {
-          const combined = combineProcessedData([mailAgentData, mailSystemData])
-          const dataWithUniqueIds = combined.data.map((record, index) => ({
-            ...record,
-            id: record.id || `props-${index}`
-          }))
-          setRealData(dataWithUniqueIds)
-          setDataSource("Mail Agent + Mail System")
-          setDataCleared(false) // Reset cleared flag when data is found
-        } else if (mailAgentData) {
-          const dataWithUniqueIds = mailAgentData.data.map((record, index) => ({
-            ...record,
-            id: record.id || `agent-${index}`
-          }))
-          setRealData(dataWithUniqueIds)
-          setDataSource("Mail Agent Only")
-          setDataCleared(false) // Reset cleared flag when data is found
-        } else if (mailSystemData) {
-          const dataWithUniqueIds = mailSystemData.data.map((record, index) => ({
-            ...record,
-            id: record.id || `system-${index}`
-          }))
-          setRealData(dataWithUniqueIds)
-          setDataSource("Mail System Only")
-          setDataCleared(false) // Reset cleared flag when data is found
-        }
+      if (result.data && Array.isArray(result.data)) {
+        // Convert Supabase cargo_data to CargoData format
+        const convertedData = result.data.map((record: any) => ({
+          id: record.id,
+          origOE: record.orig_oe || '',
+          destOE: record.dest_oe || '',
+          inbFlightNo: record.inb_flight_no || '',
+          outbFlightNo: record.outb_flight_no || '',
+          mailCat: record.mail_cat || '',
+          mailClass: record.mail_class || '',
+          totalKg: record.total_kg || 0,
+          invoiceExtend: record.invoice || '',
+          customer: record.assigned_customer || '',
+          date: record.inb_flight_date || '',
+          sector: record.orig_oe && record.dest_oe ? `${record.orig_oe}-${record.dest_oe}` : '',
+          euromail: record.mail_cat || '',
+          combined: record.rec_id || '',
+          totalEur: record.assigned_rate || 0,
+          vatEur: 0,
+          recordId: record.rec_id || '',
+          desNo: record.des_no || '',
+          recNumb: record.rec_numb || '',
+          outbDate: record.outb_flight_date || ''
+        }))
+        
+        setRealData(convertedData)
+        setDataSource(`Database (${convertedData.length} records)`)
+        setDataCleared(false) // Reset cleared flag when data is found
+      } else {
+        console.error('Error loading data from database:', result.error)
+        setRealData([])
+        setDataSource("Error loading from database")
       }
     } catch (error) {
       console.error('Error loading real data:', error)
@@ -375,14 +346,14 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         alert(`Failed to clear data: ${result.error}`)
         // If clearing failed, try to reload data
         setDataCleared(false)
-        loadRealData()
+        await loadRealData()
       }
     } catch (error) {
       console.error('❌ Error during clear operation:', error)
       alert(`Error clearing data: ${error instanceof Error ? error.message : 'Unknown error'}`)
       // If clearing failed, try to reload data
       setDataCleared(false)
-      loadRealData()
+      await loadRealData()
     } finally {
       setIsClearingData(false)
     }
@@ -449,7 +420,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
     if (isHydrated) {
       loadRealData()
     }
-  }, [isHydrated, mergedData, mailAgentData, mailSystemData])
+  }, [isHydrated])
 
   const handleMergeData = async () => {
     if (!mailAgentData && !mailSystemData) return
@@ -520,7 +491,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             className={activeStep === "preview" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Eye className="h-4 w-4 mr-2" />
-            Excel Preview
+            Database Preview
           </Button>
         </div>
       </div>
@@ -617,9 +588,9 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle className="text-black">Excel Data Preview</CardTitle>
+                  <CardTitle className="text-black">Database Data Preview</CardTitle>
                   <div className="space-y-1">
-                    <p className="text-sm text-gray-600">This preview shows how your data will appear in the exported Excel file</p>
+                    <p className="text-sm text-gray-600">This preview shows data from the database that will be used for processing</p>
                     {dataSource && (
                       <Badge variant="secondary" className="text-xs">
                         Source: {dataSource}
@@ -653,16 +624,16 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                         fields={filterFields}
                         initialConditions={filterConditions}
                         initialLogic={filterLogic}
-                        title="Filter Excel Data"
+                        title="Filter Database Data"
                       />
                     )}
                   </div>                  
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       setDataCleared(false) // Reset cleared flag to allow data loading
-                      loadRealData()
+                      await loadRealData()
                     }}
                     disabled={isLoadingData}
                   >
@@ -739,11 +710,11 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                   <AlertTriangle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
                   <p className="text-gray-600 mb-4">
-                    Please upload and process Excel files in the previous steps to see data here.
+                    No data found in the database. Upload and process Excel files in the previous steps to see data here.
                   </p>
-                  <Button variant="outline" onClick={() => {
+                  <Button variant="outline" onClick={async () => {
                     setDataCleared(false) // Reset cleared flag to allow data loading
-                    loadRealData()
+                    await loadRealData()
                   }}>
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Try Loading Data

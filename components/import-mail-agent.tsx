@@ -4,12 +4,16 @@ import type React from "react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Settings, Eye } from "lucide-react"
+import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Settings, Eye, EyeOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { processFile, getExcelColumns, getExcelSampleData, processFileWithMappings, type ColumnMappingRule } from "@/lib/file-processor"
 import { saveDataset, generateDatasetId, saveCurrentSession, getCurrentSession } from "@/lib/storage-utils"
+import { usePageFilters } from "@/store/filter-store"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
+import { IgnoreTrackingRules } from "./ignore-tracking-rules"
+import { IgnoredDataTable } from "./ignored-data-table"
+import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 
 interface ImportMailAgentProps {
   onDataProcessed: (data: ProcessedData | null) => void
@@ -26,7 +30,12 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   const [showColumnMapping, setShowColumnMapping] = useState(false)
   const [excelColumns, setExcelColumns] = useState<string[]>([])
   const [sampleData, setSampleData] = useState<Record<string, string[]>>({})
-  const [activeStep, setActiveStep] = useState<"upload" | "map">("upload")
+  const [activeStep, setActiveStep] = useState<"upload" | "map" | "ignore" | "ignored">("upload")
+  const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
+  const [showIgnoreRules, setShowIgnoreRules] = useState(false)
+  
+  // Filter store for resetting filters on new upload
+  const { clearFilters } = usePageFilters("review-merged-excel")
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -45,6 +54,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     if (files.length > 0) {
       const file = files[0]
       setUploadedFile(file)
+      
+      // Reset filters when new file is uploaded
+      clearFilters()
       
       // Automatically process the file and go to map headers
       setIsProcessing(true)
@@ -84,6 +96,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
       setUploadedFile(file)
+      
+      // Reset filters when new file is uploaded
+      clearFilters()
       
       // Automatically process the file and go to map headers
       setIsProcessing(true)
@@ -185,7 +200,10 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         setProcessedData(result.data)
         setShowColumnMapping(false)
         onDataProcessed(result.data)
-        onContinue?.()
+        
+        // Go to Ignore Rules step instead of continuing directly
+        setActiveStep("ignore")
+        setShowIgnoreRules(true)
       } else {
         setError(result.error || "Failed to process file with mappings")
       }
@@ -247,6 +265,44 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
           >
             <Settings className="h-4 w-4 mr-2" />
             Map Headers
+          </Button>
+          <Button
+            variant={activeStep === "ignore" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              if (processedData) {
+                setActiveStep("ignore")
+                setShowIgnoreRules(true)
+              }
+            }}
+            disabled={!processedData}
+            className={
+              activeStep === "ignore"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+            }
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Rules
+          </Button>
+          <Button
+            variant={activeStep === "ignored" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              if (processedData) {
+                setActiveStep("ignored")
+                setShowIgnoreRules(false)
+              }
+            }}
+            disabled={!processedData}
+            className={
+              activeStep === "ignored"
+                ? "bg-white shadow-sm text-black hover:bg-white"
+                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+            }
+          >
+            <EyeOff className="h-4 w-4 mr-2" />
+            Ignored
           </Button>
 
         </div>
@@ -317,6 +373,38 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         />
       )}
 
+      {/* Ignore Rules Step */}
+      {activeStep === "ignore" && showIgnoreRules && (
+        <IgnoreTrackingRules 
+          onRulesChange={setIgnoreRules}
+          uploadedData={processedData}
+          onRulesApplied={() => {
+            // Force re-calculation of ignored data when rules are applied
+            setIgnoreRules([...ignoreRules])
+          }}
+          onViewIgnored={() => {
+            setActiveStep("ignored")
+            setShowIgnoreRules(false)
+          }}
+          dataSource="mail-agent"
+        />
+      )}
+
+      {/* Ignored Data Step */}
+      {activeStep === "ignored" && (
+        <IgnoredDataTable 
+          originalData={processedData}
+          ignoreRules={ignoreRules}
+          onRefresh={() => {
+            // Force re-calculation of ignored data
+            setIgnoreRules([...ignoreRules])
+          }}
+          onContinue={() => {
+            onContinue?.()
+          }}
+          dataSource="mail-agent"
+        />
+      )}
 
     </div>
   )
