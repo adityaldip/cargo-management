@@ -15,20 +15,18 @@ interface ColumnMappingProps {
 }
 
 const FINAL_EXPORT_COLUMNS = [
-  "Inb.Flight Date",
-  "Outb.Flight Date",
-  "Rec. ID",
+  "Inb.Flight Date.",
+  "Outb.Flight Date.",
+  "Rec. ID.",
   "Des. No.",
   "Rec. Numb.",
-  "Orig. OE",
-  "Dest. OE",
-  "Inb. Flight No. | STA",
-  "Outb. Flight No. | STD",
+  "Orig. OE.",
+  "Dest. OE.",
+  "Inb. Flight No. | STA.",
+  "Outb. Flight No. | STD.",
   "Mail Cat.",
-  "Mail Class",
-  "Total kg",
-  "Invoice",
-  "Customer name / number",
+  "Mail Class.",
+  "Total Weight (kg).",
 ]
 
 export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onCancel }: ColumnMappingProps) {
@@ -47,13 +45,52 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
     setMappings((prev) =>
       prev.map((mapping) => {
         if (mapping.excelColumn === excelColumn) {
+          // If mapping to a specific column, check for conflicts
+          let status: "mapped" | "unmapped" | "warning" = "mapped"
+          
+          if (finalColumn === "unmapped") {
+            status = "unmapped"
+          } else {
+            // Check if this final column is already mapped by another excel column
+            const isAlreadyMapped = prev.some(
+              (m) => m.excelColumn !== excelColumn && m.mappedTo === finalColumn
+            )
+            if (isAlreadyMapped) {
+              status = "warning"
+            }
+          }
+          
           return {
             ...mapping,
             mappedTo: finalColumn === "unmapped" ? null : finalColumn,
             finalColumn: finalColumn === "unmapped" ? "Unmapped" : finalColumn,
-            status: finalColumn === "unmapped" ? "unmapped" : "mapped",
+            status,
           }
         }
+        
+        // Update status of other mappings if they conflict with the new mapping
+        if (mapping.mappedTo === finalColumn && finalColumn !== "unmapped") {
+          return {
+            ...mapping,
+            status: "warning" as const,
+          }
+        }
+        
+        // Reset status if conflict is resolved
+        if (mapping.status === "warning" && mapping.mappedTo && finalColumn !== mapping.mappedTo) {
+          const stillHasConflict = prev.some(
+            (m) => m.excelColumn !== mapping.excelColumn && 
+                   m.excelColumn !== excelColumn && 
+                   m.mappedTo === mapping.mappedTo
+          )
+          if (!stillHasConflict) {
+            return {
+              ...mapping,
+              status: "mapped" as const,
+            }
+          }
+        }
+        
         return mapping
       }),
     )
@@ -61,8 +98,16 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
 
   const getMappedCount = () => mappings.filter((m) => m.status === "mapped").length
   const getTotalCount = () => mappings.length
+  const getConflictCount = () => mappings.filter((m) => m.status === "warning").length
+
+  const hasConflicts = () => getConflictCount() > 0
 
   const handleContinue = async () => {
+    if (hasConflicts()) {
+      alert('Please resolve mapping conflicts before continuing. Multiple Excel columns cannot be mapped to the same final column.')
+      return
+    }
+    
     setIsProcessing(true)
     try {
       await onMappingComplete(mappings)
@@ -88,7 +133,10 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
             </TableHeader>
             <TableBody>
               {mappings.map((mapping, index) => (
-                <TableRow key={index}>
+                <TableRow 
+                  key={index}
+                  className={mapping.status === "warning" ? "bg-red-50 border-red-200" : ""}
+                >
                   <TableCell className="text-center">
                     <span className="w-6 h-6 bg-gray-100 rounded text-xs flex items-center justify-center text-gray-600 mx-auto">
                       {index + 1}
@@ -108,18 +156,34 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
                       value={mapping.mappedTo || "unmapped"}
                       onValueChange={(value) => handleMappingChange(mapping.excelColumn, value)}
                     >
-                      <SelectTrigger className="w-full h-8 text-sm">
+                      <SelectTrigger 
+                        className={`w-full h-8 text-sm ${
+                          mapping.status === "warning" 
+                            ? "border-red-300 focus:border-red-500" 
+                            : ""
+                        }`}
+                      >
                         <SelectValue placeholder="Select mapping" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="unmapped">
                           <span className="text-gray-500">Don't map</span>
                         </SelectItem>
-                        {FINAL_EXPORT_COLUMNS.map((col) => (
-                          <SelectItem key={col} value={col}>
-                            {col}
-                          </SelectItem>
-                        ))}
+                        {FINAL_EXPORT_COLUMNS.map((col) => {
+                          // Check if this column is already mapped by another excel column
+                          const isUsedByOther = mappings.some(
+                            (m) => m.excelColumn !== mapping.excelColumn && m.mappedTo === col
+                          )
+                          return (
+                            <SelectItem 
+                              key={col} 
+                              value={col}
+                              className={isUsedByOther ? "text-red-600" : ""}
+                            >
+                              {col} {isUsedByOther && "(⚠️ Already used)"}
+                            </SelectItem>
+                          )
+                        })}
                       </SelectContent>
                     </Select>
                   </TableCell>
@@ -128,7 +192,35 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
             </TableBody>
           </Table>
 
-          <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
+          {/* Mapping Summary */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between text-sm mb-3">
+              <div className="flex items-center gap-4">
+                <span className="text-gray-600">
+                  Mapped: <strong className="text-green-600">{getMappedCount()}</strong>
+                </span>
+                <span className="text-gray-600">
+                  Unmapped: <strong className="text-gray-500">{getTotalCount() - getMappedCount() - getConflictCount()}</strong>
+                </span>
+                {getConflictCount() > 0 && (
+                  <span className="text-gray-600">
+                    Conflicts: <strong className="text-red-600">{getConflictCount()}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            {hasConflicts() && (
+              <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded mb-3">
+                <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                <p className="text-sm text-red-700">
+                  Please resolve mapping conflicts. Multiple Excel columns cannot be mapped to the same final column.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center mt-4">
             <div>
               {onCancel && (
                 <Button variant="outline" size="sm" onClick={onCancel}>
@@ -138,9 +230,13 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
             </div>
             <Button 
               size="sm" 
-              className="bg-black hover:bg-gray-800 text-white" 
+              className={`${
+                hasConflicts() 
+                  ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed" 
+                  : "bg-black hover:bg-gray-800"
+              } text-white`}
               onClick={handleContinue}
-              disabled={isProcessing}
+              disabled={isProcessing || hasConflicts()}
             >
               {isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {isProcessing ? 'Processing...' : 'Continue to Next Step'}
