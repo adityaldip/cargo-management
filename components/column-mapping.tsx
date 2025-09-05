@@ -4,20 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { CheckCircle, AlertTriangle, ArrowRight } from "lucide-react"
-
-interface ColumnMapping {
-  excelColumn: string
-  mappedTo: string | null
-  finalColumn: string
-  status: "mapped" | "unmapped" | "warning"
-  sampleData: string[]
-}
+import { CheckCircle, AlertTriangle, ArrowRight, Loader2 } from "lucide-react"
+import type { ColumnMappingRule } from "@/lib/file-processor"
 
 interface ColumnMappingProps {
   excelColumns: string[]
   sampleData: Record<string, string[]>
-  onMappingComplete: (mappings: ColumnMapping[]) => void
+  onMappingComplete: (mappings: ColumnMappingRule[]) => void
   onCancel?: () => void
 }
 
@@ -39,15 +32,16 @@ const FINAL_EXPORT_COLUMNS = [
 ]
 
 export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onCancel }: ColumnMappingProps) {
-  const [mappings, setMappings] = useState<ColumnMapping[]>(() => {
+  const [mappings, setMappings] = useState<ColumnMappingRule[]>(() => {
     return excelColumns.map((col, index) => ({
       excelColumn: col,
       mappedTo: index < FINAL_EXPORT_COLUMNS.length ? FINAL_EXPORT_COLUMNS[index] : null,
       finalColumn: FINAL_EXPORT_COLUMNS[index] || "Unmapped",
-      status: index < FINAL_EXPORT_COLUMNS.length ? "mapped" : "unmapped",
+      status: (index < FINAL_EXPORT_COLUMNS.length ? "mapped" : "unmapped") as "mapped" | "unmapped" | "warning",
       sampleData: sampleData[col] || [],
     }))
   })
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const handleMappingChange = (excelColumn: string, finalColumn: string) => {
     setMappings((prev) =>
@@ -68,8 +62,15 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
   const getMappedCount = () => mappings.filter((m) => m.status === "mapped").length
   const getTotalCount = () => mappings.length
 
-  const handleContinue = () => {
-    onMappingComplete(mappings)
+  const handleContinue = async () => {
+    setIsProcessing(true)
+    try {
+      await onMappingComplete(mappings)
+    } catch (error) {
+      console.error('Error processing mappings:', error)
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   return (
@@ -135,8 +136,14 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
                 </Button>
               )}
             </div>
-            <Button size="sm" className="bg-black hover:bg-gray-800 text-white" onClick={handleContinue}>
-              Continue to Next Step
+            <Button 
+              size="sm" 
+              className="bg-black hover:bg-gray-800 text-white" 
+              onClick={handleContinue}
+              disabled={isProcessing}
+            >
+              {isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isProcessing ? 'Processing...' : 'Continue to Next Step'}
             </Button>
           </div>
         </CardContent>

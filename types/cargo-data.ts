@@ -15,6 +15,10 @@ export interface CargoData {
   combined?: string
   totalEur?: number
   vatEur?: number
+  recordId?: string
+  desNo?: string
+  recNumb?: string
+  outbDate?: string
 }
 
 export interface ProcessedData {

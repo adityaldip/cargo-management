@@ -5,14 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertTriangle, CheckCircle, RefreshCw, Download, Settings, Eye, GripVertical } from "lucide-react"
+import { AlertTriangle, RefreshCw, Download, Settings, Eye, GripVertical, Loader2, Trash2 } from "lucide-react"
 import { combineProcessedData } from "@/lib/file-processor"
-import { ExportModal } from "@/components/export-modal"
-import type { ProcessedData } from "@/types/cargo-data"
+import { getCurrentSession, clearAllData } from "@/lib/storage-utils"
+import type { ProcessedData, CargoData } from "@/types/cargo-data"
+import type { Database } from "@/types/database"
 
 interface ReviewMergedExcelProps {
   mailAgentData: ProcessedData | null
@@ -29,6 +28,58 @@ interface ColumnConfig {
   order: number
 }
 
+// Type for Supabase cargo_data row
+type CargoDataRow = Database['public']['Tables']['cargo_data']['Row']
+
+// Function to create column configurations from Supabase schema
+const createColumnConfigsFromSchema = (): ColumnConfig[] => {
+  // Map database column names to user-friendly labels
+  const columnLabels: Partial<Record<keyof CargoDataRow, string>> = {
+    id: 'Record ID.',
+    rec_id: 'Rec. ID.',
+    inb_flight_date: 'Inb. Flight Date.',
+    outb_flight_date: 'Outb. Flight Date.', 
+    des_no: 'Des. No.',
+    rec_numb: 'Rec. Number.',
+    orig_oe: 'Orig. OE.',
+    dest_oe: 'Dest. OE.',
+    inb_flight_no: 'Inb. Flight No.',
+    outb_flight_no: 'Outb. Flight No.',
+    mail_cat: 'Mail Category.',
+    mail_class: 'Mail Class.',
+    total_kg: 'Total Weight (kg).',
+    invoice: 'Invoice.',
+    assigned_customer: 'Customer.',
+    assigned_rate: 'Rate.',
+  }
+
+  // Define column order and visibility
+  const columnOrder: Array<{ key: keyof CargoDataRow; visible: boolean }> = [
+    { key: 'inb_flight_date', visible: true },
+    { key: 'outb_flight_date', visible: true },
+    { key: 'rec_id', visible: true },
+    { key: 'des_no', visible: true },
+    { key: 'rec_numb', visible: true },
+    { key: 'orig_oe', visible: true },
+    { key: 'dest_oe', visible: true },
+    { key: 'inb_flight_no', visible: true },
+    { key: 'outb_flight_no', visible: true },
+    { key: 'mail_cat', visible: true },
+    { key: 'mail_class', visible: true },
+    { key: 'total_kg', visible: true },
+    { key: 'invoice', visible: true },
+    { key: 'assigned_customer', visible: true },
+    { key: 'assigned_rate', visible: true },
+  ]
+
+  return columnOrder.map((col, index) => ({
+    key: col.key,
+    label: columnLabels[col.key] || col.key,
+    visible: col.visible,
+    order: index + 1
+  }))
+}
+
 export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData, onContinue }: ReviewMergedExcelProps) {
   const [mergedData, setMergedData] = useState<ProcessedData | null>(null)
   const [mergeConflicts, setMergeConflicts] = useState<string[]>([])
@@ -37,93 +88,126 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   const [activeStep, setActiveStep] = useState<"preview" | "configure">("configure")
   const recordsPerPage = 20
 
-  // Column configuration state
-  const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([
-    { key: 'inbFlightDate', label: 'Inb.Flight Date', visible: true, order: 1 },
-    { key: 'outbFlightDate', label: 'Outb.Flight Date', visible: true, order: 2 },
-    { key: 'recId', label: 'Rec. ID', visible: true, order: 3 },
-    { key: 'desNo', label: 'Des. No.', visible: true, order: 4 },
-    { key: 'recNumb', label: 'Rec. Numb.', visible: true, order: 5 },
-    { key: 'origOE', label: 'Orig. OE', visible: true, order: 6 },
-    { key: 'destOE', label: 'Dest. OE', visible: true, order: 7 },
-    { key: 'inbFlightNo', label: 'Inb. Flight No.', visible: true, order: 8 },
-    { key: 'outbFlightNo', label: 'Outb. Flight No.', visible: true, order: 9 },
-    { key: 'mailCat', label: 'Mail Cat.', visible: true, order: 10 },
-    { key: 'mailClass', label: 'Mail Class', visible: true, order: 11 },
-    { key: 'totalKg', label: 'Total kg', visible: true, order: 12 },
-    { key: 'invoiceExtend', label: 'Invoice', visible: true, order: 13 },
-    { key: 'customer', label: 'Customer', visible: true, order: 14 },
-    { key: 'rate', label: 'Rate', visible: true, order: 15 },
-  ])
+  // Column configuration state - generated from Supabase schema
+  const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>(() => 
+    createColumnConfigsFromSchema()
+  )
 
   // Drag and drop state
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+  const [realData, setRealData] = useState<CargoData[]>([])
+  const [isLoadingData, setIsLoadingData] = useState(false)
+  const [dataSource, setDataSource] = useState<string>("")
+  
+  // Clear data state
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [isClearingData, setIsClearingData] = useState(false)
+  
+  // Track if data has been intentionally cleared
+  const [dataCleared, setDataCleared] = useState(false)
 
-  // Generate 1000 dummy data entries
-  const generateDummyData = () => {
-    const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM", "ESMADD", "NLAMS", "BEBRUB"]
-    const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA", "USANC", "USHOU", "USDAL"]
-    const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456", "BA789", "KL012", "IB345"]
-    const mailCats = ["A", "B", "C", "D", "E"]
-    const mailClasses = ["7C", "7D", "7E", "7F", "7G", "8A", "8B", "8C"]
-    const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
-    const customers = [
-      "AirMail Limited / ZZXDA14",
-      "Express Cargo Inc / YYXBC23", 
-      "Global Mail Services / WWXEF45",
-      "Priority Post Ltd / VVXGH67",
-      "International Freight / UUXIJ89",
-      "Euro Mail Express / TTXKL12",
-      "Atlantic Cargo Co / SSXMN34",
-      "Pacific Mail Group / RRXOP56"
-    ]
-
-    const data = []
-    for (let i = 1; i <= 1000; i++) {
-      const year = 2025
-      const month = Math.floor(Math.random() * 12) + 1
-      const day = Math.floor(Math.random() * 28) + 1
-      const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-      
-      const inbDate = `${year} ${monthNames[month - 1]} ${day.toString().padStart(2, '0')}`
-      const outbDate = `${year} ${monthNames[month - 1]} ${(day + 1).toString().padStart(2, '0')}`
-      
-      const origOE = origins[Math.floor(Math.random() * origins.length)]
-      const destOE = destinations[Math.floor(Math.random() * destinations.length)]
-      const mailCat = mailCats[Math.floor(Math.random() * mailCats.length)]
-      const mailClass = mailClasses[Math.floor(Math.random() * mailClasses.length)]
-      
-      const desNo = (50700 + Math.floor(Math.random() * 100)).toString()
-      const recNumb = (Math.floor(Math.random() * 999) + 1).toString().padStart(3, '0')
-      const recId = `${origOE}${destOE}${mailCat}${mailClass}${desNo}${recNumb}${(70000 + Math.floor(Math.random() * 9999)).toString()}`
-      
-      data.push({
-        inbFlightDate: inbDate,
-        outbFlightDate: outbDate,
-        recId: recId,
-        desNo: desNo,
-        recNumb: recNumb,
-        origOE: origOE,
-        destOE: destOE,
-        inbFlightNo: flightNos[Math.floor(Math.random() * flightNos.length)],
-        outbFlightNo: flightNos[Math.floor(Math.random() * flightNos.length)],
-        mailCat: mailCat,
-        mailClass: mailClass,
-        totalKg: Math.round((Math.random() * 50 + 0.1) * 10) / 10,
-        invoiceExtend: invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)],
-        customer: "",
-        rate: "",
-      })
+  // Load real data from current session or merged data
+  const loadRealData = () => {
+    setIsLoadingData(true)
+    setRealData([]) // Clear existing data first
+    setDataSource("")
+    
+    // If data has been intentionally cleared, don't load anything
+    if (dataCleared) {
+      setIsLoadingData(false)
+      return
     }
-    return data
+    
+    try {
+      // First check if we have merged data
+      if (mergedData) {
+        setRealData(mergedData.data)
+        setDataSource("Merged Data")
+        setDataCleared(false) // Reset cleared flag when data is found
+        return
+      }
+
+      // Then check current session
+      const currentSession = getCurrentSession()
+      if (currentSession) {
+        const datasets = []
+        let sourceName = ""
+        
+        if (currentSession.mailAgent) {
+          datasets.push(currentSession.mailAgent.data)
+          sourceName = "Mail Agent"
+        }
+        
+        if (currentSession.mailSystem) {
+          datasets.push(currentSession.mailSystem.data)
+          sourceName = sourceName ? `${sourceName} + Mail System` : "Mail System"
+        }
+        
+        if (datasets.length > 0) {
+          const combined = datasets.length > 1 ? combineProcessedData(datasets) : datasets[0]
+          // Ensure unique IDs for all records
+          const dataWithUniqueIds = combined.data.map((record, index) => ({
+            ...record,
+            id: `session-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+          }))
+          setRealData(dataWithUniqueIds)
+          setDataSource(sourceName)
+          setDataCleared(false) // Reset cleared flag when data is found
+        }
+      }
+      
+      // Fallback to prop data if no session data
+      if (realData.length === 0) {
+        if (mailAgentData && mailSystemData) {
+          const combined = combineProcessedData([mailAgentData, mailSystemData])
+          const dataWithUniqueIds = combined.data.map((record, index) => ({
+            ...record,
+            id: `props-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+          }))
+          setRealData(dataWithUniqueIds)
+          setDataSource("Mail Agent + Mail System")
+          setDataCleared(false) // Reset cleared flag when data is found
+        } else if (mailAgentData) {
+          const dataWithUniqueIds = mailAgentData.data.map((record, index) => ({
+            ...record,
+            id: `agent-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+          }))
+          setRealData(dataWithUniqueIds)
+          setDataSource("Mail Agent Only")
+          setDataCleared(false) // Reset cleared flag when data is found
+        } else if (mailSystemData) {
+          const dataWithUniqueIds = mailSystemData.data.map((record, index) => ({
+            ...record,
+            id: `system-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
+          }))
+          setRealData(dataWithUniqueIds)
+          setDataSource("Mail System Only")
+          setDataCleared(false) // Reset cleared flag when data is found
+        }
+      }
+    } catch (error) {
+      console.error('Error loading real data:', error)
+      setRealData([]) // Clear data on error
+      setDataSource("Error loading data")
+    } finally {
+      setIsLoadingData(false)
+    }
   }
 
-  const sampleExcelData = useMemo(() => generateDummyData(), [])
+  // Use real data instead of dummy data, but respect cleared state
+  const sampleExcelData = useMemo(() => dataCleared ? [] : realData, [realData, dataCleared])
   
-  // Get all columns in order (no filtering)
+  // Get only visible columns in order
   const visibleColumns = useMemo(() => 
     columnConfigs
+      .filter(config => config.visible)
       .sort((a, b) => a.order - b.order),
+    [columnConfigs]
+  )
+
+  // Get only visible columns for configuration
+  const configColumns = useMemo(() => 
+    columnConfigs.filter(config => config.visible).sort((a, b) => a.order - b.order),
     [columnConfigs]
   )
   
@@ -146,6 +230,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
       )
     )
   }
+
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, columnKey: string) => {
@@ -185,11 +270,99 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
     alert("Excel file would be exported here (demo mode)")
   }
 
+  const handleClearData = async () => {
+    setIsClearingData(true)
+    setShowClearConfirm(false)
+    
+    // Immediately clear UI state to hide data from table
+    setDataCleared(true)
+    setRealData([])
+    setDataSource("")
+    setMergedData(null)
+    setMergeConflicts([])
+    onMergedData(null)
+    
+    try {
+      const result = await clearAllData()
+      
+      if (result.success) {
+        console.log(`✅ Successfully cleared all data:`)
+        console.log(`- Local storage: ${result.localCleared ? 'cleared' : 'failed'}`)
+        console.log(`- Supabase: ${result.supabaseDeletedCount || 0} records deleted`)
+        
+        alert(`Data cleared successfully!\n- Local storage cleared\n- ${result.supabaseDeletedCount || 0} records deleted from database`)
+      } else {
+        console.error('❌ Failed to clear all data:', result.error)
+        alert(`Failed to clear data: ${result.error}`)
+        // If clearing failed, try to reload data
+        setDataCleared(false)
+        loadRealData()
+      }
+    } catch (error) {
+      console.error('❌ Error during clear operation:', error)
+      alert(`Error clearing data: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      // If clearing failed, try to reload data
+      setDataCleared(false)
+      loadRealData()
+    } finally {
+      setIsClearingData(false)
+    }
+  }
+
+  // Format cell values for display
+  const formatCellValue = (record: CargoData, key: string): string => {
+    // Map CargoData fields to Supabase fields for compatibility
+    const fieldMapping: Record<string, string> = {
+      'rec_id': 'recordId',
+      'inb_flight_date': 'date', 
+      'outb_flight_date': 'outbDate',
+      'des_no': 'desNo',
+      'rec_numb': 'recNumb',
+      'orig_oe': 'origOE',
+      'dest_oe': 'destOE',
+      'inb_flight_no': 'inbFlightNo',
+      'outb_flight_no': 'outbFlightNo',
+      'mail_cat': 'mailCat',
+      'mail_class': 'mailClass',
+      'total_kg': 'totalKg',
+      'invoice': 'invoiceExtend',
+      'customer_name_number': 'customer',
+      'assigned_customer': 'customer',
+      'assigned_rate': 'totalEur'
+    }
+    
+    // Try to get value using mapped field name first, then original key
+    const mappedKey = fieldMapping[key] || key
+    let value = (record as any)[mappedKey] || (record as any)[key]
+    
+    if (value === undefined || value === null || value === '') {
+      return ''
+    }
+    
+    // Format numeric values
+    if (key === 'total_kg' || key === 'assigned_rate') {
+      return typeof value === 'number' ? value.toFixed(1) : String(value)
+    }
+    
+    // Format dates
+    if (key === 'inb_flight_date' || key === 'outb_flight_date' || key === 'processed_at' || key === 'created_at' || key === 'updated_at') {
+      if (typeof value === 'string' && value.includes('T')) {
+        return new Date(value).toLocaleDateString()
+      }
+    }
+    
+    return String(value)
+  }
+
   useEffect(() => {
     if (mailAgentData || mailSystemData) {
       handleMergeData()
     }
   }, [mailAgentData, mailSystemData])
+
+  useEffect(() => {
+    loadRealData()
+  }, [mergedData, mailAgentData, mailSystemData])
 
   const handleMergeData = async () => {
     if (!mailAgentData && !mailSystemData) return
@@ -227,6 +400,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
 
       setMergedData(combined)
       setMergeConflicts(conflicts)
+      setDataCleared(false) // Reset cleared flag when new data is merged
       onMergedData(combined)
     } catch (error) {
       console.error("Error merging data:", error)
@@ -278,13 +452,57 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent>
               <div className="space-y-2">
-              <CardTitle className="text-black">Configure Columns</CardTitle>
-              <p className="text-sm text-gray-600">
-                Customize which columns to display and their order in the Excel export
-              </p>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-black">Configure Columns</CardTitle>
+                    <p className="text-sm text-gray-600">
+                      Customize which columns to display and their order in the Excel export
+                    </p>
+                    {/* <div className="mt-2">
+                      <label className="flex items-center gap-2 text-sm text-gray-600">
+                        <input
+                          type="checkbox"
+                          checked={showAllColumns}
+                          onChange={(e) => setShowAllColumns(e.target.checked)}
+                          className="rounded"
+                        />
+                        Show all columns (including hidden)
+                      </label>
+                    </div> */}
+                  </div>
+                  <div className="flex gap-2">
+                    {/* <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={loadColumnConfigsFromSupabase}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Load from DB
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={saveColumnConfigsToSupabase}
+                      className="text-green-600 hover:text-green-800"
+                    >
+                      <Download className="w-4 h-4 mr-2 rotate-180" />
+                      Save to DB
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={resetColumnConfigs}
+                      className="text-gray-600 hover:text-black"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Reset to Default
+                    </Button> */}
+                  </div>
+                </div>
                 {/* Column Configuration List */}
                 <div className="space-y-1">
-                  {columnConfigs.map((config, index) => (
+                  {configColumns.map((config, index) => (
                     <div 
                       key={config.key} 
                       draggable
@@ -323,16 +541,56 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
               <div className="flex justify-between items-start">
                 <div>
                   <CardTitle className="text-black">Excel Data Preview</CardTitle>
-                  <p className="text-sm text-gray-600">Sample of how the exported Excel file will look</p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-600">This preview shows how your data will appear in the exported Excel file</p>
+                    {dataSource && (
+                      <Badge variant="secondary" className="text-xs">
+                        Source: {dataSource}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDataCleared(false) // Reset cleared flag to allow data loading
+                      loadRealData()
+                    }}
+                    disabled={isLoadingData}
+                  >
+                    {isLoadingData ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                    )}
+                    Refresh Data
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowClearConfirm(true)}
+                    disabled={isClearingData}
+                    className="text-red-600 border-red-300 hover:bg-red-50"
+                  >
+                    {isClearingData ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 mr-2" />
+                    )}
+                    Clear Data
+                  </Button>
                 <Button
                   onClick={handleExportExcel}
                   className="bg-black text-white"
                   size="sm"
+                    disabled={sampleExcelData.length === 0}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export Data
                 </Button>
+                </div>
               </div>
               <div className="flex justify-end">
                 <div className="flex gap-4 text-sm text-gray-600">
@@ -343,6 +601,27 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
               </div>
             </CardHeader>
             <CardContent>
+              {isLoadingData ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  <span>Loading data...</span>
+                </div>
+              ) : sampleExcelData.length === 0 ? (
+                <div className="text-center py-8">
+                  <AlertTriangle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
+                  <p className="text-gray-600 mb-4">
+                    Please upload and process Excel files in the previous steps to see data here.
+                  </p>
+                  <Button variant="outline" onClick={() => {
+                    setDataCleared(false) // Reset cleared flag to allow data loading
+                    loadRealData()
+                  }}>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Try Loading Data
+                  </Button>
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <Table className="border border-collapse border-radius-lg">
                   <TableHeader>
@@ -351,8 +630,8 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                         <TableHead 
                           key={column.key}
                           className={`border ${
-                            column.key === 'customer' || column.key === 'rate' ? 'bg-yellow-200' : ''
-                          } ${column.key === 'totalKg' ? 'text-right' : ''}`}
+                              column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''
+                            } ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
                         >
                           {column.label}
                         </TableHead>
@@ -361,17 +640,17 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                   </TableHeader>
                   <TableBody>
                     {currentRecords.map((record, index) => (
-                      <TableRow key={index}>
+                        <TableRow key={`row-${startIndex + index}-${record.id || 'no-id'}`}>
                         {visibleColumns.map((column) => (
                           <TableCell 
-                            key={column.key}
+                            key={`cell-${startIndex + index}-${column.key}`}
                             className={`border ${
-                              column.key === 'customer' || column.key === 'rate' ? 'bg-yellow-200' : ''
-                            } ${column.key === 'recId' ? 'font-mono text-xs' : ''} ${
-                              column.key === 'totalKg' ? 'text-right' : ''
-                            }`}
-                          >
-                            {(record as any)[column.key] || ''}
+                                column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''
+                              } ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${
+                                column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''
+                              }`}
+                            >
+                              {formatCellValue(record, column.key)}
                           </TableCell>
                         ))}
                       </TableRow>
@@ -379,8 +658,10 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                   </TableBody>
                 </Table>
               </div>
+              )}
             
             {/* Pagination Controls */}
+            {sampleExcelData.length > 0 && (
             <div className="mt-4 flex items-center justify-between">
               <div className="text-sm text-gray-600">
                 Showing {startIndex + 1} to {Math.min(endIndex, sampleExcelData.length)} of {sampleExcelData.length.toLocaleString()} records
@@ -434,11 +715,9 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                 </Button>
               </div>
             </div>
+            )}
             
               <div className="mt-2 text-center">
-                <p className="text-sm text-gray-500">
-                  This preview shows how your data will appear in the exported Excel file
-                </p>
               </div>
             </CardContent>
           </Card>
@@ -449,10 +728,61 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             className="bg-black hover:bg-gray-800 text-white"
             onClick={onContinue}
           >
-            Continue to Customer Review
+            Continue to Assign Customers
           </Button>
         </div>
       </div>
+
+      {/* Clear Data Confirmation Dialog */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Clear All Data</h3>
+            </div>
+            <div className="mb-6">
+              <p className="text-gray-600 mb-2">
+                This will permanently delete:
+              </p>
+              <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 ml-4">
+                <li>All uploaded Excel files from local storage</li>
+                <li>All processed cargo data from the database</li>
+                <li>Current session data and mappings</li>
+              </ul>
+              <p className="text-red-600 text-sm mt-3 font-medium">
+                ⚠️ This action cannot be undone!
+              </p>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowClearConfirm(false)}
+                disabled={isClearingData}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleClearData}
+                disabled={isClearingData}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isClearingData ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Clearing...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All Data
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

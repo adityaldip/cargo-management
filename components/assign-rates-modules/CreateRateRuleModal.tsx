@@ -195,6 +195,7 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
                       <SelectItem value="route">Route</SelectItem>
                       <SelectItem value="weight">Weight (kg)</SelectItem>
                       <SelectItem value="mail_category">Mail Category</SelectItem>
+                      <SelectItem value="mail_class">Mail Class</SelectItem>
                       <SelectItem value="customer">Customer</SelectItem>
                       <SelectItem value="flight_number">Flight Number</SelectItem>
                       <SelectItem value="distance">Distance (km)</SelectItem>

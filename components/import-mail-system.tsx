@@ -5,9 +5,10 @@ import type React from "react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Shuffle, Settings, Eye } from "lucide-react"
+import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Settings, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { processFile } from "@/lib/file-processor"
+import { processFile, getExcelColumns, getExcelSampleData, processFileWithMappings, type ColumnMappingRule } from "@/lib/file-processor"
+import { saveDataset, generateDatasetId, saveCurrentSession, getCurrentSession, shouldTriggerSupabaseSave, saveMergedDataToSupabase } from "@/lib/storage-utils"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
 
@@ -16,87 +17,6 @@ interface ImportMailSystemProps {
   onContinue?: () => void
 }
 
-const DEMO_EXAMPLES = [
-  {
-    name: "Mail System - Central Europe Routes.xlsx",
-    size: 3.2,
-    data: {
-      data: [
-        {
-          "Flight Date": "2025 OCT 10",
-          "Record ID": "CZPRGDEBERLA9C71010005600234",
-          "Destination": "71010",
-          "Record Number": "005",
-          "Origin OE": "CZPRG",
-          "Destination OE": "DEBER",
-          "Flight Number": "BT889",
-          "Outbound Flight": "BT445",
-          "Mail Category": "A",
-          "Mail Classification": "9C",
-          "Weight kg": "15.6",
-          "Invoice Type": "Priority",
-          "Customer Info": "Central Mail / CM2025",
-        },
-        {
-          "Flight Date": "2025 OCT 12",
-          "Record ID": "HUBUBDKCOPNHA8C71012003400156",
-          "Destination": "71012",
-          "Record Number": "003",
-          "Origin OE": "HUBUD",
-          "Destination OE": "DKCOP",
-          "Flight Number": "BT667",
-          "Outbound Flight": "BT778",
-          "Mail Category": "B",
-          "Mail Classification": "8C",
-          "Weight kg": "22.3",
-          "Invoice Type": "Express",
-          "Customer Info": "Nordic Express / NE456",
-        },
-      ],
-      summary: {
-        totalRecords: 42,
-        totalKg: 892.4,
-        euSubtotal: 4567.8,
-        nonEuSubtotal: 1234.5,
-        total: 5802.3,
-      },
-      warnings: [],
-      missingFields: [],
-    },
-  },
-  {
-    name: "System Data - Scandinavian Routes.xlsx",
-    size: 2.8,
-    data: {
-      data: [
-        {
-          "Flight Date": "2025 NOV 05",
-          "Record ID": "SEARNKOSLOGTA7C71105002100087",
-          "Destination": "71105",
-          "Record Number": "002",
-          "Origin OE": "SEARNK",
-          "Destination OE": "OSLOG",
-          "Flight Number": "BT234",
-          "Outbound Flight": "BT889",
-          "Mail Category": "A",
-          "Mail Classification": "7C",
-          "Weight kg": "18.9",
-          "Invoice Type": "Standard",
-          "Customer Info": "Scan Mail / SM789",
-        },
-      ],
-      summary: {
-        totalRecords: 28,
-        totalKg: 456.7,
-        euSubtotal: 2890.4,
-        nonEuSubtotal: 567.8,
-        total: 3458.2,
-      },
-      warnings: [],
-      missingFields: [],
-    },
-  },
-]
 
 export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSystemProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -138,21 +58,24 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       setError(null)
 
       try {
+        // Get columns and sample data first
+        const columns = await getExcelColumns(file)
+        const samples = await getExcelSampleData(file, 3)
+
+        if (columns.length === 0) {
+          setError("No columns found in Excel file")
+          return
+        }
+
+        setExcelColumns(columns)
+        setSampleData(samples)
+        setShowColumnMapping(true)
+        setActiveStep("map")
+
+        // Process the file for data validation
         const result = await processFile(file, "mail-system")
-
         if (result.success && result.data) {
-          const columns = Object.keys(result.data.data[0] || {})
-          const samples: Record<string, string[]> = {}
-
-          columns.forEach((col) => {
-            samples[col] = result.data!.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
-          })
-
-          setExcelColumns(columns)
-          setSampleData(samples)
-          setShowColumnMapping(true)
           setProcessedData(result.data)
-          setActiveStep("map")
         } else {
           setError(result.error || "Processing failed")
         }
@@ -196,10 +119,73 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     }
   }
 
-  const handleMappingComplete = (mappings: any[]) => {
-    setShowColumnMapping(false)
-    onDataProcessed(processedData)
-    onContinue?.()
+  const handleMappingComplete = async (mappings: ColumnMappingRule[]) => {
+    if (!uploadedFile) return
+    
+    setIsProcessing(true)
+    setError(null)
+    
+    try {
+      // Process file with user's column mappings
+      const result = await processFileWithMappings(uploadedFile, "mail-system", mappings)
+      
+      if (result.success && result.data) {
+        // Create dataset to save
+        const dataset = {
+          id: generateDatasetId(),
+          name: uploadedFile.name,
+          type: "mail-system" as const,
+          data: result.data,
+          mappings,
+          timestamp: Date.now(),
+          fileName: uploadedFile.name
+        }
+        
+        // Save to local storage
+        saveDataset(dataset)
+        
+        // Update current session
+        const currentSession = getCurrentSession() || {}
+        currentSession.mailSystem = dataset
+        saveCurrentSession(currentSession)
+        
+        // Check if we should trigger Supabase save (both datasets available)
+        if (shouldTriggerSupabaseSave()) {
+          console.log('Both datasets available - triggering Supabase save...')
+          try {
+            const supabaseResult = await saveMergedDataToSupabase(
+              currentSession.mailAgent,
+              currentSession.mailSystem
+            )
+            
+            if (supabaseResult.success) {
+              console.log(`✅ Successfully saved ${supabaseResult.savedCount} records to Supabase database`)
+              // You could add a toast notification here if you have a toast system
+            } else {
+              console.error('❌ Failed to save to Supabase:', supabaseResult.error)
+              setError(`Warning: Local processing succeeded, but failed to save to database: ${supabaseResult.error}`)
+            }
+          } catch (supabaseError) {
+            console.error('❌ Error during Supabase save:', supabaseError)
+            setError('Warning: Local processing succeeded, but encountered an error saving to database')
+          }
+        } else {
+          console.log('Mail System processed. Waiting for Mail Agent data to trigger Supabase save.')
+        }
+        
+        // Update component state
+        setProcessedData(result.data)
+        setShowColumnMapping(false)
+        onDataProcessed(result.data)
+        onContinue?.()
+      } else {
+        setError(result.error || "Failed to process file with mappings")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to process mapped data")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const removeFile = () => {
@@ -213,35 +199,6 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     onDataProcessed(null)
   }
 
-  const loadRandomExample = () => {
-    const randomExample = DEMO_EXAMPLES[Math.floor(Math.random() * DEMO_EXAMPLES.length)]
-
-    // Create a mock file object
-    const mockFile = new File([""], randomExample.name, {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    })
-    Object.defineProperty(mockFile, "size", { value: randomExample.size * 1024 * 1024 })
-
-    setUploadedFile(mockFile)
-
-    // Simulate processing delay
-    setIsProcessing(true)
-    setTimeout(() => {
-      const columns = Object.keys(randomExample.data.data[0] || {})
-      const samples: Record<string, string[]> = {}
-
-      columns.forEach((col) => {
-        samples[col] = randomExample.data.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
-      })
-
-      setExcelColumns(columns)
-      setSampleData(samples)
-      setProcessedData(randomExample.data as unknown as ProcessedData)
-      setShowColumnMapping(true)
-      setActiveStep("map")
-      setIsProcessing(false)
-    }, 1500)
-  }
 
   return (
     <div className="space-y-4 pt-2">
@@ -290,7 +247,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
           <CardHeader>
             <CardTitle className="text-black">Upload Mail System File</CardTitle>
             <p className="text-gray-600 text-sm">
-              Upload your mail system Excel file. The system will verify and assess each row of data.
+              Upload your Mail System Excel file. The system will verify and assess each row of data.
             </p>
           </CardHeader>
           <CardContent className="space-y-6">

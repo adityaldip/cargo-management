@@ -1,135 +1,223 @@
+import * as XLSX from 'xlsx'
 import type { CargoData, ProcessedData, FileProcessingResult } from "@/types/cargo-data"
 
-// Mock data for demonstration - in real app this would parse Excel files
-const mockMailSystemData: Partial<CargoData>[] = [
-  {
-    origOE: "USFRAT",
-    destOE: "USRIXT",
-    inbFlightNo: "BT234",
-    mailCat: "A",
-    mailClass: "7C",
-    totalKg: 7.9,
-    invoiceExtend: "Airmail",
-    customer: "LV Post",
-    date: "2023-08-09",
-    sector: "RIX VIE",
-    euromail: "EU",
-    combined: "VIE EU",
-    totalEur: 713.0,
-    vatEur: 373.8,
-  },
-  {
-    origOE: "USFRAT",
-    destOE: "USRIXT",
-    inbFlightNo: "BT234",
-    mailCat: "A",
-    mailClass: "7C",
-    totalKg: 6.2,
-    invoiceExtend: "Airmail",
-    customer: "LV Post",
-    date: "2023-08-09",
-    sector: "RIX MAD",
-    euromail: "NONEU",
-    combined: "MAD NONEU",
-    totalEur: 3862.0,
-    vatEur: 2037.55,
-  },
-]
+// Column mapping for different file types
+const MAIL_AGENT_COLUMN_MAP: Record<string, keyof CargoData> = {
+  'Inb.Flight Date': 'date',
+  'Outb.Flight Date': 'outbDate',
+  'Rec. ID': 'recordId',
+  'Des. No.': 'desNo',
+  'Rec. Numb.': 'recNumb',
+  'Orig. OE': 'origOE',
+  'Dest. OE': 'destOE',
+  'Inb. Flight No.': 'inbFlightNo',
+  'Outb. Flight No.': 'outbFlightNo',
+  'Mail Cat.': 'mailCat',
+  'Mail Class': 'mailClass',
+  'Total kg': 'totalKg',
+  'Invoice': 'invoiceExtend',
+  'Customer name / number': 'customer',
+}
 
-const mockMailAgentData: Partial<CargoData>[] = [
-  {
-    origOE: "USFRAT",
-    destOE: "USROMT",
-    inbFlightNo: "BT234",
-    outbFlightNo: "BT633",
-    mailCat: "A",
-    mailClass: "7C",
-    totalKg: 2.4,
-    invoiceExtend: "Airmail",
-  },
-  {
-    origOE: "USFRAT",
-    destOE: "USVNOT",
-    inbFlightNo: "BT234",
-    outbFlightNo: "BT341",
-    mailCat: "A",
-    mailClass: "7C",
-    totalKg: 5.7,
-    invoiceExtend: "Airmail",
-  },
-]
+const MAIL_SYSTEM_COLUMN_MAP: Record<string, keyof CargoData> = {
+  'Flight Date': 'date',
+  'Record ID': 'recordId',
+  'Destination': 'desNo',
+  'Record Number': 'recNumb',
+  'Origin OE': 'origOE',
+  'Destination OE': 'destOE',
+  'Flight Number': 'inbFlightNo',
+  'Outbound Flight': 'outbFlightNo',
+  'Mail Category': 'mailCat',
+  'Mail Classification': 'mailClass',
+  'Weight kg': 'totalKg',
+  'Invoice Type': 'invoiceExtend',
+  'Customer Info': 'customer',
+}
 
-export function processFile(file: File, fileType: "mail-system" | "mail-agent"): Promise<FileProcessingResult> {
-  return new Promise((resolve) => {
-    // Simulate file processing delay
-    setTimeout(() => {
+interface ExcelRow {
+  [key: string]: any
+}
+
+function parseExcelFile(file: File): Promise<ExcelRow[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    
+    reader.onload = (e) => {
       try {
-        const mockData = fileType === "mail-system" ? mockMailSystemData : mockMailAgentData
-
-        const processedData: CargoData[] = mockData.map((item, index) => ({
-          id: `${fileType}-${index}`,
-          origOE: item.origOE || "",
-          destOE: item.destOE || "",
-          inbFlightNo: item.inbFlightNo || "",
-          outbFlightNo: item.outbFlightNo,
-          mailCat: item.mailCat || "",
-          mailClass: item.mailClass || "",
-          totalKg: item.totalKg || 0,
-          invoiceExtend: item.invoiceExtend || "",
-          customer: item.customer,
-          date: item.date,
-          sector: item.sector,
-          euromail: item.euromail,
-          combined: item.combined,
-          totalEur: item.totalEur,
-          vatEur: item.vatEur,
-        }))
-
-        // Identify missing fields
-        const missingFields: string[] = []
-        const warnings: string[] = []
-
-        processedData.forEach((record, index) => {
-          if (!record.customer) missingFields.push(`Row ${index + 1}: Missing customer`)
-          if (!record.date) missingFields.push(`Row ${index + 1}: Missing date`)
-          if (fileType === "mail-system" && !record.totalEur) {
-            warnings.push(`Row ${index + 1}: Missing total EUR - rate calculation needed`)
-          }
-          if (fileType === "mail-agent" && !record.outbFlightNo) {
-            warnings.push(`Row ${index + 1}: Missing outbound flight number`)
-          }
-        })
-
-        // Calculate summary
-        const totalKg = processedData.reduce((sum, record) => sum + record.totalKg, 0)
-        const euRecords = processedData.filter((r) => r.euromail === "EU")
-        const nonEuRecords = processedData.filter((r) => r.euromail === "NONEU")
-
-        const euSubtotal = euRecords.reduce((sum, record) => sum + (record.totalEur || 0), 0)
-        const nonEuSubtotal = nonEuRecords.reduce((sum, record) => sum + (record.totalEur || 0), 0)
-
-        const result: ProcessedData = {
-          data: processedData,
-          missingFields: [...new Set(missingFields)],
-          warnings: [...new Set(warnings)],
-          summary: {
-            totalRecords: processedData.length,
-            euSubtotal,
-            nonEuSubtotal,
-            total: euSubtotal + nonEuSubtotal,
-            totalKg,
-          },
+        const data = e.target?.result
+        if (!data) {
+          reject(new Error('Failed to read file'))
+          return
         }
 
-        resolve({ success: true, data: result })
-      } catch (error) {
-        resolve({
-          success: false,
-          error: error instanceof Error ? error.message : "Failed to process file",
+        const workbook = XLSX.read(data, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        
+        if (!sheetName) {
+          reject(new Error('No sheets found in Excel file'))
+          return
+        }
+
+        const worksheet = workbook.Sheets[sheetName]
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1, 
+          defval: '',
+          raw: false 
+        }) as any[][]
+
+        if (jsonData.length < 2) {
+          reject(new Error('Excel file must contain at least a header row and one data row'))
+          return
+        }
+
+        // Get headers from first row
+        const headers = jsonData[0] as string[]
+        
+        // Convert rows to objects
+        const rows: ExcelRow[] = jsonData.slice(1).map(row => {
+          const obj: ExcelRow = {}
+          headers.forEach((header, index) => {
+            obj[header] = row[index] || ''
+          })
+          return obj
+        }).filter(row => {
+          // Filter out completely empty rows
+          return Object.values(row).some(value => value !== '')
         })
+
+        resolve(rows)
+      } catch (error) {
+        reject(new Error(`Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`))
       }
-    }, 1500) // Simulate processing time
+    }
+
+    reader.onerror = () => {
+      reject(new Error('Failed to read file'))
+    }
+
+    reader.readAsArrayBuffer(file)
   })
+}
+
+function mapExcelRowToCargoData(row: ExcelRow, columnMap: Record<string, keyof CargoData>, index: number): CargoData {
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).substr(2, 9)
+  const cargoData: Partial<CargoData> = {
+    id: `row-${timestamp}-${index}-${random}`,
+  }
+
+  // Map columns based on the provided mapping
+  Object.entries(columnMap).forEach(([excelColumn, cargoField]) => {
+    const value = row[excelColumn]
+    
+    if (value !== undefined && value !== '') {
+      switch (cargoField) {
+        case 'totalKg':
+          cargoData[cargoField] = parseFloat(String(value)) || 0
+          break
+        case 'totalEur':
+        case 'vatEur':
+          cargoData[cargoField] = parseFloat(String(value)) || undefined
+          break
+        default:
+          cargoData[cargoField] = String(value).trim()
+      }
+    }
+  })
+
+  // Set defaults for required fields
+  return {
+    id: cargoData.id || `row-${timestamp}-${index}-${random}`,
+    origOE: cargoData.origOE || '',
+    destOE: cargoData.destOE || '',
+    inbFlightNo: cargoData.inbFlightNo || '',
+    outbFlightNo: cargoData.outbFlightNo,
+    mailCat: cargoData.mailCat || '',
+    mailClass: cargoData.mailClass || '',
+    totalKg: cargoData.totalKg || 0,
+    invoiceExtend: cargoData.invoiceExtend || '',
+    customer: cargoData.customer,
+    date: cargoData.date,
+    sector: cargoData.sector,
+    euromail: cargoData.euromail,
+    combined: cargoData.combined,
+    totalEur: cargoData.totalEur,
+    vatEur: cargoData.vatEur,
+    recordId: cargoData.recordId,
+    desNo: cargoData.desNo,
+    recNumb: cargoData.recNumb,
+    outbDate: cargoData.outbDate,
+  }
+}
+
+export async function processFile(file: File, fileType: "mail-system" | "mail-agent"): Promise<FileProcessingResult> {
+  try {
+    // Parse the Excel file
+    const excelRows = await parseExcelFile(file)
+    
+    if (excelRows.length === 0) {
+      return {
+        success: false,
+        error: "No data found in Excel file"
+      }
+    }
+
+    // Get the appropriate column mapping
+    const columnMap = fileType === "mail-system" ? MAIL_SYSTEM_COLUMN_MAP : MAIL_AGENT_COLUMN_MAP
+    
+    // Convert Excel rows to CargoData
+    const processedData: CargoData[] = excelRows.map((row, index) => 
+      mapExcelRowToCargoData(row, columnMap, index)
+    )
+
+    // Identify missing fields and warnings
+    const missingFields: string[] = []
+    const warnings: string[] = []
+
+    processedData.forEach((record, index) => {
+      if (!record.customer) missingFields.push(`Row ${index + 1}: Missing customer`)
+      if (!record.date) missingFields.push(`Row ${index + 1}: Missing date`)
+      if (fileType === "mail-system" && !record.totalEur) {
+        warnings.push(`Row ${index + 1}: Missing total EUR - rate calculation needed`)
+      }
+      if (fileType === "mail-agent" && !record.outbFlightNo) {
+        warnings.push(`Row ${index + 1}: Missing outbound flight number`)
+      }
+      if (!record.origOE) missingFields.push(`Row ${index + 1}: Missing origin OE`)
+      if (!record.destOE) missingFields.push(`Row ${index + 1}: Missing destination OE`)
+      if (!record.inbFlightNo) missingFields.push(`Row ${index + 1}: Missing inbound flight number`)
+      if (record.totalKg === 0) warnings.push(`Row ${index + 1}: Weight is zero`)
+    })
+
+    // Calculate summary
+    const totalKg = processedData.reduce((sum, record) => sum + record.totalKg, 0)
+    const euRecords = processedData.filter((r) => r.euromail === "EU")
+    const nonEuRecords = processedData.filter((r) => r.euromail === "NONEU")
+
+    const euSubtotal = euRecords.reduce((sum, record) => sum + (record.totalEur || 0), 0)
+    const nonEuSubtotal = nonEuRecords.reduce((sum, record) => sum + (record.totalEur || 0), 0)
+
+    const result: ProcessedData = {
+      data: processedData,
+      missingFields: [...new Set(missingFields)],
+      warnings: [...new Set(warnings)],
+      summary: {
+        totalRecords: processedData.length,
+        euSubtotal,
+        nonEuSubtotal,
+        total: euSubtotal + nonEuSubtotal,
+        totalKg,
+      },
+    }
+
+    return { success: true, data: result }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to process file",
+    }
+  }
 }
 
 export function combineProcessedData(datasets: ProcessedData[]): ProcessedData {
@@ -163,4 +251,215 @@ export function combineProcessedData(datasets: ProcessedData[]): ProcessedData {
       totalKg,
     },
   }
+}
+
+// Helper function to get available columns from an Excel file
+export async function getExcelColumns(file: File): Promise<string[]> {
+  try {
+    const excelRows = await parseExcelFile(file)
+    if (excelRows.length > 0) {
+      return Object.keys(excelRows[0])
+    }
+    return []
+  } catch (error) {
+    console.error('Error getting Excel columns:', error)
+    return []
+  }
+}
+
+// Helper function to get sample data from Excel file
+export async function getExcelSampleData(file: File, maxSamples: number = 3): Promise<Record<string, string[]>> {
+  try {
+    const excelRows = await parseExcelFile(file)
+    const sampleData: Record<string, string[]> = {}
+    
+    if (excelRows.length > 0) {
+      const columns = Object.keys(excelRows[0])
+      
+      columns.forEach(column => {
+        sampleData[column] = excelRows
+          .slice(0, maxSamples)
+          .map(row => String(row[column] || ''))
+      })
+    }
+    
+    return sampleData
+  } catch (error) {
+    console.error('Error getting Excel sample data:', error)
+    return {}
+  }
+}
+
+// Interface for column mappings
+export interface ColumnMappingRule {
+  excelColumn: string
+  mappedTo: string | null
+  finalColumn: string
+  status: "mapped" | "unmapped" | "warning"
+  sampleData: string[]
+}
+
+// Apply column mappings to raw Excel data
+export async function processFileWithMappings(
+  file: File, 
+  fileType: "mail-system" | "mail-agent",
+  mappings: ColumnMappingRule[]
+): Promise<FileProcessingResult> {
+  try {
+    // Parse the Excel file
+    const excelRows = await parseExcelFile(file)
+    
+    if (excelRows.length === 0) {
+      return {
+        success: false,
+        error: "No data found in Excel file"
+      }
+    }
+
+    // Create a mapping lookup for faster processing
+    const mappingLookup: Record<string, string> = {}
+    mappings.forEach(mapping => {
+      if (mapping.mappedTo && mapping.status === 'mapped') {
+        mappingLookup[mapping.excelColumn] = mapping.mappedTo
+      }
+    })
+
+    // Convert Excel rows to CargoData using the user's mappings
+    const processedData: CargoData[] = excelRows.map((row, index) => {
+      const timestamp = Date.now()
+      const random = Math.random().toString(36).substr(2, 9)
+      const cargoData: Partial<CargoData> = {
+        id: `${fileType}-${timestamp}-${index}-${random}`,
+      }
+
+      // Apply user mappings
+      Object.entries(row).forEach(([excelColumn, value]) => {
+        const mappedColumn = mappingLookup[excelColumn]
+        if (mappedColumn && value !== undefined && value !== '') {
+          // Map to CargoData fields based on the mapped column name
+          const cargoField = getCargoFieldFromMappedColumn(mappedColumn)
+          if (cargoField) {
+            switch (cargoField) {
+              case 'totalKg':
+                cargoData[cargoField] = parseFloat(String(value)) || 0
+                break
+              case 'totalEur':
+              case 'vatEur':
+                cargoData[cargoField] = parseFloat(String(value)) || undefined
+                break
+              default:
+                cargoData[cargoField] = String(value).trim()
+            }
+          }
+        }
+      })
+
+      // Set defaults for required fields
+      return {
+        id: cargoData.id || `${fileType}-${timestamp}-${index}-${random}`,
+        origOE: cargoData.origOE || '',
+        destOE: cargoData.destOE || '',
+        inbFlightNo: cargoData.inbFlightNo || '',
+        outbFlightNo: cargoData.outbFlightNo,
+        mailCat: cargoData.mailCat || '',
+        mailClass: cargoData.mailClass || '',
+        totalKg: cargoData.totalKg || 0,
+        invoiceExtend: cargoData.invoiceExtend || '',
+        customer: cargoData.customer,
+        date: cargoData.date,
+        sector: cargoData.sector,
+        euromail: cargoData.euromail,
+        combined: cargoData.combined,
+        totalEur: cargoData.totalEur,
+        vatEur: cargoData.vatEur,
+        recordId: cargoData.recordId,
+        desNo: cargoData.desNo,
+        recNumb: cargoData.recNumb,
+        outbDate: cargoData.outbDate,
+      }
+    })
+
+    // Identify missing fields and warnings
+    const missingFields: string[] = []
+    const warnings: string[] = []
+
+    processedData.forEach((record, index) => {
+      if (!record.customer) missingFields.push(`Row ${index + 1}: Missing customer`)
+      if (!record.date) missingFields.push(`Row ${index + 1}: Missing date`)
+      if (fileType === "mail-system" && !record.totalEur) {
+        warnings.push(`Row ${index + 1}: Missing total EUR - rate calculation needed`)
+      }
+      if (fileType === "mail-agent" && !record.outbFlightNo) {
+        warnings.push(`Row ${index + 1}: Missing outbound flight number`)
+      }
+      if (!record.origOE) missingFields.push(`Row ${index + 1}: Missing origin OE`)
+      if (!record.destOE) missingFields.push(`Row ${index + 1}: Missing destination OE`)
+      if (!record.inbFlightNo) missingFields.push(`Row ${index + 1}: Missing inbound flight number`)
+      if (record.totalKg === 0) warnings.push(`Row ${index + 1}: Weight is zero`)
+    })
+
+    // Calculate summary
+    const totalKg = processedData.reduce((sum, record) => sum + record.totalKg, 0)
+    const euRecords = processedData.filter((r) => r.euromail === "EU")
+    const nonEuRecords = processedData.filter((r) => r.euromail === "NONEU")
+
+    const euSubtotal = euRecords.reduce((sum, record) => sum + (record.totalEur || 0), 0)
+    const nonEuSubtotal = nonEuRecords.reduce((sum, record) => sum + (record.totalEur || 0), 0)
+
+    const result: ProcessedData = {
+      data: processedData,
+      missingFields: [...new Set(missingFields)],
+      warnings: [...new Set(warnings)],
+      summary: {
+        totalRecords: processedData.length,
+        euSubtotal,
+        nonEuSubtotal,
+        total: euSubtotal + nonEuSubtotal,
+        totalKg,
+      },
+    }
+
+    return { success: true, data: result }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to process file with mappings",
+    }
+  }
+}
+
+// Helper function to map display column names to CargoData field names
+function getCargoFieldFromMappedColumn(mappedColumn: string): keyof CargoData | null {
+  const mappingTable: Record<string, keyof CargoData> = {
+    'Inb.Flight Date': 'date',
+    'Outb.Flight Date': 'outbDate',
+    'Rec. ID': 'recordId',
+    'Des. No.': 'desNo',
+    'Rec. Numb.': 'recNumb',
+    'Orig. OE': 'origOE',
+    'Dest. OE': 'destOE',
+    'Inb. Flight No. | STA': 'inbFlightNo',
+    'Outb. Flight No. | STD': 'outbFlightNo',
+    'Mail Cat.': 'mailCat',
+    'Mail Class': 'mailClass',
+    'Total kg': 'totalKg',
+    'Invoice': 'invoiceExtend',
+    'Customer name / number': 'customer',
+    // Additional mappings for mail system
+    'Flight Date': 'date',
+    'Record ID': 'recordId',
+    'Destination': 'desNo',
+    'Record Number': 'recNumb',
+    'Origin OE': 'origOE',
+    'Destination OE': 'destOE',
+    'Flight Number': 'inbFlightNo',
+    'Outbound Flight': 'outbFlightNo',
+    'Mail Category': 'mailCat',
+    'Mail Classification': 'mailClass',
+    'Weight kg': 'totalKg',
+    'Invoice Type': 'invoiceExtend',
+    'Customer Info': 'customer',
+  }
+  
+  return mappingTable[mappedColumn] || null
 }

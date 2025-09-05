@@ -178,6 +178,7 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
                       <SelectItem value="orig_oe">Origin OE</SelectItem>
                       <SelectItem value="dest_oe">Destination OE</SelectItem>
                       <SelectItem value="mail_category">Mail Category</SelectItem>
+                      <SelectItem value="mail_class">Mail Class</SelectItem>
                       <SelectItem value="weight">Weight</SelectItem>
                       <SelectItem value="customer_code">Customer Code</SelectItem>
                     </SelectContent>

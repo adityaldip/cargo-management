@@ -4,9 +4,10 @@ import type React from "react"
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Shuffle, Settings, Eye } from "lucide-react"
+import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Settings, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { processFile } from "@/lib/file-processor"
+import { processFile, getExcelColumns, getExcelSampleData, processFileWithMappings, type ColumnMappingRule } from "@/lib/file-processor"
+import { saveDataset, generateDatasetId, saveCurrentSession, getCurrentSession } from "@/lib/storage-utils"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
 
@@ -15,120 +16,6 @@ interface ImportMailAgentProps {
   onContinue?: () => void
 }
 
-const DEMO_EXAMPLES = [
-  {
-    name: "Air Baltic Mail Agent - July 2025.xlsx",
-    size: 2.4,
-    data: {
-      data: [
-        {
-          "Inb.Flight Date": "2025 JUL 15",
-          "Outb.Flight Date": "2025 JUL 16",
-          "Rec. ID": "USFRATUSRIXTA7C50708003700079",
-          "Des. No.": "50708",
-          "Rec. Numb.": "003",
-          "Orig. OE": "USFRAT",
-          "Dest. OE": "USRIXT",
-          "Inb. Flight No.": "BT234",
-          "Outb. Flight No.": "BT633",
-          "Mail Cat.": "A",
-          "Mail Class": "7C",
-          "Total kg": "7.9",
-          Invoice: "Airmail",
-          "Customer name / number": "AirMail Limited / ZZXDA14",
-        },
-        {
-          "Inb.Flight Date": "2025 JUL 08",
-          "Outb.Flight Date": "2025 JUL 09",
-          "Rec. ID": "USFRATUSRIXTA7C50705002700062",
-          "Des. No.": "50705",
-          "Rec. Numb.": "002",
-          "Orig. OE": "USFRAT",
-          "Dest. OE": "USRIXT",
-          "Inb. Flight No.": "BT234",
-          "Outb. Flight No.": "BT445",
-          "Mail Cat.": "A",
-          "Mail Class": "7C",
-          "Total kg": "6.2",
-          Invoice: "Airmail",
-          "Customer name / number": "AirMail Limited / ZZXDA14",
-        },
-      ],
-      summary: {
-        totalRecords: 25,
-        totalWeight: 156.8,
-        total: 2847.5,
-        missingData: { incompleteRecords: 0 },
-      },
-      warnings: [],
-      missingFields: [],
-    },
-  },
-  {
-    name: "European Routes - August 2025.xlsx",
-    size: 3.1,
-    data: {
-      data: [
-        {
-          "Inb.Flight Date": "2025 AUG 12",
-          "Outb.Flight Date": "2025 AUG 13",
-          "Rec. ID": "DKCPHAFRANKTA8C60812004500123",
-          "Des. No.": "60812",
-          "Rec. Numb.": "004",
-          "Orig. OE": "DKCPHA",
-          "Dest. OE": "FRANK",
-          "Inb. Flight No.": "BT445",
-          "Outb. Flight No.": "BT778",
-          "Mail Cat.": "B",
-          "Mail Class": "8C",
-          "Total kg": "12.4",
-          Invoice: "Express",
-          "Customer name / number": "Euro Express / EEX901",
-        },
-      ],
-      summary: {
-        totalRecords: 18,
-        totalWeight: 234.6,
-        total: 4125.75,
-        missingData: { incompleteRecords: 0 },
-      },
-      warnings: [],
-      missingFields: [],
-    },
-  },
-  {
-    name: "Nordic Mail System - September 2025.xlsx",
-    size: 1.8,
-    data: {
-      data: [
-        {
-          "Inb.Flight Date": "2025 SEP 05",
-          "Outb.Flight Date": "2025 SEP 06",
-          "Rec. ID": "SEARNKOSLOTA9C70905001200089",
-          "Des. No.": "70905",
-          "Rec. Numb.": "001",
-          "Orig. OE": "SEARNK",
-          "Dest. OE": "OSLO",
-          "Inb. Flight No.": "BT667",
-          "Outb. Flight No.": "BT889",
-          "Mail Cat.": "A",
-          "Mail Class": "7C",
-          "Total kg": "8.7",
-          Invoice: "Standard",
-          "Customer name / number": "Nordic Post / NP2025",
-        },
-      ],
-      summary: {
-        totalRecords: 32,
-        totalWeight: 287.3,
-        total: 3456.8,
-        missingData: { incompleteRecords: 0 },
-      },
-      warnings: [],
-      missingFields: [],
-    },
-  },
-]
 
 export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgentProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -164,21 +51,24 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
       setError(null)
 
       try {
+        // Get columns and sample data first
+        const columns = await getExcelColumns(file)
+        const samples = await getExcelSampleData(file, 3)
+
+        if (columns.length === 0) {
+          setError("No columns found in Excel file")
+          return
+        }
+
+        setExcelColumns(columns)
+        setSampleData(samples)
+        setShowColumnMapping(true)
+        setActiveStep("map")
+
+        // Process the file for data validation
         const result = await processFile(file, "mail-agent")
-
         if (result.success && result.data) {
-          const columns = Object.keys(result.data.data[0] || {})
-          const samples: Record<string, string[]> = {}
-
-          columns.forEach((col) => {
-            samples[col] = result.data!.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
-          })
-
-          setExcelColumns(columns)
-          setSampleData(samples)
-          setShowColumnMapping(true)
           setProcessedData(result.data)
-          setActiveStep("map")
         } else {
           setError(result.error || "Processing failed")
         }
@@ -200,21 +90,24 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
       setError(null)
 
       try {
+        // Get columns and sample data first
+        const columns = await getExcelColumns(file)
+        const samples = await getExcelSampleData(file, 3)
+
+        if (columns.length === 0) {
+          setError("No columns found in Excel file")
+          return
+        }
+
+        setExcelColumns(columns)
+        setSampleData(samples)
+        setShowColumnMapping(true)
+        setActiveStep("map")
+
+        // Process the file for data validation
         const result = await processFile(file, "mail-agent")
-
         if (result.success && result.data) {
-          const columns = Object.keys(result.data.data[0] || {})
-          const samples: Record<string, string[]> = {}
-
-          columns.forEach((col) => {
-            samples[col] = result.data!.data.slice(0, 3).map((row) => String((row as any)[col] || ""))
-          })
-
-          setExcelColumns(columns)
-          setSampleData(samples)
-          setShowColumnMapping(true)
           setProcessedData(result.data)
-          setActiveStep("map")
         } else {
           setError(result.error || "Processing failed")
         }
@@ -258,10 +151,49 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     }
   }
 
-  const handleMappingComplete = (mappings: any[]) => {
-    setShowColumnMapping(false)
-    onDataProcessed(processedData)
-    onContinue?.()
+  const handleMappingComplete = async (mappings: ColumnMappingRule[]) => {
+    if (!uploadedFile) return
+    
+    setIsProcessing(true)
+    setError(null)
+    
+    try {
+      // Process file with user's column mappings
+      const result = await processFileWithMappings(uploadedFile, "mail-agent", mappings)
+      
+      if (result.success && result.data) {
+        // Create dataset to save
+        const dataset = {
+          id: generateDatasetId(),
+          name: uploadedFile.name,
+          type: "mail-agent" as const,
+          data: result.data,
+          mappings,
+          timestamp: Date.now(),
+          fileName: uploadedFile.name
+        }
+        
+        // Save to local storage
+        saveDataset(dataset)
+        
+        // Update current session
+        const currentSession = getCurrentSession() || {}
+        currentSession.mailAgent = dataset
+        saveCurrentSession(currentSession)
+        
+        // Update component state
+        setProcessedData(result.data)
+        setShowColumnMapping(false)
+        onDataProcessed(result.data)
+        onContinue?.()
+      } else {
+        setError(result.error || "Failed to process file with mappings")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to process mapped data")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const removeFile = () => {
@@ -326,7 +258,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
           <CardHeader>
             <CardTitle className="text-black">Upload Mail Agent File</CardTitle>
             <p className="text-gray-600 text-sm">
-              Upload your mail agent Excel file. The system will verify and assess each row of data.
+              Upload your Mail Agent Excel file. The system will verify and assess each row of data.
             </p>
           </CardHeader>
           <CardContent className="space-y-6">

@@ -287,37 +287,38 @@ export function ConfigureRates() {
         </div>
       )}
 
-      <Card className="bg-white border-gray-200 shadow-sm">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-black flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Rate Assignment Rules
-          </CardTitle>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Rule
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={refetch}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? "Refreshing..." : "Refresh"}
-            </Button>
-            <Button className="bg-black hover:bg-gray-800 text-white">
-              <Play className="h-4 w-4 mr-2" />
-              Execute Rate Assignment
-            </Button>
+      <div className="max-w-4xl mx-auto">
+        <Card className="bg-white border-gray-200 shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-black flex items-center gap-2">
+              <Calculator className="h-5 w-5" />
+              Rate Assignment Rules
+            </CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                New Rule
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={refetch}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? "Refreshing..." : "Refresh"}
+              </Button>
+              <Button className="bg-black hover:bg-gray-800 text-white">
+                <Play className="h-4 w-4 mr-2" />
+                Execute
+              </Button>
+            </div>
           </div>
-        </div>
-      </CardHeader>
+        </CardHeader>
 
       <CardContent>
         {/* Filter Section */}
@@ -341,7 +342,7 @@ export function ConfigureRates() {
           </div>
         </div>
         
-        <div className="space-y-2">
+        <div className="space-y-1">
           {filteredRules.map((rule) => (
             <div key={rule.id} className="border rounded-lg">
               <div
@@ -350,7 +351,7 @@ export function ConfigureRates() {
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, rule.id)}
                 className={cn(
-                  "flex items-center gap-4 p-3 transition-all cursor-pointer hover:bg-gray-50",
+                  "flex items-center gap-1 p-1 transition-all cursor-pointer hover:bg-gray-50",
                   rule.isActive ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
                   draggedRule === rule.id && "opacity-50",
                   expandedRule === rule.id && "bg-gray-50"
@@ -363,19 +364,17 @@ export function ConfigureRates() {
                 </div>
 
                 {/* Priority Badge */}
-                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
+                <div className="flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
                   {rule.priority}
                 </div>
 
                 {/* Toggle Switch */}
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={rule.isActive}
-                    onCheckedChange={() => handleToggleRule(rule.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="scale-75"
-                  />
-                </div>
+                <Switch
+                  checked={rule.isActive}
+                  onCheckedChange={() => handleToggleRule(rule.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="scale-75"
+                />
                 
                 {/* Rule Info */}
                 <div className="flex-1 min-w-0">
@@ -383,37 +382,30 @@ export function ConfigureRates() {
                 </div>
 
                 {/* Rate Info */}
-                <div className="text-right">
-                  <p className="text-sm font-medium text-black">
+                <div className="text-right min-w-20">
+                  <p className="text-xs font-medium text-black">
                     {rule.actions.currency} {rule.actions.baseRate.toFixed(2)}
                     {rule.actions.rateType === "per_kg" && "/kg"}
                   </p>
-                  {rule.lastRun && (
-                    <p className="text-xs text-gray-400">
-                      Last run: {new Date(rule.lastRun).toLocaleDateString()}
-                    </p>
-                  )}
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      if (confirm(`Are you sure you want to delete "${rule.name}"? This action cannot be undone.`)) {
-                        const result = await deleteRateRule(rule.id)
-                        if (!result.success) {
-                          alert(`Failed to delete rule: ${result.error}`)
-                        }
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    if (confirm(`Are you sure you want to delete "${rule.name}"? This action cannot be undone.`)) {
+                      const result = await deleteRateRule(rule.id)
+                      if (!result.success) {
+                        alert(`Failed to delete rule: ${result.error}`)
                       }
-                    }}
-                    className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                    }
+                  }}
+                  className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
               </div>
 
               {/* Expanded Edit Section */}
@@ -425,15 +417,15 @@ export function ConfigureRates() {
                       {/* Filter Conditions */}
                       <div className="p-4 space-y-2">
                         {editingRuleConditions.map((condition, index) => (
-                          <div key={index} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 group">
+                          <div key={index} className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group">
                             {index === 0 ? (
-                              <span className="text-sm font-medium text-gray-700 min-w-12">Where</span>
+                              <span className="text-xs font-medium text-gray-700 min-w-10">Where</span>
                             ) : (
                               <Select 
                                 value={editingRuleLogic}
                                 onValueChange={(value) => setEditingRuleLogic(value as "AND" | "OR")}
                               >
-                                <SelectTrigger className="h-8 min-w-16 max-w-16 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
+                                <SelectTrigger className="h-7 w-12 text-xs border-gray-200">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -449,16 +441,15 @@ export function ConfigureRates() {
                                 updateEditingRuleCondition(index, { field: value, value: "" })
                               }}
                             >
-                              <SelectTrigger className="h-8 min-w-32 max-w-64 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
-                                <SelectValue placeholder="Property" />
+                              <SelectTrigger className="h-7 w-24 text-xs border-gray-200">
+                                <SelectValue placeholder="Field" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="route">Route</SelectItem>
-                                <SelectItem value="weight">Weight (kg)</SelectItem>
-                                <SelectItem value="mail_category">Mail Category</SelectItem>
+                                <SelectItem value="weight">Weight</SelectItem>
+                                <SelectItem value="mail_category">Category</SelectItem>
                                 <SelectItem value="customer">Customer</SelectItem>
-                                <SelectItem value="flight_number">Flight Number</SelectItem>
-                                <SelectItem value="distance">Distance (km)</SelectItem>
+                                <SelectItem value="flight_number">Flight</SelectItem>
                               </SelectContent>
                             </Select>
 
@@ -466,17 +457,14 @@ export function ConfigureRates() {
                               value={condition.operator}
                               onValueChange={(value) => updateEditingRuleCondition(index, { operator: value })}
                             >
-                              <SelectTrigger className="h-8 min-w-24 max-w-32 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
+                              <SelectTrigger className="h-7 w-16 text-xs border-gray-200">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="equals">Is</SelectItem>
-                                <SelectItem value="contains">Contains</SelectItem>
-                                <SelectItem value="starts_with">Starts with</SelectItem>
-                                <SelectItem value="ends_with">Ends with</SelectItem>
-                                <SelectItem value="greater_than">Greater than</SelectItem>
-                                <SelectItem value="less_than">Less than</SelectItem>
-                                <SelectItem value="between">Between</SelectItem>
+                                <SelectItem value="contains">Has</SelectItem>
+                                <SelectItem value="starts_with">Starts</SelectItem>
+                                <SelectItem value="ends_with">Ends</SelectItem>
                               </SelectContent>
                             </Select>
 
@@ -484,7 +472,7 @@ export function ConfigureRates() {
                               value={condition.value}
                               onValueChange={(value) => updateEditingRuleCondition(index, { value })}
                             >
-                              <SelectTrigger className="h-8 min-w-32 max-w-64 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500 flex-1">
+                              <SelectTrigger className="h-7 w-24 text-xs border-gray-200 flex-1 min-w-20">
                                 <SelectValue placeholder="Value" />
                               </SelectTrigger>
                               <SelectContent className="max-h-60">
@@ -496,52 +484,48 @@ export function ConfigureRates() {
                               </SelectContent>
                             </Select>
 
-                            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              {editingRuleConditions.length > 1 && index > 0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeEditingRuleCondition(index)}
-                                  className="h-8 w-8 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
+                            {editingRuleConditions.length > 1 && index > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeEditingRuleCondition(index)}
+                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         ))}
 
                         {/* Rate Assignment Row */}
-                        <div className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
-                          <div className="flex items-center gap-2 flex-1">
-                            <span className="text-sm font-medium text-gray-700 min-w-12">Rate</span>
-                            <Input 
-                              placeholder="Base rate"
-                              defaultValue={rule.actions.baseRate}
-                              className="h-8 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500 w-24"
-                            />
-                            <Select defaultValue={rule.actions.currency}>
-                              <SelectTrigger className="h-8 w-20 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="EUR">EUR</SelectItem>
-                                <SelectItem value="USD">USD</SelectItem>
-                                <SelectItem value="GBP">GBP</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Select defaultValue={rule.actions.rateType}>
-                              <SelectTrigger className="h-8 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500 flex-1 min-w-32 max-w-48">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="fixed">Fixed Rate</SelectItem>
-                                <SelectItem value="per_kg">Per Kilogram</SelectItem>
-                                <SelectItem value="distance_based">Distance Based</SelectItem>
-                                <SelectItem value="zone_based">Zone Based</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                        <div className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
+                          <span className="text-xs font-medium text-gray-700 min-w-8">Rate</span>
+                          <Input 
+                            placeholder="Rate"
+                            defaultValue={rule.actions.baseRate}
+                            className="h-7 text-xs border-gray-200 w-16"
+                          />
+                          <Select defaultValue={rule.actions.currency}>
+                            <SelectTrigger className="h-7 w-16 text-xs border-gray-200">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="EUR">EUR</SelectItem>
+                              <SelectItem value="USD">USD</SelectItem>
+                              <SelectItem value="GBP">GBP</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select defaultValue={rule.actions.rateType}>
+                            <SelectTrigger className="h-7 text-xs border-gray-200 flex-1 min-w-20 max-w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="fixed">Fixed</SelectItem>
+                              <SelectItem value="per_kg">Per kg</SelectItem>
+                              <SelectItem value="distance_based">Distance</SelectItem>
+                              <SelectItem value="zone_based">Zone</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
 
@@ -600,6 +584,7 @@ export function ConfigureRates() {
         )}
       </CardContent>
     </Card>
+    </div>
 
     {/* Create Rate Rule Modal */}
     <CreateRateRuleModal

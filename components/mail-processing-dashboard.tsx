@@ -67,7 +67,7 @@ export function MailProcessingDashboard() {
             mailAgentData={mailAgentData}
             mailSystemData={mailSystemData}
             onMergedData={setMergedData}
-            onContinue={() => setActiveStep("review-customers")}
+            onContinue={() => setActiveStep("assign-customers")}
           />
         )
       // case "review-customers":

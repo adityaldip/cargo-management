@@ -383,47 +383,50 @@ export function RulesConfiguration() {
       )}
 
       {/* Rules Management */}
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardContent>
-        <div className="flex items-center justify-between">
-            <CardTitle className="text-black flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Automation Rules
-              {isReordering && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 ml-4">
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
-                  <span className="text-xs">Reordering...</span>
-                </div>
-              )}
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setIsCreateModalOpen(true)}
-                disabled={isReordering}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Rule
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={refetch}
-                disabled={isRefreshing}
-              >
-                {isRefreshing ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                ) : (
-                  "Refresh"
+      <div className="max-w-4xl mx-auto">
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-black flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Automation Rules
+                {isReordering && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600 ml-4">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                    <span className="text-xs">Reordering...</span>
+                  </div>
                 )}
-              </Button>
-              <Button className="bg-black hover:bg-gray-800 text-white">
-                <Play className="h-4 w-4 mr-2" />
-                Execute Automation
-              </Button>
+              </CardTitle>
+              <div className="flex flex-wrap gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setIsCreateModalOpen(true)}
+                  disabled={isReordering}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Rule
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={refetch}
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                  ) : (
+                    "Refresh"
+                  )}
+                </Button>
+                <Button className="bg-black hover:bg-gray-800 text-white">
+                  <Play className="h-4 w-4 mr-2" />
+                  Execute
+                </Button>
+              </div>
             </div>
-          </div>
+          </CardHeader>
+          <CardContent>
           {/* Filter Section - Notion Style */}
           <div className="mb-4 space-y-2">
             <div className="flex items-center justify-between">
@@ -442,7 +445,7 @@ export function RulesConfiguration() {
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, rule.id)}
                   className={cn(
-                    "flex items-center gap-4 p-1 transition-colors duration-150 cursor-pointer hover:bg-gray-50",
+                    "flex items-center gap-1 p-1 transition-colors duration-150 cursor-pointer hover:bg-gray-50",
                     rule.is_active ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
                     draggedRule === rule.id && "opacity-50",
                     (expandedRule === rule.id || expandingRuleId === rule.id) && "bg-gray-50",
@@ -456,19 +459,17 @@ export function RulesConfiguration() {
                   </div>
 
                   {/* Priority Badge */}
-                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
+                  <div className="flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
                     {rule.priority}
                   </div>
 
                   {/* Toggle Switch */}
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={rule.is_active}
-                      onCheckedChange={() => toggleRule(rule.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="scale-75"
-                    />
-                  </div>
+                  <Switch
+                    checked={rule.is_active}
+                    onCheckedChange={() => toggleRule(rule.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="scale-75"
+                  />
                   
                   {/* Rule Info */}
                   <div className="flex-1 min-w-0">
@@ -484,34 +485,23 @@ export function RulesConfiguration() {
                     )}
                   </div>
 
-                  {/* Assignment Info */}
-                  <div className="text-right">
-                    {rule.last_run && (
-                      <p className="text-xs text-gray-400">
-                        Last update: {new Date(rule.last_run).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-
                   {/* Actions */}
-                  <div className="flex gap-1">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        if (confirm(`Are you sure you want to delete "${rule.name}"? This action cannot be undone.`)) {
-                          const result = await deleteRule(rule.id)
-                          if (!result.success) {
-                            alert(`Failed to delete rule: ${result.error}`)
-                          }
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      if (confirm(`Are you sure you want to delete "${rule.name}"? This action cannot be undone.`)) {
+                        const result = await deleteRule(rule.id)
+                        if (!result.success) {
+                          alert(`Failed to delete rule: ${result.error}`)
                         }
-                      }}
-                      className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                      }
+                    }}
+                    className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
 
                 {/* Loading State for Expanding */}
@@ -534,15 +524,15 @@ export function RulesConfiguration() {
                         {/* Filter Conditions */}
                         <div className="p-4 space-y-2">
                           {editingRuleConditions.map((condition, index) => (
-                            <div key={index} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 group">
+                            <div key={index} className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group">
                               {index === 0 ? (
-                                <span className="text-sm font-medium text-gray-700 min-w-12">Where</span>
+                                <span className="text-xs font-medium text-gray-700 min-w-10">Where</span>
                               ) : (
                                 <Select 
                                   value={editingRuleLogic}
                                   onValueChange={(value) => setEditingRuleLogic(value as "AND" | "OR")}
                                 >
-                                  <SelectTrigger className="h-8 min-w-16 max-w-16 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
+                                  <SelectTrigger className="h-7 w-24 text-xs border-gray-200">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -555,12 +545,11 @@ export function RulesConfiguration() {
                               <Select 
                                 value={condition.field}
                                 onValueChange={(value) => {
-                                  // When field changes, clear the value since it may not be valid for the new field
                                   updateEditingRuleCondition(index, { field: value, value: "" })
                                 }}
                               >
-                                <SelectTrigger className="h-8 min-w-32 max-w-64 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
-                                  <SelectValue/>
+                                <SelectTrigger className="h-7 w-32 text-xs border-gray-200">
+                                  <SelectValue placeholder="Field"/>
                                 </SelectTrigger>
                                 <SelectContent>
                                   {rule.where.map((option) => (
@@ -575,14 +564,14 @@ export function RulesConfiguration() {
                                 value={condition.operator}
                                 onValueChange={(value) => updateEditingRuleCondition(index, { operator: value })}
                               >
-                                <SelectTrigger className="h-8 min-w-24 max-w-32 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500">
+                                <SelectTrigger className="h-7 w-24 text-xs border-gray-200">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="equals">Is</SelectItem>
                                   <SelectItem value="contains">Contains</SelectItem>
-                                  <SelectItem value="starts_with">Starts with</SelectItem>
-                                  <SelectItem value="ends_with">Ends with</SelectItem>
+                                  <SelectItem value="starts_with">Starts</SelectItem>
+                                  <SelectItem value="ends_with">Ends</SelectItem>
                                 </SelectContent>
                               </Select>
 
@@ -590,8 +579,8 @@ export function RulesConfiguration() {
                                 value={condition.value}
                                 onValueChange={(value) => updateEditingRuleCondition(index, { value })}
                               >
-                                <SelectTrigger className="h-8 min-w-32 max-w-64 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500 flex-1">
-                                  <SelectValue/>
+                                <SelectTrigger className="h-7 w-24 text-xs border-gray-200 flex-1 min-w-20">
+                                  <SelectValue placeholder="Value"/>
                                 </SelectTrigger>
                                 <SelectContent className="max-h-60">
                                   {getFieldValues(condition.field).map((value) => (
@@ -602,43 +591,39 @@ export function RulesConfiguration() {
                                 </SelectContent>
                               </Select>
 
-                              <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                {editingRuleConditions.length > 1 && index > 0 && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => removeEditingRuleCondition(index)}
-                                    className="h-8 w-8 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                )}
-                              </div>
+                              {editingRuleConditions.length > 1 && index > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeEditingRuleCondition(index)}
+                                  className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           ))}
 
                           {/* Customer Assignment Row */}
-                          <div className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
-                            <div className="flex items-center gap-2 flex-1">
-                              <span className="text-sm font-medium text-gray-700 min-w-12">Customer</span>
-                              <Select 
-                                value={editingRuleAssignTo}
-                                onValueChange={setEditingRuleAssignTo}
-                              >
-                                <SelectTrigger className="h-8 text-xs border-gray-200 hover:border-gray-300 focus:border-blue-500 flex-1 min-w-32 max-w-64">
-                                  <SelectValue placeholder="Select customer..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="premium-express">Premium Express Ltd</SelectItem>
-                                  <SelectItem value="nordic-post">Nordic Post AS</SelectItem>
-                                  <SelectItem value="baltic-express">Baltic Express Network</SelectItem>
-                                  <SelectItem value="cargo-masters">Cargo Masters International</SelectItem>
-                                  <SelectItem value="general-mail">General Mail Services</SelectItem>
-                                  <SelectItem value="euro-logistics">Euro Logistics GmbH</SelectItem>
-                                  <SelectItem value="air-freight">Air Freight Solutions</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
+                          <div className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
+                            <span className="text-xs font-medium text-gray-700 min-w-10">Customer</span>
+                            <Select 
+                              value={editingRuleAssignTo}
+                              onValueChange={setEditingRuleAssignTo}
+                            >
+                              <SelectTrigger className="h-7 text-xs border-gray-200 flex-1 min-w-32 max-w-48">
+                                <SelectValue placeholder="Select customer..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="premium-express">Premium Express Ltd</SelectItem>
+                                <SelectItem value="nordic-post">Nordic Post AS</SelectItem>
+                                <SelectItem value="baltic-express">Baltic Express Network</SelectItem>
+                                <SelectItem value="cargo-masters">Cargo Masters International</SelectItem>
+                                <SelectItem value="general-mail">General Mail Services</SelectItem>
+                                <SelectItem value="euro-logistics">Euro Logistics GmbH</SelectItem>
+                                <SelectItem value="air-freight">Air Freight Solutions</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
 
                         </div>
@@ -699,6 +684,7 @@ export function RulesConfiguration() {
           )}
         </CardContent>
       </Card>
+      </div>
 
       {/* Create Customer Rule Modal */}
       <CreateCustomerRuleModal
