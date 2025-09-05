@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { 
   Play,
   ArrowLeft,
@@ -22,6 +24,10 @@ interface ExecuteRulesProps extends Pick<AssignCustomersProps, 'data'> {
 
 export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRulesProps) {
   const { rules } = useCustomerRules()
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
   
   // Filter state - now persistent
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -48,10 +54,12 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
   // Filter handlers
   const handleApplyFilters = (conditions: FilterCondition[], logic: "AND" | "OR") => {
     setFilters(conditions, logic)
+    setCurrentPage(1) // Reset to first page when filters change
   }
 
   const handleClearFilters = () => {
     clearFilters()
+    setCurrentPage(1)
   }
 
   // Generate sample data
@@ -155,6 +163,7 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
   // Get filtered data for preview
   const allPreviewData = generateSampleData()
   const filteredPreviewData = applyFilters(allPreviewData, filterConditions, filterLogic)
+  const totalPreviewItems = filteredPreviewData.length
 
   if (currentView === "rules") {
     return (
@@ -257,7 +266,13 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPreviewData.map((record, index) => (
+                {(() => {
+                  // Get paginated filtered data
+                  const startIndex = (currentPage - 1) * itemsPerPage
+                  const endIndex = Math.min(startIndex + itemsPerPage, totalPreviewItems)
+                  const currentPageData = filteredPreviewData.slice(startIndex, endIndex)
+                  
+                  return currentPageData.map((record, index) => (
                   <TableRow key={index}>
                     <TableCell className="border">{record.inb_flight_date}</TableCell>
                     <TableCell className="border">{record.outb_flight_date}</TableCell>
@@ -275,10 +290,62 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                     <TableCell className="border text-xs bg-yellow-200">{record.customer}</TableCell>
                     <TableCell className="border text-xs bg-yellow-200">{record.rate}</TableCell>
                   </TableRow>
-                ))}
+                  ))
+                })()}
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination Controls */}
+          {filteredPreviewData.length > 0 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Show</span>
+                <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                  setItemsPerPage(Number(value))
+                  setCurrentPage(1)
+                }}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-gray-600">entries</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalPreviewItems)} of {totalPreviewItems} entries
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-3 py-1 text-sm bg-gray-100 rounded">
+                    {currentPage}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalPreviewItems / itemsPerPage), prev + 1))}
+                    disabled={currentPage >= Math.ceil(totalPreviewItems / itemsPerPage)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
           
           <div className="mt-2 text-center">
             <p className="text-sm text-gray-500">
@@ -292,6 +359,7 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
 
   // Results View
   if (currentView === "results" && data) {
+    const totalResultsItems = data.data.length
     return (
       <>
         {/* Navigation Button */}
@@ -337,7 +405,13 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.data.map((row: any, index: number) => {
+                  {(() => {
+                    // Get paginated results data
+                    const startIndex = (currentPage - 1) * itemsPerPage
+                    const endIndex = Math.min(startIndex + itemsPerPage, totalResultsItems)
+                    const currentPageData = data.data.slice(startIndex, endIndex)
+                    
+                    return currentPageData.map((row: any, index: number) => {
                     // Apply rule matching logic to determine assigned team
                     const matchedRule = rules.find(rule => {
                       if (!rule.is_active) return false
@@ -413,10 +487,62 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                         </TableCell>
                       </TableRow>
                     )
-                  })}
+                    })
+                  })()}
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination Controls */}
+            {data.data.length > 0 && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Show</span>
+                  <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                    setItemsPerPage(Number(value))
+                    setCurrentPage(1)
+                  }}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm text-gray-600">entries</span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalResultsItems)} of {totalResultsItems} entries
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="px-3 py-1 text-sm bg-gray-100 rounded">
+                      {currentPage}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalResultsItems / itemsPerPage), prev + 1))}
+                      disabled={currentPage >= Math.ceil(totalResultsItems / itemsPerPage)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Summary Footer */}
             <div className="mt-6 pt-4 border-t border-gray-200">

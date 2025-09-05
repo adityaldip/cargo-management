@@ -24,7 +24,9 @@ import {
   CheckCircle,
   Clock,
   UserCheck,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCustomerRules } from "./hooks"
@@ -62,6 +64,10 @@ export function RulesConfiguration() {
     operator: string
     value: string
   }[]>([{ field: "orig_oe", operator: "equals", value: "" }])
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
   
   // State for expanded rule editing
   const [editingRuleConditions, setEditingRuleConditions] = useState<{
@@ -177,6 +183,10 @@ export function RulesConfiguration() {
       : conditionResults.every(result => result)
   })
 
+  // Pagination logic
+  const totalItems = filteredRules.length
+  const totalPages = Math.ceil(totalItems / itemsPerPage)
+
   const handleEditRule = (rule: CustomerRuleExtended) => {
     if (expandedRule === rule.id) {
       setExpandedRule(null)
@@ -271,6 +281,7 @@ export function RulesConfiguration() {
     setFilterConditions([{ field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }])
     setFilterLogic("OR")
     setShowFilters(false)
+    setCurrentPage(1) // Reset to first page when clearing filters
   }
 
   // Memoized field values for better performance
@@ -491,7 +502,13 @@ export function RulesConfiguration() {
           </div>
           
           <div className="space-y-1">
-            {filteredRules.map((rule) => (
+            {(() => {
+              // Get paginated filtered data
+              const startIndex = (currentPage - 1) * itemsPerPage
+              const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
+              const currentPageData = filteredRules.slice(startIndex, endIndex)
+              
+              return currentPageData.map((rule) => (
               <div key={rule.id} className="border rounded-lg">
                 <div
                   draggable
@@ -823,8 +840,60 @@ export function RulesConfiguration() {
                   </div>
                 )}
               </div>
-            ))}
+              ))
+            })()}
           </div>
+
+          {/* Pagination Controls */}
+          {filteredRules.length > 0 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Show</span>
+                <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                  setItemsPerPage(Number(value))
+                  setCurrentPage(1)
+                }}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-gray-600">entries</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-3 py-1 text-sm bg-gray-100 rounded">
+                    {currentPage}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalItems / itemsPerPage), prev + 1))}
+                    disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {filteredRules.length === 0 && (
             <div className="text-center py-8">
