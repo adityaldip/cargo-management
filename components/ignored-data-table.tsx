@@ -19,6 +19,7 @@ import type { ProcessedData, CargoData } from "@/types/cargo-data"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 import { applyIgnoreRules, applyIgnoreRulesWithConditions } from "@/lib/ignore-rules-utils"
 import { saveMergedDataToSupabase } from "@/lib/storage-utils"
+import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
 import type { Database } from "@/types/database"
 
 // Type for Supabase cargo_data row
@@ -96,6 +97,9 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
   const [showDetails, setShowDetails] = useState(false)
   const [isSavingToSupabase, setIsSavingToSupabase] = useState(false)
   
+  // Zustand store
+  const { getConditionsForDataSource } = useIgnoreRulesStore()
+  
   // Column configuration state - generated from Supabase schema
   const [columnConfigs] = useState<ColumnConfig[]>(() => 
     createColumnConfigsFromSchema()
@@ -158,18 +162,8 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
     setIsSavingToSupabase(true)
     
     try {
-      // Get persisted conditions from localStorage
-      const storageKey = `ignore-rules-conditions-${dataSource}`
-      const savedConditions = localStorage.getItem(storageKey)
-      let persistedConditions: Array<{field: string, operator: string, value: string}> = []
-      
-      if (savedConditions) {
-        try {
-          persistedConditions = JSON.parse(savedConditions)
-        } catch (error) {
-          console.error('Error parsing persisted conditions:', error)
-        }
-      }
+      // Get persisted conditions from Zustand store
+      const persistedConditions = getConditionsForDataSource(dataSource)
       
       // Apply ignore rules to get filtered data (excluding ignored records)
       const filteredData = applyIgnoreRulesWithConditions(originalData.data, ignoreRules, persistedConditions)
@@ -230,18 +224,8 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
     setIsLoading(true)
     
     try {
-      // Get persisted conditions from localStorage
-      const storageKey = `ignore-rules-conditions-${dataSource}`
-      const savedConditions = localStorage.getItem(storageKey)
-      let persistedConditions: Array<{field: string, operator: string, value: string}> = []
-      
-      if (savedConditions) {
-        try {
-          persistedConditions = JSON.parse(savedConditions)
-        } catch (error) {
-          console.error('Error parsing persisted conditions:', error)
-        }
-      }
+      // Get persisted conditions from Zustand store
+      const persistedConditions = getConditionsForDataSource(dataSource)
       
       // Apply ignore rules with persisted conditions
       const filtered = applyIgnoreRulesWithConditions(originalData.data, ignoreRules, persistedConditions)
@@ -263,12 +247,9 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
   }, [originalData, ignoreRules, dataSource])
 
   const getIgnoredReason = (record: any): string => {
-    // First check persisted conditions
-    const storageKey = `ignore-rules-conditions-${dataSource}`
-    const savedConditions = localStorage.getItem(storageKey)
-    if (savedConditions) {
-      try {
-        const persistedConditions = JSON.parse(savedConditions)
+    // First check persisted conditions from Zustand store
+    const persistedConditions = getConditionsForDataSource(dataSource)
+    if (persistedConditions.length > 0) {
         for (const condition of persistedConditions) {
           const recordValue = record.inbFlightNo || ''
           const conditionValues = condition.value.split(',').map((v: string) => v.trim())
@@ -296,9 +277,6 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
               break
           }
         }
-      } catch (error) {
-        console.error('Error parsing persisted conditions for reason:', error)
-      }
     }
     
     // Fallback to checking rules

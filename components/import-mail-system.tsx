@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import { processFile, getExcelColumns, getExcelSampleData, processFileWithMappings, type ColumnMappingRule } from "@/lib/file-processor"
 import { saveDataset, generateDatasetId, saveCurrentSession, getCurrentSession, shouldTriggerSupabaseSave, saveMergedDataToSupabase } from "@/lib/storage-utils"
 import { usePageFilters } from "@/store/filter-store"
+import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
 import { IgnoreTrackingRules } from "./ignore-tracking-rules"
@@ -37,6 +38,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   
   // Filter store for resetting filters on new upload
   const { clearFilters } = usePageFilters("review-merged-excel")
+  
+  // Ignore rules store for targeted reset
+  const { resetMailSystemRules } = useIgnoreRulesStore()
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -54,6 +58,16 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     const files = Array.from(e.dataTransfer.files)
     if (files.length > 0) {
       setUploadedFile(files[0])
+      
+      // Reset filters when new file is uploaded
+      clearFilters()
+      
+      // Reset ignore rules for mail system only (targeted reset)
+      resetMailSystemRules()
+      
+      // Reset ignore rules state
+      setIgnoreRules([])
+      setShowIgnoreRules(false)
     }
   }
 
@@ -64,6 +78,13 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       
       // Reset filters when new file is uploaded
       clearFilters()
+      
+      // Reset ignore rules for mail system only (targeted reset)
+      resetMailSystemRules()
+      
+      // Reset ignore rules state
+      setIgnoreRules([])
+      setShowIgnoreRules(false)
       
       // Automatically process the file and go to map headers
       setIsProcessing(true)
@@ -212,6 +233,11 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     setSampleData({})
     setActiveStep("upload")
     onDataProcessed(null)
+    
+    // Reset ignore rules when file is removed (targeted reset)
+    setIgnoreRules([])
+    setShowIgnoreRules(false)
+    resetMailSystemRules()
   }
 
 

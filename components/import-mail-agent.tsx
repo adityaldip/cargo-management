@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { processFile, getExcelColumns, getExcelSampleData, processFileWithMappings, type ColumnMappingRule } from "@/lib/file-processor"
 import { saveDataset, generateDatasetId, saveCurrentSession, getCurrentSession } from "@/lib/storage-utils"
 import { usePageFilters } from "@/store/filter-store"
+import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
 import { IgnoreTrackingRules } from "./ignore-tracking-rules"
@@ -36,6 +37,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   
   // Filter store for resetting filters on new upload
   const { clearFilters } = usePageFilters("review-merged-excel")
+  
+  // Ignore rules store for targeted reset
+  const { resetMailAgentRules } = useIgnoreRulesStore()
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -57,6 +61,13 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
       
       // Reset filters when new file is uploaded
       clearFilters()
+      
+      // Reset ignore rules for mail agent only (targeted reset)
+      resetMailAgentRules()
+      
+      // Reset ignore rules state
+      setIgnoreRules([])
+      setShowIgnoreRules(false)
       
       // Automatically process the file and go to map headers
       setIsProcessing(true)
@@ -99,6 +110,13 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
       
       // Reset filters when new file is uploaded
       clearFilters()
+      
+      // Reset ignore rules for mail agent only (targeted reset)
+      resetMailAgentRules()
+      
+      // Reset ignore rules state
+      setIgnoreRules([])
+      setShowIgnoreRules(false)
       
       // Automatically process the file and go to map headers
       setIsProcessing(true)
@@ -223,6 +241,11 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     setSampleData({})
     setActiveStep("upload")
     onDataProcessed(null)
+    
+    // Reset ignore rules when file is removed (targeted reset)
+    setIgnoreRules([])
+    setShowIgnoreRules(false)
+    resetMailAgentRules()
   }
 
 

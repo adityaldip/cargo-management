@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 import type { ProcessedData } from "@/types/cargo-data"
+import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
 
 interface IgnoreTrackingRulesProps {
   onRulesChange?: (rules: IgnoreRule[]) => void
@@ -65,6 +66,15 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
   const [editingRuleAction, setEditingRuleAction] = useState<"ignore" | "remove">("ignore")
   const [isSaving, setIsSaving] = useState(false)
   const [openSelects, setOpenSelects] = useState<Record<number, boolean>>({})
+  
+  // Zustand store
+  const {
+    getConditionsForDataSource,
+    setConditionsForDataSource,
+  } = useIgnoreRulesStore()
+  
+  // Get current conditions based on data source
+  const currentConditions = getConditionsForDataSource(dataSource)
 
   // Available field options for tracking data
   const trackingFields = [
@@ -91,27 +101,12 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
     return Array.from(values).sort()
   }
 
-  // Load expanded rule conditions from localStorage on component mount
+  // Load conditions from Zustand store on component mount
   useEffect(() => {
-    const storageKey = `ignore-rules-conditions-${dataSource}`
-    const savedConditions = localStorage.getItem(storageKey)
-    if (savedConditions) {
-      try {
-        const parsedConditions = JSON.parse(savedConditions)
-        setEditingRuleConditions(parsedConditions)
-      } catch (error) {
-        console.error('Error loading saved ignore rule conditions:', error)
-      }
+    if (currentConditions.length > 0) {
+      setEditingRuleConditions(currentConditions)
     }
-  }, [dataSource])
-
-  // Save expanded rule conditions to localStorage when they change
-  useEffect(() => {
-    if (editingRuleConditions.length > 0) {
-      const storageKey = `ignore-rules-conditions-${dataSource}`
-      localStorage.setItem(storageKey, JSON.stringify(editingRuleConditions))
-    }
-  }, [editingRuleConditions, dataSource])
+  }, [currentConditions])
 
   // Notify parent component when rules change
   useEffect(() => {
@@ -144,21 +139,9 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
         // Initialize editing state with current rule data
         setEditingRuleName(rule.name)
         
-        // Load persisted conditions or create from current rule
-        const storageKey = `ignore-rules-conditions-${dataSource}`
-        const savedConditions = localStorage.getItem(storageKey)
-        if (savedConditions) {
-          try {
-            const parsedConditions = JSON.parse(savedConditions)
-            setEditingRuleConditions(parsedConditions)
-          } catch (error) {
-            // Fallback to current rule data
-            setEditingRuleConditions([{
-              field: rule.field,
-              operator: rule.operator,
-              value: rule.value
-            }])
-          }
+        // Load conditions from Zustand store or create from current rule
+        if (currentConditions.length > 0) {
+          setEditingRuleConditions(currentConditions)
         } else {
           // Convert single rule to conditions format
           setEditingRuleConditions([{
@@ -245,7 +228,7 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
     // Simulate save delay
     setTimeout(() => {
       // Update the single rule with the first condition (for display purposes)
-      // The multiple conditions are stored in editingRuleConditions and persisted separately
+      // The multiple conditions are stored in Zustand store
       if (editingRuleConditions.length > 0) {
         const firstCondition = editingRuleConditions[0]
         setRules(prev => prev.map(rule => 
@@ -259,6 +242,9 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
               } 
             : rule
         ))
+        
+        // Save conditions to Zustand store
+        setConditionsForDataSource(dataSource, editingRuleConditions)
       }
 
       // Close editor
