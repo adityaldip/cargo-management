@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react"
-import { customerAPI, rulesAPI } from "@/lib/api-client"
-import { Customer, CustomerRuleExtended } from "./types"
+import { customerAPI, rulesAPI, customerCodesAPI } from "@/lib/api-client"
+import { Customer, CustomerCode, CustomerRuleExtended, CustomerWithCodes } from "./types"
 
 export function useCustomerData() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [customerCodes, setCustomerCodes] = useState<CustomerCode[]>([])
 
   const fetchCustomers = async () => {
     try {
@@ -59,8 +60,9 @@ export function useCustomerData() {
     }
   }
 
-  const createCustomer = async (customerData: any) => {
+  const createCustomer = async (customerData: any, customerCodes: Array<{code: string, accounting_label: string}>) => {
     try {
+      // First create the customer
       const { data: newCustomer, error } = await customerAPI.create(customerData)
       if (error) {
         setError(`Failed to create customer: ${error}`)
@@ -68,6 +70,30 @@ export function useCustomerData() {
       }
       
       if (newCustomer) {
+        // Then create customer codes if provided
+        if (customerCodes && customerCodes.length > 0) {
+          try {
+            const validCodes = customerCodes.filter(code => code.code.trim())
+            if (validCodes.length > 0) {
+              const { error: codesError } = await customerCodesAPI.bulkUpdate(
+                (newCustomer as any).id, 
+                validCodes.map(code => ({
+                  code: code.code.trim(),
+                  accounting_label: code.accounting_label.trim() || null
+                }))
+              )
+              
+              if (codesError) {
+                console.warn('Failed to create customer codes:', codesError)
+                setError(`Customer created but failed to save codes: ${codesError}`)
+              }
+            }
+          } catch (codeError) {
+            console.warn('Failed to create customer codes:', codeError)
+            setError(`Customer created but failed to save codes: ${codeError}`)
+          }
+        }
+        
         setCustomers(prev => [newCustomer as Customer, ...prev])
         return { success: true, data: newCustomer }
       }
@@ -110,8 +136,51 @@ export function useCustomerData() {
     loadData()
   }, [])
 
+  const fetchCustomerCodes = async (customerId: string) => {
+    try {
+      const { data: codes, error } = await customerCodesAPI.getByCustomerId(customerId)
+      if (error) {
+        console.error('Error fetching customer codes:', error)
+        return []
+      }
+      return codes || []
+    } catch (err) {
+      console.error('Error fetching customer codes:', err)
+      return []
+    }
+  }
+
+  const updateCustomerCodes = async (customerId: string, codes: Array<{code: string, accounting_label: string}>) => {
+    try {
+      const validCodes = codes.filter(code => code.code.trim())
+      if (validCodes.length === 0) {
+        return { success: false, error: 'No valid codes provided' }
+      }
+
+      const { error } = await customerCodesAPI.bulkUpdate(
+        customerId, 
+        validCodes.map(code => ({
+          code: code.code.trim(),
+          accounting_label: code.accounting_label.trim() || null
+        }))
+      )
+      
+      if (error) {
+        setError(`Failed to update customer codes: ${error}`)
+        return { success: false, error }
+      }
+      
+      return { success: true }
+    } catch (err) {
+      const errorMessage = `Failed to update customer codes: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
+    }
+  }
+
   return {
     customers,
+    customerCodes,
     loading,
     error,
     setError,
@@ -119,6 +188,8 @@ export function useCustomerData() {
     deleteCustomer,
     createCustomer,
     updateCustomer,
+    fetchCustomerCodes,
+    updateCustomerCodes,
     loadData,
     refetch: loadData
   }

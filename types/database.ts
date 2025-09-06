@@ -56,6 +56,35 @@ export interface Database {
           updated_at?: string
         }
       }
+      customer_codes: {
+        Row: {
+          id: string
+          customer_id: string
+          code: string
+          accounting_label: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          code: string
+          accounting_label?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          code?: string
+          accounting_label?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       customer_rules: {
         Row: {
           id: string

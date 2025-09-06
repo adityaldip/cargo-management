@@ -76,6 +76,45 @@ export const customerAPI = {
   },
 }
 
+// Customer Codes API operations
+export const customerCodesAPI = {
+  // Get all customer codes for a customer
+  async getByCustomerId(customerId: string) {
+    return apiRequest(`/customers/${customerId}/codes`)
+  },
+
+  // Create customer code
+  async create(customerId: string, codeData: { code: string; accounting_label?: string }) {
+    return apiRequest(`/customers/${customerId}/codes`, {
+      method: 'POST',
+      body: JSON.stringify(codeData),
+    })
+  },
+
+  // Update customer code
+  async update(codeId: string, updates: { code?: string; accounting_label?: string }) {
+    return apiRequest(`/customer-codes/${codeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  },
+
+  // Delete customer code
+  async delete(codeId: string) {
+    return apiRequest(`/customer-codes/${codeId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // Bulk update customer codes (replace all codes for a customer)
+  async bulkUpdate(customerId: string, codes: Array<{ code: string; accounting_label?: string }>) {
+    return apiRequest(`/customers/${customerId}/codes/bulk`, {
+      method: 'PUT',
+      body: JSON.stringify({ codes }),
+    })
+  },
+}
+
 // Customer Rules API operations
 export const rulesAPI = {
   // Get all rules

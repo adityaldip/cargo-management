@@ -16,16 +16,19 @@ import {
   Plus, 
   Edit,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  X,
+  Save
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCustomerData } from "./hooks"
-import { Customer } from "./types"
+import { Customer, CustomerCode, CustomerWithCodes } from "./types"
 
 
 export function CustomerManagement() {
   const {
     customers,
+    customerCodes: existingCustomerCodes,
     loading,
     error,
     setError,
@@ -33,6 +36,8 @@ export function CustomerManagement() {
     deleteCustomer,
     createCustomer,
     updateCustomer,
+    fetchCustomerCodes,
+    updateCustomerCodes,
     refetch
   } = useCustomerData()
   
@@ -47,6 +52,7 @@ export function CustomerManagement() {
     name: "",
     code: ""
   })
+  const [customerCodes, setCustomerCodes] = useState<Array<{code: string, accounting_label: string}>>([{code: "", accounting_label: ""}])
   const [isCreating, setIsCreating] = useState(false)
   const [togglingCustomer, setTogglingCustomer] = useState<string | null>(null)
 
@@ -69,13 +75,32 @@ export function CustomerManagement() {
     }
   }
 
-  const handleEditCustomer = (customer: Customer) => {
+  const handleEditCustomer = async (customer: Customer) => {
     setSelectedCustomer(customer)
     // Pre-populate form with customer data
     setNewCustomerForm({
       name: customer.name,
       code: customer.code
     })
+    
+    // Fetch existing customer codes
+    try {
+      const codes = await fetchCustomerCodes(customer.id)
+      if (Array.isArray(codes) && codes.length > 0) {
+        setCustomerCodes(codes.map((code: any) => ({
+          code: code.code,
+          accounting_label: code.accounting_label || ""
+        })))
+      } else {
+        // Fallback to primary code if no codes found
+        setCustomerCodes([{code: customer.code, accounting_label: ""}])
+      }
+    } catch (err) {
+      console.error('Error fetching customer codes:', err)
+      // Fallback to primary code
+      setCustomerCodes([{code: customer.code, accounting_label: ""}])
+    }
+    
     setIsCustomerEditorOpen(true)
   }
 
@@ -84,8 +109,15 @@ export function CustomerManagement() {
   }
 
   const handleSaveCustomer = async () => {
-    if (!newCustomerForm.name.trim() || !newCustomerForm.code.trim()) {
-      setError('Please fill in all required fields (Name, Code)')
+    if (!newCustomerForm.name.trim()) {
+      setError('Please fill in customer name')
+      return
+    }
+
+    // Validate customer codes
+    const validCodes = customerCodes.filter(code => code.code.trim())
+    if (validCodes.length === 0) {
+      setError('Please add at least one customer code')
       return
     }
 
@@ -99,25 +131,28 @@ export function CustomerManagement() {
         // Update existing customer
         const result = await updateCustomer(selectedCustomer.id, {
           name: newCustomerForm.name.trim(),
-          code: newCustomerForm.code.trim().toUpperCase(),
         })
 
         if (result?.success) {
-          handleCloseModal()
+          // Update customer codes
+          const codesResult = await updateCustomerCodes(selectedCustomer.id, validCodes)
+          if (codesResult?.success) {
+            handleCloseModal()
+          }
         }
       } else {
         // Create new customer
         const result = await createCustomer({
           name: newCustomerForm.name.trim(),
-          code: newCustomerForm.code.trim().toUpperCase(),
-          email: `${newCustomerForm.code.trim().toLowerCase()}@example.com`, // Default email
+          code: validCodes[0].code.trim().toUpperCase(), // Use first code as primary
+          email: `${validCodes[0].code.trim().toLowerCase()}@example.com`, // Default email
           phone: null,
           address: null,
           contact_person: null,
           priority: "medium",
           is_active: true,
           total_shipments: 0
-        })
+        }, validCodes)
 
         if (result?.success) {
           handleCloseModal()
@@ -136,6 +171,7 @@ export function CustomerManagement() {
       name: "",
       code: ""
     })
+    setCustomerCodes([{code: "", accounting_label: ""}])
     setIsCustomerEditorOpen(true)
   }
 
@@ -144,9 +180,27 @@ export function CustomerManagement() {
       name: "",
       code: ""
     })
+    setCustomerCodes([{code: "", accounting_label: ""}])
     setSelectedCustomer(null)
     setIsCustomerEditorOpen(false)
     setError(null)
+  }
+
+  // Customer codes management functions
+  const addCustomerCode = () => {
+    setCustomerCodes([...customerCodes, {code: "", accounting_label: ""}])
+  }
+
+  const removeCustomerCode = (index: number) => {
+    if (customerCodes.length > 1) {
+      setCustomerCodes(customerCodes.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateCustomerCode = (index: number, field: 'code' | 'accounting_label', value: string) => {
+    const updated = [...customerCodes]
+    updated[index] = { ...updated[index], [field]: value }
+    setCustomerCodes(updated)
   }
 
   // Show loading state
@@ -218,7 +272,7 @@ export function CustomerManagement() {
                 onClick={handleCreateNewCustomer}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                New Customer
+                Add Customer Code
               </Button>
               <Button 
                 variant="outline" 
@@ -246,7 +300,7 @@ export function CustomerManagement() {
                 <TableRow className="h-8">
                   <TableHead className="h-8 py-1 text-xs">Status</TableHead>
                   <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
-                  <TableHead className="h-8 py-1 text-xs">Code</TableHead>
+                  <TableHead className="h-8 py-1 text-xs">Codes</TableHead>
                   <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -281,9 +335,12 @@ export function CustomerManagement() {
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2">
-                      <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
-                        {customer.code}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
+                          {customer.code}
+                        </Badge>
+                        {/* TODO: Add multiple codes display when customer_codes table is implemented */}
+                      </div>
                     </TableCell>
                     <TableCell className="py-1 px-2">
                       <div className="flex gap-0">
@@ -374,10 +431,10 @@ export function CustomerManagement() {
 
       {/* Create Customer Modal */}
       <Dialog open={isCustomerEditorOpen} onOpenChange={handleCloseModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {selectedCustomer ? 'Edit Customer' : 'Create New Customer'}
+              {selectedCustomer ? 'Edit Customer Code' : 'Add Customer Code'}
             </DialogTitle>
           </DialogHeader>
           
@@ -393,16 +450,66 @@ export function CustomerManagement() {
                   className="w-full"
                 />
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="code">Customer Code *</Label>
-                <Input
-                  id="code"
-                  value={newCustomerForm.code}
-                  onChange={(e) => setNewCustomerForm(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                  placeholder="Enter customer code (e.g., CUST001)"
-                  className="w-full font-mono"
-                />
+
+              {/* Customer Codes Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Customer Codes *</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addCustomerCode}
+                    className="flex items-center gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add Code
+                  </Button>
+                </div>
+                
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="space-y-3">
+                    {customerCodes.map((codeItem, index) => (
+                      <div key={index} className="flex gap-3 items-end">
+                        <div className="flex-1">
+                          <Label htmlFor={`code-${index}`} className="text-xs text-gray-600">
+                            Code *
+                          </Label>
+                          <Input
+                            id={`code-${index}`}
+                            value={codeItem.code}
+                            onChange={(e) => updateCustomerCode(index, 'code', e.target.value.toUpperCase())}
+                            placeholder="e.g., CPHA"
+                            className="font-mono text-sm"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <Label htmlFor={`accounting-${index}`} className="text-xs text-gray-600">
+                            Accounting Label
+                          </Label>
+                          <Input
+                            id={`accounting-${index}`}
+                            value={codeItem.accounting_label}
+                            onChange={(e) => updateCustomerCode(index, 'accounting_label', e.target.value)}
+                            placeholder="e.g., Danija 1"
+                            className="text-sm"
+                          />
+                        </div>
+                        {customerCodes.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeCustomerCode(index)}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -417,7 +524,7 @@ export function CustomerManagement() {
             </Button>
             <Button 
               onClick={handleSaveCustomer}
-              disabled={isCreating || !newCustomerForm.name.trim() || !newCustomerForm.code.trim()}
+              disabled={isCreating || !newCustomerForm.name.trim() || customerCodes.every(code => !code.code.trim())}
             >
               {isCreating ? (
                 <>
@@ -425,7 +532,7 @@ export function CustomerManagement() {
                   {selectedCustomer ? 'Updating...' : 'Creating...'}
                 </>
               ) : (
-                selectedCustomer ? 'Update Customer' : 'Create Customer'
+                selectedCustomer ? 'Update Customer Code' : 'Add Customer Code'
               )}
             </Button>
           </DialogFooter>

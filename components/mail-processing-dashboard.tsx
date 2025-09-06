@@ -9,6 +9,7 @@ import { AssignCustomers } from "@/components/assign-customers-modules"
 import { AssignRates } from "@/components/assign-rates-modules"
 import { ReviewRates } from "@/components/review-rates"
 import { ReviewInvoices } from "@/components/review-invoices"
+import { Reporting } from "@/components/reporting"
 import { defaultRateSettings, type RateSettings } from "@/types/rate-settings"
 import type { ProcessedData } from "@/types/cargo-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -100,6 +101,8 @@ export function MailProcessingDashboard() {
         return <ReviewRates settings={rateSettings} onSettingsChange={setRateSettings} data={mergedData} />
       case "review-invoices":
         return <ReviewInvoices data={mergedData} />
+      case "reporting":
+        return <Reporting data={mergedData} />
       default:
         return <ImportMailAgent onDataProcessed={setMailAgentData} />
     }

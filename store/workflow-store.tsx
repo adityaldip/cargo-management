@@ -10,6 +10,7 @@ type WorkflowStep =
   | "assign-rates"
   | "review-rates"
   | "review-invoices"
+  | "reporting"
 
 interface WorkflowStore {
   activeStep: WorkflowStep

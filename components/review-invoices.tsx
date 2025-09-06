@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import jsPDF from 'jspdf'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,7 +23,8 @@ import {
   TrendingUp,
   Package,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ProcessedData } from "@/types/cargo-data"
@@ -167,6 +169,8 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
   const [sortBy, setSortBy] = useState<"revenue" | "weight" | "parcels">("revenue")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
+  const [showPdfPreview, setShowPdfPreview] = useState(false)
   
   // Track if component has hydrated to prevent hydration mismatch
   const [isHydrated, setIsHydrated] = useState(false)
@@ -316,17 +320,171 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
     // Here you would implement the bulk action logic
   }
 
+  const handleDownloadClick = (invoice: Invoice) => {
+    setSelectedInvoice(invoice)
+    setShowPdfPreview(true)
+  }
+
+  const closePdfPreview = () => {
+    setShowPdfPreview(false)
+    setSelectedInvoice(null)
+  }
+
+  const generatePDF = (invoice: Invoice) => {
+    const doc = new jsPDF()
+    
+    // Set font
+    doc.setFont('helvetica')
+    
+    // Company header
+    doc.setFontSize(20)
+    doc.setFont('helvetica', 'bold')
+    doc.text('CARGO MANAGEMENT LTD', 20, 30)
+    
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text('123 Business Street, Business City, BC 12345', 20, 40)
+    doc.text('Phone: +1 (555) 123-4567 | Email: info@cargomgmt.com', 20, 45)
+    
+    // Invoice details (right side)
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text('INVOICE', 150, 30)
+    
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text('INVOICE NO:', 150, 40)
+    doc.text(invoice.invoiceNumber, 180, 40)
+    
+    doc.text('DATE:', 150, 45)
+    doc.text(new Date(invoice.date).toLocaleDateString('en-GB'), 180, 45)
+    
+    doc.text('DUE DATE:', 150, 50)
+    doc.text(new Date(invoice.dueDate).toLocaleDateString('en-GB'), 180, 50)
+    
+    // Issued to section
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('ISSUED TO:', 20, 70)
+    
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(invoice.customer, 20, 80)
+    doc.text('123 Business Street', 20, 85)
+    doc.text('Business City, BC 12345', 20, 90)
+    
+    // Pay to section
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('PAY TO:', 20, 110)
+    
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Cargo Management Ltd', 20, 120)
+    doc.text('Account Name: Cargo Management', 20, 125)
+    doc.text('Account No.: 1234 5678 9012', 20, 130)
+    
+    // Cargo Shipment Details Table
+    const startY = 150
+    const lineHeight = 8
+    const tableWidth = 170
+    const colWidths = [30, 20, 20, 20, 30, 30, 30] // Sector, empty, empty, Mail Cat, Total KG, Rate, Total EUR
+    
+    // Table headers
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.text('SECTOR', 20, startY)
+    doc.text('MAIL CAT.', 80, startY)
+    doc.text('TOTAL KG', 110, startY)
+    doc.text('RATE', 140, startY)
+    doc.text('TOTAL EUR', 170, startY)
+    
+    // Draw line under headers
+    doc.line(20, startY + 2, 200, startY + 2)
+    
+    // Sample cargo data based on invoice
+    const cargoData = [
+      { sector: 'DUS RIX', mailCat: 'A,B', totalKg: 16.6, rate: 1.0, totalEur: 16.6 },
+      { sector: 'VNO FRA', mailCat: 'A,B', totalKg: 22.2, rate: 0.85, totalEur: 18.87 },
+      { sector: 'BUD ATH', mailCat: 'A,B', totalKg: 138.5, rate: 1.0, totalEur: 138.5 },
+      { sector: 'ATH RIX', mailCat: 'A,B', totalKg: 248.2, rate: 0.85, totalEur: 210.97 },
+      { sector: 'ATH ARN', mailCat: 'A,B', totalKg: 45.3, rate: 0.9, totalEur: 40.77 },
+      { sector: 'ATH KEF', mailCat: 'A,B', totalKg: 12.8, rate: 0.85, totalEur: 10.88 },
+      { sector: 'ATH RMO', mailCat: 'A,B', totalKg: 67.4, rate: 0.9, totalEur: 60.66 },
+      { sector: 'ATH LJU', mailCat: 'A,B', totalKg: 23.1, rate: 0.8, totalEur: 18.48 },
+      { sector: 'OSL TLL', mailCat: 'A,B', totalKg: 0.1, rate: 0.9, totalEur: 0.09 },
+      { sector: 'BUD VNO', mailCat: 'A,B', totalKg: 2490.7, rate: 0.8523908941, totalEur: 2123.05 }
+    ]
+    
+    // Line items
+    doc.setFont('helvetica', 'normal')
+    let currentY = startY + 10
+    
+    cargoData.forEach(item => {
+      doc.text(item.sector, 20, currentY)
+      doc.text(item.mailCat, 80, currentY)
+      doc.text(item.totalKg.toString(), 110, currentY)
+      doc.text(item.rate.toString(), 140, currentY)
+      doc.text(`€${item.totalEur.toFixed(2)}`, 170, currentY)
+      currentY += lineHeight
+    })
+    
+    // Draw line under items
+    doc.line(20, currentY + 2, 200, currentY + 2)
+    
+    // Summary section
+    currentY += 10
+    const totalKg = cargoData.reduce((sum, item) => sum + item.totalKg, 0)
+    const totalEur = cargoData.reduce((sum, item) => sum + item.totalEur, 0)
+    const avgRate = totalEur / totalKg
+    
+    doc.setFont('helvetica', 'bold')
+    doc.text('TOTAL', 20, currentY)
+    doc.text('', 80, currentY) // Empty for mail cat
+    doc.text(totalKg.toFixed(1), 110, currentY)
+    doc.text(avgRate.toFixed(10), 140, currentY)
+    doc.text(`€${totalEur.toFixed(2)}`, 170, currentY)
+    
+    // Additional invoice summary
+    currentY += 15
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    
+    const subtotal = totalEur * 0.9
+    const tax = totalEur * 0.1
+    const finalTotal = totalEur
+    
+    doc.text('SUBTOTAL:', 120, currentY)
+    doc.text(`€${subtotal.toFixed(2)}`, 180, currentY)
+    currentY += lineHeight
+    
+    doc.text('Tax:', 120, currentY)
+    doc.text('10%', 180, currentY)
+    currentY += lineHeight
+    
+    // Total line
+    doc.setFont('helvetica', 'bold')
+    doc.text('TOTAL:', 120, currentY)
+    doc.text(`€${finalTotal.toFixed(2)}`, 180, currentY)
+    
+    // Footer
+    currentY += 20
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.text('Thank you for your business!', 20, currentY)
+    doc.text('Payment is due within 30 days of invoice date.', 20, currentY + 5)
+    
+    // Save the PDF
+    doc.save(`invoice-${invoice.invoiceNumber}.pdf`)
+  }
+
   // Export function
   const handleExport = () => {
     const csvData = filteredInvoices.map(invoice => ({
       "Invoice Number": invoice.invoiceNumber,
       "Customer": invoice.customer,
-      "Route": invoice.route,
       "Date": invoice.date,
-      "Due Date": invoice.dueDate,
       "Amount": `€${invoice.amount.toFixed(2)}`,
-      "Status": invoice.status,
-      "Items": invoice.items,
       "Total Weight": `${invoice.totalWeight}kg`,
       "Payment Method": invoice.paymentMethod || ""
     }))
@@ -352,69 +510,27 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
 
   return (
     <div className="space-y-4 pt-2">
-      {/* Invoices Table */}
-      <Card className="bg-white border-gray-200 shadow-sm">
+      {/* Sample Data Banner */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <p className="text-sm text-amber-800 font-medium">
+            This is sample data and not connected to the database yet
+          </p>
+        </div>
+      </div>
+
+      {/* Main Content with PDF Preview */}
+      <div className="flex gap-4">
+        {/* Invoices Table */}
+        <div className={cn("transition-all duration-300", showPdfPreview ? "w-1/2" : "w-full")}>
+          <Card className="bg-white border-gray-200 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-black flex items-center gap-2">
               <Receipt className="h-5 w-5" />
               Invoice Management
             </CardTitle>
-            <div className="flex gap-2">
-              <Button onClick={handleExport} variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export CSV
-              </Button>
-              {selectedInvoices.length > 0 && (
-                <>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleBulkAction("download")}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download ({selectedInvoices.length})
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleBulkAction("send")}
-                  >
-                    Send ({selectedInvoices.length})
-                  </Button>
-                </>
-              )}
-              {/* <Button className="bg-black hover:bg-gray-800 text-white">
-                <Receipt className="h-4 w-4 mr-2" />
-                Generate New Invoice
-              </Button> */}
-            </div>
-          </div>
-          
-          {/* Filters */}
-          <div className="flex gap-4 mt-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search invoices, customers, or routes..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardHeader>
 
@@ -440,12 +556,8 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
                   </TableHead>
                   <TableHead className="border p-2">Invoice</TableHead>
                   <TableHead className="border p-2">Customer</TableHead>
-                  <TableHead className="border p-2">Route</TableHead>
                   <TableHead className="border p-2">Date</TableHead>
-                  <TableHead className="border p-2">Due Date</TableHead>
                   <TableHead className="border p-2">Amount</TableHead>
-                  <TableHead className="border p-2">Status</TableHead>
-                  <TableHead className="border p-2">Items</TableHead>
                   <TableHead className="border p-2 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -469,25 +581,10 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
                     </TableCell>
                     <TableCell className="border p-2 text-xs">{invoice.customer}</TableCell>
                     <TableCell className="border p-2">
-                      <span className="font-mono text-xs">{invoice.route}</span>
-                    </TableCell>
-                    <TableCell className="border p-2">
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3 text-gray-400" />
                         <span className="text-xs">{new Date(invoice.date).toLocaleDateString()}</span>
                       </div>
-                    </TableCell>
-                    <TableCell className="border p-2">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-gray-400" />
-                        <span className="text-xs">{new Date(invoice.dueDate).toLocaleDateString()}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="border p-2 font-semibold text-xs">
-                      €{invoice.amount.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="border p-2">
-                      {getStatusBadge(invoice.status)}
                     </TableCell>
                     <TableCell className="border p-2">
                       <div className="text-xs">
@@ -500,7 +597,12 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
                           <Eye className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 w-6 p-0"
+                          onClick={() => handleDownloadClick(invoice)}
+                        >
                           <Download className="h-3 w-3" />
                         </Button>
                       </div>
@@ -572,6 +674,122 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
           )}
         </CardContent>
       </Card>
+        </div>
+
+        {/* PDF Preview Panel */}
+        {showPdfPreview && selectedInvoice && (
+          <div className="w-1/2">
+            <Card className="bg-white border-gray-200 shadow-sm h-full">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-black flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Invoice Preview
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={closePdfPreview}
+                    className="h-8 w-8 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="h-full overflow-auto">
+                <div className="bg-white border border-gray-200 rounded-lg p-8 h-full">
+                  {/* Invoice Header */}
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="space-y-4">
+                      <div>
+                        <h2 className="text-sm font-bold text-gray-800 mb-2">ISSUED TO:</h2>
+                        <div className="text-sm text-gray-700">
+                          <div>{selectedInvoice.customer}</div>
+                          <div>123 Business Street</div>
+                          <div>Business City, BC 12345</div>
+                        </div>
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-bold text-gray-800 mb-2">PAY TO:</h2>
+                        <div className="text-sm text-gray-700">
+                          <div>Cargo Management Ltd</div>
+                          <div>Account Name: Cargo Management</div>
+                          <div>Account No.: 1234 5678 9012</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right space-y-2">
+                      <div className="flex justify-between w-48">
+                        <span className="text-sm text-gray-700">INVOICE NO:</span>
+                        <span className="text-sm font-semibold">{selectedInvoice.invoiceNumber}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cargo Shipment Details Table */}
+                  <div className="mb-8">
+                    <div className="border-t border-gray-300 pt-4">
+                      <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-800 mb-4">
+                        <div>SECTOR</div>
+                        <div>MAIL CAT.</div>
+                        <div className="text-right">TOTAL KG</div>
+                        <div className="text-right">RATE</div>
+                        <div className="text-right">TOTAL EUR</div>
+                      </div>
+                      
+                      {/* Sample cargo data */}
+                      <div className="space-y-2">
+                        {[
+                          { sector: 'DUS RIX', mailCat: 'A,B', totalKg: 16.6, rate: 1.0, totalEur: 16.6 },
+                          { sector: 'VNO FRA', mailCat: 'A,B', totalKg: 22.2, rate: 0.85, totalEur: 18.87 },
+                          { sector: 'BUD ATH', mailCat: 'A,B', totalKg: 138.5, rate: 1.0, totalEur: 138.5 },
+                          { sector: 'ATH RIX', mailCat: 'A,B', totalKg: 248.2, rate: 0.85, totalEur: 210.97 },
+                          { sector: 'ATH ARN', mailCat: 'A,B', totalKg: 45.3, rate: 0.9, totalEur: 40.77 },
+                          { sector: 'ATH KEF', mailCat: 'A,B', totalKg: 12.8, rate: 0.85, totalEur: 10.88 },
+                          { sector: 'ATH RMO', mailCat: 'A,B', totalKg: 67.4, rate: 0.9, totalEur: 60.66 },
+                          { sector: 'ATH LJU', mailCat: 'A,B', totalKg: 23.1, rate: 0.8, totalEur: 18.48 },
+                          { sector: 'OSL TLL', mailCat: 'A,B', totalKg: 0.1, rate: 0.9, totalEur: 0.09 },
+                          { sector: 'BUD VNO', mailCat: 'A,B', totalKg: 2490.7, rate: 0.8523908941, totalEur: 2123.05 }
+                        ].map((item, index) => (
+                          <div key={index} className="grid grid-cols-5 gap-4 text-sm text-gray-700 py-1">
+                            <div className="font-mono">{item.sector}</div>
+                            <div>{item.mailCat}</div>
+                            <div className="text-right">{item.totalKg}</div>
+                            <div className="text-right">{item.rate}</div>
+                            <div className="text-right font-semibold">€{item.totalEur.toFixed(2)}</div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="border-t border-gray-300 mt-4 pt-4">
+                        <div className="grid grid-cols-5 gap-4 text-sm font-bold text-gray-800">
+                          <div>TOTAL</div>
+                          <div></div>
+                          <div className="text-right">9952.7</div>
+                          <div className="text-right">0.8511680248</div>
+                          <div className="text-right">€8471.42</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 justify-center">
+                    <Button 
+                      size="sm" 
+                      className="flex items-center gap-2"
+                      onClick={() => generatePDF(selectedInvoice)}
+                    >
+                      <Download className="h-4 w-4" />
+                      Download PDF
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
