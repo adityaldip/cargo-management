@@ -4,6 +4,7 @@ import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import { WorkflowProvider } from '@/store/workflow-store'
 import { FilterProvider } from '@/store/filter-store'
+import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function RootLayout({
             {children}
           </FilterProvider>
         </WorkflowProvider>
+        <Toaster />
         <Analytics />
       </body>
     </html>

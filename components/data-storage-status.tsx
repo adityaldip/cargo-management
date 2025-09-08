@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { getStoredDatasets, getCurrentSession, deleteDataset, getSupabaseSaveStatus, type StoredDataset } from "@/lib/storage-utils"
+import { useDataStore } from "@/store/data-store"
+import type { StoredDataset } from "@/store/data-store"
 import { Trash2, FileText, Clock, Database, CheckCircle } from "lucide-react"
 
 export function DataStorageStatus() {

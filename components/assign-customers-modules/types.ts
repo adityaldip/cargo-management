@@ -7,7 +7,7 @@ export type CustomerRuleDB = Database['public']['Tables']['customer_rules']['Row
 
 // Extended customer type with codes
 export interface CustomerWithCodes extends Customer {
-  customer_codes: CustomerCode[]
+  codes: CustomerCode[]
 }
 
 // Extended rule type that matches our component interface

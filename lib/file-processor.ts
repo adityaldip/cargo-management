@@ -243,9 +243,12 @@ function mapExcelRowToCargoData(row: ExcelRow, columnMap: Record<string, keyof C
 export async function processFile(
   file: File, 
   fileType: "mail-system" | "mail-agent",
-  ignoreRules?: IgnoreRule[]
+  ignoreRules?: IgnoreRule[],
+  onProgress?: (progress: number, message: string, stats?: { currentRow: number, totalRows: number, processedRows: number }) => void
 ): Promise<FileProcessingResult> {
   try {
+    onProgress?.(0, "Reading file...", { currentRow: 0, totalRows: 0, processedRows: 0 })
+    
     // Parse the file (Excel or CSV)
     const excelRows = await parseFile(file)
     
@@ -256,13 +259,36 @@ export async function processFile(
       }
     }
 
+    onProgress?.(30, `Found ${excelRows.length} rows, processing data...`, { currentRow: 0, totalRows: excelRows.length, processedRows: 0 })
+
     // Get the appropriate column mapping
     const columnMap = fileType === "mail-system" ? MAIL_SYSTEM_COLUMN_MAP : MAIL_AGENT_COLUMN_MAP
     
-    // Convert Excel rows to CargoData
-    let processedData: CargoData[] = excelRows.map((row, index) => 
-      mapExcelRowToCargoData(row, columnMap, index)
-    )
+    // Convert Excel rows to CargoData with progress tracking
+    let processedData: CargoData[] = []
+    const totalRows = excelRows.length
+    
+    for (let i = 0; i < excelRows.length; i++) {
+      const row = excelRows[i]
+      processedData.push(mapExcelRowToCargoData(row, columnMap, i))
+      
+      // Update progress every 100 rows or at the end
+      if (i % 100 === 0 || i === excelRows.length - 1) {
+        const progress = 30 + Math.floor((i / totalRows) * 50) // 30-80% for data processing
+        onProgress?.(progress, `Processing row ${i + 1} of ${totalRows}...`, { 
+          currentRow: i + 1, 
+          totalRows: totalRows, 
+          processedRows: i + 1 
+        })
+        
+        // Add a small delay to allow UI updates for large files
+        if (i % 500 === 0 && i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 10))
+        }
+      }
+    }
+
+    onProgress?.(80, "Applying ignore rules...", { currentRow: totalRows, totalRows: totalRows, processedRows: totalRows })
 
     // Apply ignore rules if provided
     if (ignoreRules && ignoreRules.length > 0) {
@@ -274,6 +300,8 @@ export async function processFile(
         console.log(`✓ Applied ignore rules: ${ignoredCount} records filtered out (${originalCount} → ${processedData.length})`)
       }
     }
+
+    onProgress?.(90, "Finalizing data...", { currentRow: totalRows, totalRows: totalRows, processedRows: processedData.length })
 
     // Identify missing fields and warnings
     const missingFields: string[] = []
@@ -314,6 +342,8 @@ export async function processFile(
         totalKg,
       },
     }
+
+    onProgress?.(100, "Upload complete!", { currentRow: totalRows, totalRows: totalRows, processedRows: processedData.length })
 
     return { success: true, data: result }
   } catch (error) {
@@ -408,9 +438,12 @@ export async function processFileWithMappings(
   file: File, 
   fileType: "mail-system" | "mail-agent",
   mappings: ColumnMappingRule[],
-  ignoreRules?: IgnoreRule[]
+  ignoreRules?: IgnoreRule[],
+  onProgress?: (progress: number, message: string, stats?: { currentRow: number, totalRows: number, processedRows: number }) => void
 ): Promise<FileProcessingResult> {
   try {
+    onProgress?.(10, "Reading file...", { currentRow: 0, totalRows: 0, processedRows: 0 })
+    
     // Parse the file (Excel or CSV)
     const excelRows = await parseFile(file)
     
@@ -421,6 +454,8 @@ export async function processFileWithMappings(
       }
     }
 
+    onProgress?.(20, `Found ${excelRows.length} rows, applying mappings...`, { currentRow: 0, totalRows: excelRows.length, processedRows: 0 })
+
     // Create a mapping lookup for faster processing
     const mappingLookup: Record<string, string> = {}
     mappings.forEach(mapping => {
@@ -429,13 +464,18 @@ export async function processFileWithMappings(
       }
     })
     
+    onProgress?.(30, "Processing data with custom mappings...", { currentRow: 0, totalRows: excelRows.length, processedRows: 0 })
 
-    // Convert Excel rows to CargoData using the user's mappings
-    let processedData: CargoData[] = excelRows.map((row, index) => {
+    // Convert Excel rows to CargoData using the user's mappings with progress tracking
+    let processedData: CargoData[] = []
+    const totalRows = excelRows.length
+    
+    for (let i = 0; i < excelRows.length; i++) {
+      const row = excelRows[i]
       const timestamp = Date.now()
       const random = Math.random().toString(36).substr(2, 9)
       const cargoData: Partial<CargoData> = {
-        id: `${fileType}-${timestamp}-${index}-${random}`,
+        id: `${fileType}-${timestamp}-${i}-${random}`,
       }
 
       // Apply user mappings
@@ -461,8 +501,8 @@ export async function processFileWithMappings(
       })
 
       // Set defaults for required fields
-      return {
-        id: cargoData.id || `${fileType}-${timestamp}-${index}-${random}`,
+      const finalCargoData = {
+        id: cargoData.id || `${fileType}-${timestamp}-${i}-${random}`,
         origOE: cargoData.origOE || '',
         destOE: cargoData.destOE || '',
         inbFlightNo: cargoData.inbFlightNo || '',
@@ -483,7 +523,26 @@ export async function processFileWithMappings(
         recNumb: cargoData.recNumb,
         outbDate: cargoData.outbDate,
       }
-    })
+      
+      processedData.push(finalCargoData)
+      
+      // Update progress every 100 rows or at the end
+      if (i % 100 === 0 || i === excelRows.length - 1) {
+        const progress = 30 + Math.floor((i / totalRows) * 50) // 30-80% for data processing
+        onProgress?.(progress, `Processing row ${i + 1} of ${totalRows}...`, { 
+          currentRow: i + 1, 
+          totalRows: totalRows, 
+          processedRows: i + 1 
+        })
+        
+        // Add a small delay to allow UI updates for large files
+        if (i % 500 === 0 && i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 10))
+        }
+      }
+    }
+
+    onProgress?.(80, "Applying ignore rules...", { currentRow: totalRows, totalRows: totalRows, processedRows: totalRows })
 
     // Apply ignore rules if provided
     if (ignoreRules && ignoreRules.length > 0) {
@@ -495,6 +554,8 @@ export async function processFileWithMappings(
         console.log(`✓ Applied ignore rules: ${ignoredCount} records filtered out (${originalCount} → ${processedData.length})`)
       }
     }
+
+    onProgress?.(90, "Finalizing data...", { currentRow: totalRows, totalRows: totalRows, processedRows: processedData.length })
 
     // Identify missing fields and warnings
     const missingFields: string[] = []
@@ -535,6 +596,8 @@ export async function processFileWithMappings(
         totalKg,
       },
     }
+
+    onProgress?.(100, "Upload complete!", { currentRow: totalRows, totalRows: totalRows, processedRows: processedData.length })
 
     return { success: true, data: result }
   } catch (error) {

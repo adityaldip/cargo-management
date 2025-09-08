@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { CheckCircle, AlertTriangle, ArrowRight, Loader2 } from "lucide-react"
 import type { ColumnMappingRule } from "@/lib/file-processor"
 
@@ -109,6 +110,7 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
     }
     
     setIsProcessing(true)
+    
     try {
       await onMappingComplete(mappings)
     } catch (error) {
@@ -119,45 +121,117 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
   }
 
   return (
-    <div className="space-y-4 pt-2 max-w-xl mx-auto">
-      {/* Column Mapping Interface */}
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardContent className="pt-0">
+    <div className="space-y-1 pt-1 max-w-xl mx-auto">
+      {/* Single Card with All Components */}
+      <Card className="bg-white border-gray-200 shadow-sm" style={{ paddingBottom: "8px", paddingTop: "8px" }}>
+        <CardContent className="space-y-1">
+          <CardTitle className="text-lg">Column Mapping</CardTitle>
+          {/* Mapping Summary */}
+          <div className="flex items-center justify-between text-sm pb-1">
+            <div className="flex items-center gap-1">
+              <span className="text-gray-600">
+                Mapped: <strong className="text-green-600">{getMappedCount()}</strong>
+              </span>
+              <span className="text-gray-600">
+                Unmapped: <strong className="text-gray-500">{getTotalCount() - getMappedCount() - getConflictCount()}</strong>
+              </span>
+              {getConflictCount() > 0 && (
+                <span className="text-gray-600">
+                  Conflicts: <strong className="text-red-600">{getConflictCount()}</strong>
+                </span>
+              )}
+            </div>
+          </div>
+          
+          {hasConflicts() && (
+            <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded">
+              <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+              <p className="text-sm text-red-700">
+                Please resolve mapping conflicts. Multiple Excel columns cannot be mapped to the same final column.
+              </p>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-between items-center pb-2">
+            <div>
+              {onCancel && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      Cancel
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancel Column Mapping?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to cancel? This will reset the upload and return to the upload step. All mapping progress will be lost.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>No, Continue Mapping</AlertDialogCancel>
+                      <AlertDialogAction onClick={onCancel} className="bg-red-600 hover:bg-red-700">
+                        Yes, Cancel and Reset
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+            <Button 
+              size="sm" 
+              className={`${
+                hasConflicts() 
+                  ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed" 
+                  : "bg-black hover:bg-gray-800"
+              } text-white`}
+              onClick={handleContinue}
+              disabled={isProcessing || hasConflicts()}
+            >
+              {isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isProcessing ? 'Processing...' : 'Continue to Next Step'}
+            </Button>
+          </div>
+
+
+          {/* Column Mapping Table */}
+          <div className="border-t border-gray-200 pt-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-12 text-center">No</TableHead>
-                <TableHead>Excel Column</TableHead>
-                <TableHead>Final Export Column</TableHead>
+              <TableRow className="h-8">
+                <TableHead className="w-8 text-center py-1 text-xs">No</TableHead>
+                <TableHead className="py-1 text-xs">Excel Column</TableHead>
+                <TableHead className="py-1 text-xs">Final Export Column</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {mappings.map((mapping, index) => (
                 <TableRow 
                   key={index}
-                  className={mapping.status === "warning" ? "bg-red-50 border-red-200" : ""}
+                  className={`h-8 ${mapping.status === "warning" ? "bg-red-50 border-red-200" : ""}`}
                 >
-                  <TableCell className="text-center">
-                    <span className="w-6 h-6 bg-gray-100 rounded text-xs flex items-center justify-center text-gray-600 mx-auto">
+                  <TableCell className="text-center py-1">
+                    <span className="w-5 h-5 bg-gray-100 rounded text-xs flex items-center justify-center text-gray-600 mx-auto">
                       {index + 1}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-1">
                     <div className="min-w-0">
-                      <div className="font-medium text-black text-sm truncate">{mapping.excelColumn}</div>
+                      <div className="font-medium text-black text-xs truncate">{mapping.excelColumn}</div>
                       <div className="text-xs text-gray-500 truncate">
-                        {mapping.sampleData[0] && mapping.sampleData[0].substring(0, 30)}
-                        {mapping.sampleData[0] && mapping.sampleData[0].length > 30 && '...'}
+                        {mapping.sampleData[0] && mapping.sampleData[0].substring(0, 25)}
+                        {mapping.sampleData[0] && mapping.sampleData[0].length > 25 && '...'}
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-1">
                     <Select
                       value={mapping.mappedTo || "unmapped"}
                       onValueChange={(value) => handleMappingChange(mapping.excelColumn, value)}
                     >
                       <SelectTrigger 
-                        className={`w-full h-8 text-sm ${
+                        className={`w-full h-6 text-xs ${
                           mapping.status === "warning" 
                             ? "border-red-300 focus:border-red-500" 
                             : ""
@@ -191,56 +265,6 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
               ))}
             </TableBody>
           </Table>
-
-          {/* Mapping Summary */}
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center justify-between text-sm mb-3">
-              <div className="flex items-center gap-4">
-                <span className="text-gray-600">
-                  Mapped: <strong className="text-green-600">{getMappedCount()}</strong>
-                </span>
-                <span className="text-gray-600">
-                  Unmapped: <strong className="text-gray-500">{getTotalCount() - getMappedCount() - getConflictCount()}</strong>
-                </span>
-                {getConflictCount() > 0 && (
-                  <span className="text-gray-600">
-                    Conflicts: <strong className="text-red-600">{getConflictCount()}</strong>
-                  </span>
-                )}
-              </div>
-            </div>
-            
-            {hasConflicts() && (
-              <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded mb-3">
-                <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                <p className="text-sm text-red-700">
-                  Please resolve mapping conflicts. Multiple Excel columns cannot be mapped to the same final column.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-between items-center mt-4">
-            <div>
-              {onCancel && (
-                <Button variant="outline" size="sm" onClick={onCancel}>
-                  Cancel
-                </Button>
-              )}
-            </div>
-            <Button 
-              size="sm" 
-              className={`${
-                hasConflicts() 
-                  ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed" 
-                  : "bg-black hover:bg-gray-800"
-              } text-white`}
-              onClick={handleContinue}
-              disabled={isProcessing || hasConflicts()}
-            >
-              {isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {isProcessing ? 'Processing...' : 'Continue to Next Step'}
-            </Button>
           </div>
         </CardContent>
       </Card>

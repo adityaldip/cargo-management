@@ -18,15 +18,17 @@ import {
   AlertTriangle,
   CheckCircle,
   ChevronDown,
-  EyeOff,
   Check,
   ChevronsUpDown,
-  X
+  X,
+  Info
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 import type { ProcessedData } from "@/types/cargo-data"
 import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
+import { DisabledBanner } from "@/components/ui/status-banner"
+import { useToast } from "@/hooks/use-toast"
 
 interface IgnoreTrackingRulesProps {
   onRulesChange?: (rules: IgnoreRule[]) => void
@@ -72,6 +74,9 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
     getConditionsForDataSource,
     setConditionsForDataSource,
   } = useIgnoreRulesStore()
+  
+  // Toast hook
+  const { toast } = useToast()
   
   // Get current conditions based on data source
   const currentConditions = getConditionsForDataSource(dataSource)
@@ -260,9 +265,12 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
+      {/* Disabled Banner */}
+      <DisabledBanner className="mb-4" />
+      
+      <Card className="bg-white border-gray-200 shadow-sm" style={{ padding:"12px 0px 12px 0px" }}>
+        <CardContent>
+        <div className="flex items-center justify-between">
             <CardTitle className="text-black flex items-center gap-2">
               <Settings className="h-5 w-5" />
                 Automation Rules
@@ -275,30 +283,35 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
             </CardTitle>
             <div className="flex flex-wrap gap-2">
               <Button 
+                variant="outline"
+                className="border-gray-300 hover:bg-gray-50"
+                onClick={() => {
+                  // Navigate to ignored tab
+                  onViewIgnored?.()
+                }}
+              >
+                Skip
+              </Button>
+              <Button 
                 className="bg-black hover:bg-gray-800 text-white"
                 onClick={() => {
-                  // Apply rules logic would go here
-                  console.log('Applying ignore rules:', rules)
-                  onRulesApplied?.()
+                  // Show temporary disabled toast notification
+                  toast({
+                    title: (
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <span>This button is temporarily disabled</span>
+                      </div>
+                    ),
+                    className: "border-amber-200 bg-amber-50 text-amber-900",
+                  })
                 }}
               >
                 <Play className="h-4 w-4 mr-2" />
                 Apply Rules
               </Button>
-              {onViewIgnored && (
-                <Button 
-                  variant="outline"
-                  onClick={onViewIgnored}
-                  className="border-gray-300 hover:bg-gray-50"
-                >
-                  <EyeOff className="h-4 w-4 mr-2" />
-                  View Ignored Data
-                </Button>
-              )}
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+          </div>          
           <div className="mb-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="text-xs text-gray-500">
@@ -308,28 +321,6 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
                 )}
               </div>
             </div>
-            {!uploadedData && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <p className="text-amber-800 text-sm font-medium">No data uploaded yet</p>
-                </div>
-                <p className="text-amber-700 text-sm mt-1">
-                  Upload and map your Mail System file first to see available values for filtering.
-                </p>
-              </div>
-            )}
-            {uploadedData && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-blue-600" />
-                  <p className="text-blue-800 text-sm font-medium">Data ready for filtering</p>
-                </div>
-                <p className="text-blue-700 text-sm mt-1">
-                  Configure ignore rules to filter out unwanted Inb. Flight No. records before reviewing the merged data.
-                </p>
-              </div>
-            )}
           </div>
           
           <div className="space-y-1">
@@ -387,7 +378,7 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
                   </div>
 
                   {/* Actions */}
-                  <Button 
+                  {/* <Button 
                     variant="ghost" 
                     size="sm"
                     onClick={(e) => {
@@ -397,7 +388,7 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
                     className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
                   >
                     <Trash2 className="h-3 w-3" />
-                  </Button>
+                  </Button> */}
                 </div>
 
                 {/* Loading State for Expanding */}
@@ -594,7 +585,6 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="ignore">ignore</SelectItem>
-                                <SelectItem value="remove">remove</SelectItem>
                               </SelectContent>
                             </Select>
                             <span className="text-xs text-gray-500">the matching records</span>

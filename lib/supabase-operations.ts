@@ -257,6 +257,53 @@ export const cargoDataOperations = {
     )
   },
 
+  // Get cargo data with server-side pagination and search
+  async getPaginated(params: {
+    page?: number
+    limit?: number
+    search?: string
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  } = {}) {
+    const { page = 1, limit = 50, search = '', sortBy = 'created_at', sortOrder = 'desc' } = params
+    const offset = (page - 1) * limit
+    
+    try {
+      const response = await fetch(`/api/cargo-data?${new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        search,
+        sortBy,
+        sortOrder
+      })}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      return await response.json()
+    } catch (error) {
+      console.error('Error fetching paginated cargo data:', error)
+      return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false, offset: 0 }, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  },
+
+  // Get cargo data statistics
+  async getStats(search: string = '') {
+    try {
+      const response = await fetch(`/api/cargo-data/stats?${new URLSearchParams({ search })}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      return await response.json()
+    } catch (error) {
+      console.error('Error fetching cargo data stats:', error)
+      return { totalWeight: 0, totalRate: 0, recordCount: 0, avgWeight: 0, avgRate: 0, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  },
+
   // Get cargo data by ID
   async getById(id: string) {
     return safeSupabaseOperation(() =>
@@ -321,6 +368,29 @@ export const cargoDataOperations = {
         .is('assigned_customer', null)
         .order('created_at', { ascending: false })
         .limit(limit)
+    )
+  },
+
+  // Clear all cargo data (for bulk deletion)
+  async clearAll() {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all records
+    )
+  },
+
+  // Get all cargo data IDs for deletion (more efficient than getting full records)
+  async getAllIds(page: number = 1, limit: number = 1000) {
+    const offset = (page - 1) * limit
+    
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .select('id')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1)
     )
   },
 }

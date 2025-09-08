@@ -18,9 +18,11 @@ type WorkflowStep =
 interface WorkflowNavigationProps {
   activeStep: WorkflowStep
   onStepChange: (step: WorkflowStep) => void
+  isProcessing?: boolean
+  isClearingData?: boolean
 }
 
-export function WorkflowNavigation({ activeStep, onStepChange }: WorkflowNavigationProps) {
+export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false }: WorkflowNavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
   
@@ -42,6 +44,9 @@ export function WorkflowNavigation({ activeStep, onStepChange }: WorkflowNavigat
   ]
 
   const handleStepChange = (stepId: WorkflowStep) => {
+    // Don't allow navigation when processing or clearing data
+    if (isProcessing || isClearingData) return
+    
     onStepChange(stepId)
     setIsMobileMenuOpen(false) // Close mobile menu when step is selected
   }
@@ -85,6 +90,21 @@ export function WorkflowNavigation({ activeStep, onStepChange }: WorkflowNavigat
             </div>
           </div>
 
+          {/* Processing Status Banner */}
+          {/* {(isProcessing || isClearingData) && (
+            <div className="px-3 py-2 mx-2 mb-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-yellow-600"></div>
+                <span className="text-xs text-yellow-800 font-medium">
+                  {isProcessing ? "Processing in progress..." : "Data is being cleared..."}
+                </span>
+              </div>
+              <p className="text-xs text-yellow-700 mt-1">
+                Navigation temporarily disabled
+              </p>
+            </div>
+          )} */}
+
           {/* Navigation Steps */}
           <nav className="flex-1 px-1">
             <div className="space-y-1">
@@ -97,14 +117,32 @@ export function WorkflowNavigation({ activeStep, onStepChange }: WorkflowNavigat
                     <TooltipTrigger asChild>
                       <div
                         onClick={() => handleStepChange(step.id as WorkflowStep)}
-                        className={`flex items-center px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${isActive ? "bg-black text-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}`}
+                        className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
+                          isProcessing || isClearingData
+                            ? "cursor-not-allowed opacity-50 text-gray-400" 
+                            : isActive 
+                              ? "bg-black text-white cursor-pointer" 
+                              : "text-gray-600 hover:text-black hover:bg-gray-50 cursor-pointer"
+                        }`}
                       >
                         <Icon className="h-4 w-4 flex-shrink-0" />
                         <span className="ml-3 text-sm font-medium truncate">{step.label}</span>
+                        {isProcessing && (
+                          <div className="ml-auto">
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400"></div>
+                          </div>
+                        )}
                       </div>
                     </TooltipTrigger>
                     <TooltipContent side="right" className="bg-black text-white text-xs whitespace-nowrap hidden lg:block">
-                      <p>{step.tooltip}</p>
+                      <p>
+                        {isProcessing 
+                          ? "Navigation is disabled - processing is in progress" 
+                          : isClearingData 
+                            ? "Navigation is disabled - data is being cleared"
+                            : step.tooltip
+                        }
+                      </p>
                     </TooltipContent>
                   </Tooltip>
                 )

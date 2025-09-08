@@ -20,9 +20,20 @@ export interface ColumnMapping {
   sampleData: string[]
 }
 
+export interface UploadSession {
+  fileName: string | null
+  processedData: ProcessedData | null
+  excelColumns: string[]
+  sampleData: Record<string, string[]>
+  activeStep: "upload" | "map" | "ignore" | "ignored"
+  ignoreRules: any[]
+  timestamp: number
+}
+
 const STORAGE_KEYS = {
   DATASETS: 'cargo-management-datasets',
-  CURRENT_SESSION: 'cargo-management-session'
+  CURRENT_SESSION: 'cargo-management-session',
+  UPLOAD_SESSIONS: 'cargo-management-upload-sessions'
 }
 
 // Local Storage Operations
@@ -81,9 +92,61 @@ export interface CurrentSession {
 // Session Management
 export function saveCurrentSession(data: CurrentSession): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_SESSION, JSON.stringify(data))
+    // Create a lightweight version of the session data to avoid quota issues
+    const lightweightData: CurrentSession = {
+      mailAgent: data.mailAgent ? {
+        id: data.mailAgent.id,
+        name: data.mailAgent.name,
+        type: data.mailAgent.type,
+        timestamp: data.mailAgent.timestamp,
+        fileName: data.mailAgent.fileName,
+        // Don't save the actual data to avoid quota issues
+        data: {
+          data: [], // Empty data array
+          summary: data.mailAgent.data.summary, // Keep summary for reference
+          missingFields: [],
+          warnings: []
+        },
+        mappings: data.mailAgent.mappings
+      } : undefined,
+      mailSystem: data.mailSystem ? {
+        id: data.mailSystem.id,
+        name: data.mailSystem.name,
+        type: data.mailSystem.type,
+        timestamp: data.mailSystem.timestamp,
+        fileName: data.mailSystem.fileName,
+        // Don't save the actual data to avoid quota issues
+        data: {
+          data: [], // Empty data array
+          summary: data.mailSystem.data.summary, // Keep summary for reference
+          missingFields: [],
+          warnings: []
+        },
+        mappings: data.mailSystem.mappings
+      } : undefined,
+      // Don't save combined data to avoid quota issues
+      combined: undefined,
+      supabaseSaved: data.supabaseSaved
+    }
+    
+    localStorage.setItem(STORAGE_KEYS.CURRENT_SESSION, JSON.stringify(lightweightData))
   } catch (error) {
     console.error('Error saving current session:', error)
+    // If it's a quota error, try to clear some space and save a minimal version
+    if (error instanceof Error && error.name === 'QuotaExceededError') {
+      try {
+        console.log('Quota exceeded, performing emergency cleanup...')
+        emergencyCleanup()
+        // Save only the essential info
+        const minimalData: CurrentSession = {
+          supabaseSaved: data.supabaseSaved
+        }
+        localStorage.setItem(STORAGE_KEYS.CURRENT_SESSION, JSON.stringify(minimalData))
+        console.log('Successfully saved minimal session data after cleanup')
+      } catch (retryError) {
+        console.error('Failed to save even minimal session data:', retryError)
+      }
+    }
   }
 }
 
@@ -121,6 +184,39 @@ export function cleanOldDatasets(): void {
     }
   } catch (error) {
     console.error('Error cleaning old datasets:', error)
+  }
+}
+
+// Aggressive cleanup when quota is exceeded
+export function emergencyCleanup(): void {
+  try {
+    console.log('Performing emergency localStorage cleanup...')
+    
+    // Clear all datasets
+    localStorage.removeItem(STORAGE_KEYS.DATASETS)
+    
+    // Clear upload sessions
+    localStorage.removeItem(STORAGE_KEYS.UPLOAD_SESSIONS)
+    
+    // Keep only minimal session data
+    const currentSession = getCurrentSession()
+    if (currentSession) {
+      const minimalSession: CurrentSession = {
+        supabaseSaved: currentSession.supabaseSaved
+      }
+      localStorage.setItem(STORAGE_KEYS.CURRENT_SESSION, JSON.stringify(minimalSession))
+    }
+    
+    console.log('Emergency cleanup completed')
+  } catch (error) {
+    console.error('Error during emergency cleanup:', error)
+    // Last resort - clear everything
+    try {
+      localStorage.clear()
+      console.log('Cleared all localStorage as last resort')
+    } catch (clearError) {
+      console.error('Failed to clear localStorage:', clearError)
+    }
   }
 }
 
@@ -225,9 +321,9 @@ export async function saveMergedDataToSupabase(
       console.log(`Successfully saved batch. Total saved so far: ${totalSaved}`)
     }
     
-    // Update session to mark as saved to Supabase
+    // Update session to mark as saved to Supabase (without saving large data)
     const currentSession = getCurrentSession() || {}
-    currentSession.combined = mergedData
+    // Don't save mergedData to avoid quota issues - it's already saved to Supabase
     currentSession.supabaseSaved = {
       timestamp: Date.now(),
       recordCount: totalSaved,
@@ -256,7 +352,7 @@ export function shouldTriggerSupabaseSave(): boolean {
   if (!session) return false
   
   // Check if we have both datasets and haven't saved to Supabase yet
-  const hasBothDatasets = session.mailAgent && session.mailSystem
+  const hasBothDatasets = Boolean(session.mailAgent && session.mailSystem)
   const notYetSaved = !session.supabaseSaved
   
   return hasBothDatasets && notYetSaved
@@ -281,7 +377,7 @@ export function getSupabaseSaveStatus(): {
     sources: [
       session.supabaseSaved.mailAgent,
       session.supabaseSaved.mailSystem
-    ].filter(Boolean)
+    ].filter(Boolean) as string[]
   }
 }
 
@@ -298,11 +394,21 @@ export function clearAllLocalStorage(): void {
 }
 
 // Clear Supabase cargo data (WARNING: This will delete ALL cargo data)
-export async function clearSupabaseData(): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+export async function clearSupabaseData(
+  onProgress?: (progress: number, currentStep: string, stepIndex: number, totalSteps: number) => void,
+  shouldStop?: () => boolean
+): Promise<{ success: boolean; error?: string; deletedCount?: number; cancelled?: boolean }> {
   try {
     console.log('🗑️ Starting Supabase data clearing process...')
     
-    // Get all cargo data first to know how many records we're deleting
+    // Step 1: Get all cargo data first to know how many records we're deleting
+    onProgress?.(10, "Mengambil data dari database...", 0, 3)
+    
+    // Check if should stop before starting
+    if (shouldStop?.()) {
+      return { success: false, error: "Proses dibatalkan", cancelled: true }
+    }
+    
     const allDataResult = await cargoDataOperations.getAll(1, 10000) // Get up to 10k records
     
     if (allDataResult.error) {
@@ -312,24 +418,47 @@ export async function clearSupabaseData(): Promise<{ success: boolean; error?: s
       }
     }
     
-    const totalRecords = allDataResult.data?.length || 0
+    const totalRecords = Array.isArray(allDataResult.data) ? allDataResult.data.length : 0
     console.log(`Found ${totalRecords} records to delete`)
     
     if (totalRecords === 0) {
+      onProgress?.(100, "Tidak ada data untuk dihapus", 2, 3)
       return { success: true, deletedCount: 0 }
     }
     
-    // Delete records in batches
+    // Step 2: Delete records in batches
+    onProgress?.(20, "Memulai proses penghapusan data...", 1, 3)
     let deletedCount = 0
     const batchSize = 50
+    const totalBatches = Math.ceil(totalRecords / batchSize)
     
-    if (allDataResult.data) {
+    if (Array.isArray(allDataResult.data)) {
       for (let i = 0; i < allDataResult.data.length; i += batchSize) {
+        // Check if should stop before each batch
+        if (shouldStop?.()) {
+          return { success: false, error: "Proses dibatalkan", cancelled: true, deletedCount }
+        }
+        
         const batch = allDataResult.data.slice(i, i + batchSize)
-        console.log(`Deleting batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(allDataResult.data.length/batchSize)} (${batch.length} records)`)
+        const currentBatch = Math.floor(i/batchSize) + 1
+        const progress = 20 + (currentBatch / totalBatches) * 70 // 20% to 90%
+        
+        onProgress?.(
+          progress, 
+          `Menghapus batch ${currentBatch}/${totalBatches} (${batch.length} records)`, 
+          1, 
+          3
+        )
+        
+        console.log(`Deleting batch ${currentBatch}/${totalBatches} (${batch.length} records)`)
         
         // Delete each record in the batch
         for (const record of batch) {
+          // Check if should stop before each record
+          if (shouldStop?.()) {
+            return { success: false, error: "Proses dibatalkan", cancelled: true, deletedCount }
+          }
+          
           const deleteResult = await cargoDataOperations.delete(record.id)
           if (deleteResult.error) {
             console.error(`Failed to delete record ${record.id}:`, deleteResult.error)
@@ -341,6 +470,8 @@ export async function clearSupabaseData(): Promise<{ success: boolean; error?: s
       }
     }
     
+    // Step 3: Complete
+    onProgress?.(100, "Data berhasil dihapus", 2, 3)
     console.log(`✅ Successfully deleted ${deletedCount} records from Supabase`)
     return { 
       success: true, 
@@ -356,12 +487,16 @@ export async function clearSupabaseData(): Promise<{ success: boolean; error?: s
 }
 
 // Clear all data (both local storage and Supabase)
-export async function clearAllData(): Promise<{ 
+export async function clearAllData(
+  onProgress?: (progress: number, currentStep: string, stepIndex: number, totalSteps: number) => void,
+  shouldStop?: () => boolean
+): Promise<{ 
   success: boolean
   error?: string
   localCleared: boolean
   supabaseCleared: boolean
   supabaseDeletedCount?: number
+  cancelled?: boolean
 }> {
   let localCleared = false
   let supabaseCleared = false
@@ -369,19 +504,47 @@ export async function clearAllData(): Promise<{
   const errors: string[] = []
   
   try {
-    // Clear local storage first
+    // Step 1: Clear local storage first
+    onProgress?.(5, "Menghapus data dari local storage...", 0, 2)
+    
+    // Check if should stop before clearing local storage
+    if (shouldStop?.()) {
+      return { 
+        success: false, 
+        error: "Proses dibatalkan", 
+        localCleared: false, 
+        supabaseCleared: false, 
+        cancelled: true 
+      }
+    }
+    
     clearAllLocalStorage()
     localCleared = true
+    onProgress?.(10, "Local storage berhasil dihapus", 0, 2)
   } catch (error) {
     errors.push(`Local storage: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
   
   try {
-    // Clear Supabase data
-    const supabaseResult = await clearSupabaseData()
+    // Step 2: Clear Supabase data
+    const supabaseResult = await clearSupabaseData((progress, step, stepIndex, totalSteps) => {
+      // Map Supabase progress to overall progress (10% to 100%)
+      const mappedProgress = 10 + (progress * 0.9)
+      onProgress?.(mappedProgress, step, 1, 2)
+    }, shouldStop)
+    
     if (supabaseResult.success) {
       supabaseCleared = true
       supabaseDeletedCount = supabaseResult.deletedCount || 0
+    } else if (supabaseResult.cancelled) {
+      return {
+        success: false,
+        error: supabaseResult.error,
+        localCleared,
+        supabaseCleared: false,
+        supabaseDeletedCount: supabaseResult.deletedCount || 0,
+        cancelled: true
+      }
     } else {
       errors.push(`Supabase: ${supabaseResult.error}`)
     }
@@ -395,5 +558,154 @@ export async function clearAllData(): Promise<{
     localCleared,
     supabaseCleared,
     supabaseDeletedCount
+  }
+}
+
+// Upload Session Persistence Functions
+export function saveUploadSession(dataSource: "mail-agent" | "mail-system", sessionData: UploadSession): void {
+  try {
+    const existingSessions = getUploadSessions()
+    
+    // Create a lightweight version of session data for localStorage
+    const lightweightSessionData: UploadSession = {
+      ...sessionData,
+      // Don't store the full processedData in localStorage to avoid quota issues
+      processedData: sessionData.processedData ? {
+        ...sessionData.processedData,
+        data: [] // Remove the actual data array to save space
+      } : null
+    }
+    
+    existingSessions[dataSource] = lightweightSessionData
+    localStorage.setItem(STORAGE_KEYS.UPLOAD_SESSIONS, JSON.stringify(existingSessions))
+  } catch (error) {
+    console.error('Error saving upload session to localStorage:', error)
+    
+    // If quota exceeded, try to clean up old data and retry
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.log('localStorage quota exceeded, attempting cleanup...')
+      try {
+        // Clean up old datasets first
+        cleanOldDatasets()
+        
+        // Try again with even more minimal data
+        const existingSessions = getUploadSessions()
+        const minimalSessionData: UploadSession = {
+          fileName: sessionData.fileName,
+          processedData: null, // Don't store any processed data
+          excelColumns: sessionData.excelColumns,
+          sampleData: sessionData.sampleData,
+          activeStep: sessionData.activeStep,
+          ignoreRules: sessionData.ignoreRules,
+          timestamp: sessionData.timestamp
+        }
+        
+        existingSessions[dataSource] = minimalSessionData
+        localStorage.setItem(STORAGE_KEYS.UPLOAD_SESSIONS, JSON.stringify(existingSessions))
+        console.log('Successfully saved minimal session data after cleanup')
+      } catch (retryError) {
+        console.error('Failed to save even minimal session data:', retryError)
+        // Don't throw error - just log it and continue
+        console.warn('Continuing without saving session data to localStorage')
+      }
+    } else {
+      throw new Error('Failed to save upload session to local storage')
+    }
+  }
+}
+
+export function getUploadSession(dataSource: "mail-agent" | "mail-system"): UploadSession | null {
+  try {
+    const sessions = getUploadSessions()
+    return sessions[dataSource] || null
+  } catch (error) {
+    console.error('Error reading upload session from localStorage:', error)
+    return null
+  }
+}
+
+export function getUploadSessions(): Record<string, UploadSession> {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.UPLOAD_SESSIONS)
+    return stored ? JSON.parse(stored) : {}
+  } catch (error) {
+    console.error('Error reading upload sessions from localStorage:', error)
+    return {}
+  }
+}
+
+export function clearUploadSession(dataSource: "mail-agent" | "mail-system"): void {
+  try {
+    const existingSessions = getUploadSessions()
+    delete existingSessions[dataSource]
+    localStorage.setItem(STORAGE_KEYS.UPLOAD_SESSIONS, JSON.stringify(existingSessions))
+  } catch (error) {
+    console.error('Error clearing upload session from localStorage:', error)
+    
+    // If quota exceeded, try to remove the entire key
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      try {
+        localStorage.removeItem(STORAGE_KEYS.UPLOAD_SESSIONS)
+        console.log('Cleared upload sessions by removing entire key due to quota')
+      } catch (removeError) {
+        console.error('Failed to clear upload sessions:', removeError)
+      }
+    }
+  }
+}
+
+export function clearAllUploadSessions(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.UPLOAD_SESSIONS)
+  } catch (error) {
+    console.error('Error clearing all upload sessions from localStorage:', error)
+  }
+}
+
+// Utility function to check localStorage quota and estimate usage
+export function checkLocalStorageQuota(): { used: number; available: number; percentage: number } {
+  try {
+    let used = 0
+    for (const key in localStorage) {
+      if (localStorage.hasOwnProperty(key)) {
+        used += localStorage[key].length + key.length
+      }
+    }
+    
+    // Estimate available space (most browsers have 5-10MB limit)
+    const estimatedLimit = 5 * 1024 * 1024 // 5MB
+    const available = Math.max(0, estimatedLimit - used)
+    const percentage = (used / estimatedLimit) * 100
+    
+    return { used, available, percentage }
+  } catch (error) {
+    console.error('Error checking localStorage quota:', error)
+    return { used: 0, available: 0, percentage: 0 }
+  }
+}
+
+// Function to safely save data with quota management
+export function safeLocalStorageSetItem(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value)
+    return true
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn(`localStorage quota exceeded for key: ${key}`)
+      
+      // Try to clean up old data
+      try {
+        cleanOldDatasets()
+        localStorage.setItem(key, value)
+        console.log('Successfully saved after cleanup')
+        return true
+      } catch (retryError) {
+        console.error('Failed to save even after cleanup:', retryError)
+        return false
+      }
+    } else {
+      console.error('Error saving to localStorage:', error)
+      return false
+    }
   }
 }

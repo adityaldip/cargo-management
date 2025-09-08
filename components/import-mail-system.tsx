@@ -1,16 +1,16 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import React, { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Settings, Eye, EyeOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { processFile, getExcelColumns, getExcelSampleData, processFileWithMappings, type ColumnMappingRule } from "@/lib/file-processor"
-import { saveDataset, generateDatasetId, saveCurrentSession, getCurrentSession, shouldTriggerSupabaseSave, saveMergedDataToSupabase } from "@/lib/storage-utils"
+import { useDataStore } from "@/store/data-store"
 import { usePageFilters } from "@/store/filter-store"
 import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
+import { useWorkflowStore } from "@/store/workflow-store"
+import { useToast } from "@/hooks/use-toast"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
 import { IgnoreTrackingRules } from "./ignore-tracking-rules"
@@ -24,6 +24,17 @@ interface ImportMailSystemProps {
 
 
 export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSystemProps) {
+  const { 
+    addDataset, 
+    generateDatasetId, 
+    updateCurrentSession, 
+    saveUploadSession, 
+    getUploadSession, 
+    clearUploadSession,
+    shouldTriggerSupabaseSave,
+    saveMergedDataToSupabase
+  } = useDataStore()
+  
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null)
@@ -35,12 +46,118 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   const [activeStep, setActiveStep] = useState<"upload" | "map" | "ignore" | "ignored">("upload")
   const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
   const [showIgnoreRules, setShowIgnoreRules] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [progressMessage, setProgressMessage] = useState("")
+  const [isFileProcessing, setIsFileProcessing] = useState(false)
+  const [showProgressBar, setShowProgressBar] = useState(false)
+  const [progressStats, setProgressStats] = useState({
+    currentRow: 0,
+    totalRows: 0,
+    processedRows: 0
+  })
+  
+  // Load persisted data on component mount
+  React.useEffect(() => {
+    const uploadSession = getUploadSession("mail-system")
+    if (uploadSession) {
+      // Restore file info (we can't restore the actual File object, but we can restore the state)
+      if (uploadSession.fileName) {
+        // Create a mock file object for display purposes
+        const mockFile = new File([], uploadSession.fileName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+        setUploadedFile(mockFile)
+      }
+      
+      // Restore processed data
+      if (uploadSession.processedData) {
+        setProcessedData(uploadSession.processedData)
+      }
+      
+      // Restore column mapping data
+      if (uploadSession.excelColumns) {
+        setExcelColumns(uploadSession.excelColumns)
+      }
+      if (uploadSession.sampleData) {
+        setSampleData(uploadSession.sampleData)
+      }
+      
+      // Restore active step
+      if (uploadSession.activeStep) {
+        setActiveStep(uploadSession.activeStep)
+        if (uploadSession.activeStep === "map") {
+          setShowColumnMapping(true)
+        } else if (uploadSession.activeStep === "ignore") {
+          setShowIgnoreRules(true)
+        }
+      }
+      
+      // Restore ignore rules
+      if (uploadSession.ignoreRules) {
+        setIgnoreRules(uploadSession.ignoreRules)
+      }
+    }
+  }, [])
   
   // Filter store for resetting filters on new upload
   const { clearFilters } = usePageFilters("review-merged-excel")
   
   // Ignore rules store for targeted reset
   const { resetMailSystemRules } = useIgnoreRulesStore()
+  
+  // Workflow store for global processing state
+  const { setIsProcessing: setGlobalProcessing } = useWorkflowStore()
+  
+  // Toast for notifications
+  const { toast } = useToast()
+  
+  // Save upload session data
+  const saveUploadSessionData = () => {
+    const sessionData = {
+      fileName: uploadedFile?.name || null,
+      processedData,
+      excelColumns,
+      sampleData,
+      activeStep,
+      ignoreRules,
+      timestamp: Date.now()
+    }
+    saveUploadSession("mail-system", sessionData)
+  }
+  
+  // Save session data whenever relevant state changes
+  React.useEffect(() => {
+    if (uploadedFile || processedData || excelColumns.length > 0) {
+      try {
+        saveUploadSessionData()
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('quota')) {
+          toast({
+            title: "Storage Warning",
+            description: "Local storage is full. Some session data may not be saved, but your work will continue normally.",
+            variant: "destructive",
+            duration: 5000,
+          })
+        }
+      }
+    }
+  }, [uploadedFile, processedData, excelColumns, sampleData, activeStep, ignoreRules])
+
+  // Auto-hide progress bar when reaching 100%
+  React.useEffect(() => {
+    if (uploadProgress === 100 && isFileProcessing) {
+      const timer = setTimeout(() => {
+        setShowProgressBar(false)
+        setUploadProgress(0)
+        setProgressMessage("")
+        setProgressStats({
+          currentRow: 0,
+          totalRows: 0,
+          processedRows: 0
+        })
+      }, 1500) // Hide after 1.5 seconds
+      
+      return () => clearTimeout(timer)
+    }
+  }, [uploadProgress, isFileProcessing])
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -102,13 +219,45 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
 
         setExcelColumns(columns)
         setSampleData(samples)
-        setShowColumnMapping(true)
-        setActiveStep("map")
 
         // Process the file for data validation
-        const result = await processFile(file, "mail-system", ignoreRules)
+        setIsFileProcessing(true)
+        setShowProgressBar(true)
+        setGlobalProcessing(true)
+        const result = await processFile(file, "mail-system", ignoreRules, (progress, message, stats) => {
+          setUploadProgress(progress)
+          setProgressMessage(message)
+          // Use real stats from file processor if available, otherwise simulate
+          if (stats) {
+            setProgressStats({
+              currentRow: stats.currentRow,
+              totalRows: stats.totalRows,
+              processedRows: stats.processedRows
+            })
+          } else if (progress > 0) {
+            // Fallback simulation for backward compatibility
+            const estimatedTotal = 1000
+            setProgressStats({
+              currentRow: Math.round((progress / 100) * estimatedTotal),
+              totalRows: estimatedTotal,
+              processedRows: Math.round((progress / 100) * estimatedTotal)
+            })
+          }
+        })
         if (result.success && result.data) {
           setProcessedData(result.data)
+          
+          // Show success toast with row count
+          const rowCount = result.data.data.length
+          toast({
+            title: "Upload Successful!",
+            description: `${rowCount} rows of data uploaded`,
+            duration: 3000,
+          })
+          
+          // Move to mapping tab only after 100% completion
+          setShowColumnMapping(true)
+          setActiveStep("map")
         } else {
           setError(result.error || "Processing failed")
         }
@@ -116,6 +265,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         setError(err instanceof Error ? err.message : "Processing failed")
       } finally {
         setIsProcessing(false)
+        setIsFileProcessing(false)
+        setGlobalProcessing(false)
+        // Don't reset progress here - let auto-hide handle it
       }
     }
   }
@@ -127,7 +279,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     setError(null)
 
     try {
-      const result = await processFile(uploadedFile, "mail-system", ignoreRules)
+      setIsFileProcessing(true)
+      setGlobalProcessing(true)
+      const result = await processFile(uploadedFile, "mail-system", ignoreRules, (progress, message) => {
+        setUploadProgress(progress)
+        setProgressMessage(message)
+      })
 
       if (result.success && result.data) {
         const columns = Object.keys(result.data.data[0] || {})
@@ -139,8 +296,18 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
 
         setExcelColumns(columns)
         setSampleData(samples)
-        setShowColumnMapping(true)
         setProcessedData(result.data)
+        
+        // Show success toast with row count
+        const rowCount = result.data.data.length
+        toast({
+          title: "Upload Successful!",
+          description: `${rowCount} rows of data uploaded`,
+          duration: 3000,
+        })
+        
+        // Move to mapping tab only after 100% completion
+        setShowColumnMapping(true)
         setActiveStep("map")
       } else {
         setError(result.error || "Processing failed")
@@ -149,6 +316,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       setError(err instanceof Error ? err.message : "Processing failed")
     } finally {
       setIsProcessing(false)
+      setGlobalProcessing(false)
     }
   }
 
@@ -160,7 +328,30 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     
     try {
       // Process file with user's column mappings
-      const result = await processFileWithMappings(uploadedFile, "mail-system", mappings, ignoreRules)
+      setIsFileProcessing(true)
+      setShowProgressBar(true)
+      setGlobalProcessing(true)
+      const result = await processFileWithMappings(uploadedFile, "mail-system", mappings, ignoreRules, (progress, message, stats) => {
+        setUploadProgress(progress)
+        setProgressMessage(message)
+        
+        // Use real stats from file processor if available, otherwise simulate
+        if (stats) {
+          setProgressStats({
+            currentRow: stats.currentRow,
+            totalRows: stats.totalRows,
+            processedRows: stats.processedRows
+          })
+        } else if (progress > 0) {
+          // Fallback simulation for backward compatibility
+          const estimatedTotal = 1000
+          setProgressStats({
+            currentRow: Math.round((progress / 100) * estimatedTotal),
+            totalRows: estimatedTotal,
+            processedRows: Math.round((progress / 100) * estimatedTotal)
+          })
+        }
+      })
       
       if (result.success && result.data) {
         // Create dataset to save
@@ -175,24 +366,25 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         }
         
         // Save to local storage
-        saveDataset(dataset)
+        addDataset(dataset)
         
         // Update current session
-        const currentSession = getCurrentSession() || {}
-        currentSession.mailSystem = dataset
-        saveCurrentSession(currentSession)
+        updateCurrentSession({ mailSystem: dataset })
         
         // Check if we should trigger Supabase save (both datasets available)
         if (shouldTriggerSupabaseSave()) {
           console.log('Both datasets available - triggering Supabase save...')
           try {
             const supabaseResult = await saveMergedDataToSupabase(
-              currentSession.mailAgent,
-              currentSession.mailSystem
+              undefined, // mailAgent dataset will be retrieved from store
+              dataset
             )
             
             if (supabaseResult.success) {
               console.log(`✅ Successfully saved ${supabaseResult.savedCount} records to Supabase database`)
+              // Clear upload sessions after successful Supabase save
+              clearUploadSession("mail-agent")
+              clearUploadSession("mail-system")
               // You could add a toast notification here if you have a toast system
             } else {
               console.error('❌ Failed to save to Supabase:', supabaseResult.error)
@@ -221,6 +413,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       setError(err instanceof Error ? err.message : "Failed to process mapped data")
     } finally {
       setIsProcessing(false)
+      setGlobalProcessing(false)
     }
   }
 
@@ -234,10 +427,57 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     setActiveStep("upload")
     onDataProcessed(null)
     
+    // Reset progress state
+    setIsProcessing(false)
+    setIsFileProcessing(false)
+    setShowProgressBar(false)
+    setUploadProgress(0)
+    setProgressMessage("")
+    setProgressStats({
+      currentRow: 0,
+      totalRows: 0,
+      processedRows: 0
+    })
+    
     // Reset ignore rules when file is removed (targeted reset)
     setIgnoreRules([])
     setShowIgnoreRules(false)
     resetMailSystemRules()
+    
+    // Clear upload session
+    clearUploadSession("mail-system")
+  }
+
+  const handleCancelMapping = () => {
+    // Reset all upload state and go back to upload tab
+    setUploadedFile(null)
+    setProcessedData(null)
+    setError(null)
+    setShowColumnMapping(false)
+    setExcelColumns([])
+    setSampleData({})
+    setActiveStep("upload")
+    onDataProcessed(null)
+    
+    // Reset progress state
+    setIsProcessing(false)
+    setIsFileProcessing(false)
+    setShowProgressBar(false)
+    setUploadProgress(0)
+    setProgressMessage("")
+    setProgressStats({
+      currentRow: 0,
+      totalRows: 0,
+      processedRows: 0
+    })
+    
+    // Reset ignore rules (targeted reset)
+    setIgnoreRules([])
+    setShowIgnoreRules(false)
+    resetMailSystemRules()
+    
+    // Clear upload session
+    clearUploadSession("mail-system")
   }
 
 
@@ -379,6 +619,40 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
                 </Button>
               </div>
 
+              {/* Processing Status - Under uploaded file */}
+              {isFileProcessing && showProgressBar && (
+                <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      {progressMessage || "Processing file..."}
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      {uploadProgress}%
+                    </span>
+                  </div>
+                  
+                  {/* Progress Bar */}
+                  <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                  
+                  {/* Progress Details */}
+                  {progressStats.totalRows > 0 && (
+                    <div className="flex justify-between text-xs text-gray-600">
+                      <span>
+                        {progressStats.processedRows.toLocaleString()} / {progressStats.totalRows.toLocaleString()} rows processed
+                      </span>
+                      <span>
+                        Row {progressStats.currentRow.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {error && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded">
                   <AlertTriangle className="h-5 w-5 text-red-600" />
@@ -397,7 +671,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
           excelColumns={excelColumns} 
           sampleData={sampleData} 
           onMappingComplete={handleMappingComplete}
-          onCancel={() => setActiveStep("upload")}
+          onCancel={handleCancelMapping}
         />
       )}
 

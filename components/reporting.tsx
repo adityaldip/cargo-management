@@ -13,9 +13,9 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  RefreshCw,
-  AlertTriangle
+  RefreshCw
 } from "lucide-react"
+import { WarningBanner } from "@/components/ui/status-banner"
 import { cn } from "@/lib/utils"
 import type { ProcessedData } from "@/types/cargo-data"
 
@@ -643,12 +643,10 @@ export function Reporting({ data }: ReportingProps) {
   return (
     <div className="space-y-4 pt-2">
       {/* Sample Data Banner */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
-        <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
-        <div className="text-sm text-yellow-800">
-          This is sample data and not connected to the database yet
-        </div>
-      </div>
+      <WarningBanner 
+        message="This is sample data and not connected to the database yet"
+        className="mb-4"
+      />
 
       {/* Header with Filters */}
       <Card className="bg-white border-gray-200 shadow-sm">

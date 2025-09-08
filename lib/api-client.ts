@@ -78,6 +78,12 @@ export const customerAPI = {
 
 // Customer Codes API operations
 export const customerCodesAPI = {
+  // Get all customer codes (bulk operation - much faster)
+  async getAll(customerIds?: string[]) {
+    const params = customerIds ? `?customer_ids=${customerIds.join(',')}` : ''
+    return apiRequest(`/customer-codes${params}`)
+  },
+
   // Get all customer codes for a customer
   async getByCustomerId(customerId: string) {
     return apiRequest(`/customers/${customerId}/codes`)

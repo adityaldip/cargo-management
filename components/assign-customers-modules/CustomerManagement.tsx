@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { ErrorBanner } from "@/components/ui/status-banner"
 import { 
   UserCheck, 
   Plus, 
@@ -42,7 +43,7 @@ export function CustomerManagement() {
   } = useCustomerData()
   
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithCodes | null>(null)
   const [isCustomerEditorOpen, setIsCustomerEditorOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
@@ -55,12 +56,19 @@ export function CustomerManagement() {
   const [customerCodes, setCustomerCodes] = useState<Array<{code: string, accounting_label: string}>>([{code: "", accounting_label: ""}])
   const [isCreating, setIsCreating] = useState(false)
   const [togglingCustomer, setTogglingCustomer] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
-  // Filter customers based on search
-  const filteredCustomers = customers.filter(customer => 
-    customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-    customer.code.toLowerCase().includes(customerSearchTerm.toLowerCase())
-  )
+  // Filter and sort customers based on search and sort order
+  const filteredCustomers = customers
+    .filter(customer => 
+      customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+      customer.code.toLowerCase().includes(customerSearchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      const comparison = a.name.localeCompare(b.name)
+      return sortOrder === 'asc' ? comparison : -comparison
+    })
 
   // Pagination logic
   const totalItems = filteredCustomers.length
@@ -75,7 +83,11 @@ export function CustomerManagement() {
     }
   }
 
-  const handleEditCustomer = async (customer: Customer) => {
+  const handleSortToggle = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+  }
+
+  const handleEditCustomer = async (customer: CustomerWithCodes) => {
     setSelectedCustomer(customer)
     // Pre-populate form with customer data
     setNewCustomerForm({
@@ -83,9 +95,14 @@ export function CustomerManagement() {
       code: customer.code
     })
     
-    // Fetch existing customer codes
+    // Use existing codes from customer object or fetch if not available
     try {
-      const codes = await fetchCustomerCodes(customer.id)
+      let codes = customer.codes
+      if (!codes || codes.length === 0) {
+        const fetchedCodes = await fetchCustomerCodes(customer.id)
+        codes = Array.isArray(fetchedCodes) ? fetchedCodes : []
+      }
+      
       if (Array.isArray(codes) && codes.length > 0) {
         setCustomerCodes(codes.map((code: any) => ({
           code: code.code,
@@ -137,6 +154,10 @@ export function CustomerManagement() {
           // Update customer codes
           const codesResult = await updateCustomerCodes(selectedCustomer.id, validCodes)
           if (codesResult?.success) {
+            // Refresh data to show updated codes
+            setIsRefreshing(true)
+            await refetch()
+            setIsRefreshing(false)
             handleCloseModal()
           }
         }
@@ -240,21 +261,11 @@ export function CustomerManagement() {
     <div className="max-w-3xl mx-auto">
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <p className="text-red-800 font-medium">Error</p>
-          </div>
-          <p className="text-red-700 mt-1">{error}</p>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setError(null)}
-            className="mt-2"
-          >
-            Dismiss
-          </Button>
-        </div>
+        <ErrorBanner 
+          message={error}
+          className="mb-4"
+          onClose={() => setError(null)}
+        />
       )}
 
       {/* Customer Management */}
@@ -278,20 +289,18 @@ export function CustomerManagement() {
                 variant="outline" 
                 size="sm"
                 onClick={refetch}
+                disabled={isRefreshing}
               >
-                Refresh
+                {isRefreshing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                    Refreshing...
+                  </>
+                ) : (
+                  'Refresh'
+                )}
               </Button>
             </div>
-          </div>
-
-          {/* Search Input */}
-          <div className="mb-4">
-            <Input
-              placeholder="Search customers by name or code..."
-              value={customerSearchTerm}
-              onChange={(e) => setCustomerSearchTerm(e.target.value)}
-              className="max-w-md"
-            />
           </div>
           
           <div className="overflow-x-auto">
@@ -299,7 +308,21 @@ export function CustomerManagement() {
               <TableHeader>
                 <TableRow className="h-8">
                   <TableHead className="h-8 py-1 text-xs">Status</TableHead>
-                  <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
+                  <TableHead className="h-8 py-1 text-xs">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSortToggle}
+                      className="h-6 px-1 text-xs font-medium hover:bg-gray-100"
+                    >
+                      Customer
+                      {sortOrder === 'asc' ? (
+                        <ArrowUp className="h-3 w-3 ml-1" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3 ml-1" />
+                      )}
+                    </Button>
+                  </TableHead>
                   <TableHead className="h-8 py-1 text-xs">Codes</TableHead>
                   <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
                 </TableRow>
@@ -331,15 +354,24 @@ export function CustomerManagement() {
                     <TableCell className="py-1 px-2">
                       <div>
                         <p className="font-medium text-black text-sm leading-tight">{customer.name}</p>
-                        <p className="text-xs text-gray-500 leading-tight">{customer.address || 'No address'}</p>
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2">
                       <div className="flex flex-wrap gap-1">
-                        <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
+                        {/* Display primary code from customer table */}
+                        {/* <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
                           {customer.code}
-                        </Badge>
-                        {/* TODO: Add multiple codes display when customer_codes table is implemented */}
+                        </Badge> */}
+                        {/* Display additional codes from customer_codes table */}
+                        {customer.codes && customer.codes.length > 0 && customer.codes.map((codeItem, index) => (
+                          <Badge 
+                            key={codeItem.id || index} 
+                            variant="secondary" 
+                            className="font-mono text-xs px-1 py-0 h-5"
+                          >
+                            {codeItem.code}
+                          </Badge>
+                        ))}
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2">

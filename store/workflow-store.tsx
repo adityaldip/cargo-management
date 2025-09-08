@@ -15,6 +15,12 @@ type WorkflowStep =
 interface WorkflowStore {
   activeStep: WorkflowStep
   setActiveStep: (step: WorkflowStep) => void
+  isProcessing: boolean
+  setIsProcessing: (processing: boolean) => void
+  isClearingData: boolean
+  setIsClearingData: (clearing: boolean) => void
+  shouldStopProcess: boolean
+  setShouldStopProcess: (shouldStop: boolean) => void
 }
 
 const WorkflowContext = createContext<WorkflowStore | undefined>(undefined)
@@ -29,6 +35,9 @@ interface WorkflowProviderProps {
 export function WorkflowProvider({ children }: WorkflowProviderProps) {
   // Always start with DEFAULT_STEP to prevent hydration mismatch
   const [activeStep, setActiveStepState] = useState<WorkflowStep>(DEFAULT_STEP)
+  const [isProcessing, setIsProcessingState] = useState(false)
+  const [isClearingData, setIsClearingDataState] = useState(false)
+  const [shouldStopProcess, setShouldStopProcessState] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
 
   const setActiveStep = (step: WorkflowStep) => {
@@ -52,6 +61,12 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   const value: WorkflowStore = {
     activeStep,
     setActiveStep,
+    isProcessing,
+    setIsProcessing: setIsProcessingState,
+    isClearingData,
+    setIsClearingData: setIsClearingDataState,
+    shouldStopProcess,
+    setShouldStopProcess: setShouldStopProcessState,
   }
 
   return (

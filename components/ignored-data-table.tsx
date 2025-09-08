@@ -18,9 +18,15 @@ import {
 import type { ProcessedData, CargoData } from "@/types/cargo-data"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 import { applyIgnoreRules, applyIgnoreRulesWithConditions } from "@/lib/ignore-rules-utils"
-import { saveMergedDataToSupabase } from "@/lib/storage-utils"
+import { useDataStore } from "@/store/data-store"
 import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
+import { useWorkflowStore } from "@/store/workflow-store"
 import type { Database } from "@/types/database"
+import { WarningBanner } from "@/components/ui/status-banner"
+import { dummyIgnoredData } from "@/lib/dummy-data"
+import { combineProcessedData } from "@/lib/file-processor"
+import { cargoDataOperations } from "@/lib/supabase-operations"
+import { useToast } from "@/hooks/use-toast"
 
 // Type for Supabase cargo_data row
 type CargoDataRow = Database['public']['Tables']['cargo_data']['Row']
@@ -90,15 +96,38 @@ interface IgnoredDataTableProps {
   dataSource?: "mail-agent" | "mail-system"
 }
 
+
 export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onContinue, dataSource = "mail-system" }: IgnoredDataTableProps) {
+  const { saveMergedDataToSupabase, clearUploadSession } = useDataStore()
   const [ignoredData, setIgnoredData] = useState<any[]>([])
   const [filteredData, setFilteredData] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [isSavingToSupabase, setIsSavingToSupabase] = useState(false)
+  const [useDummyData, setUseDummyData] = useState(false)
+  
+  // Progress tracking state
+  const [saveProgress, setSaveProgress] = useState({
+    percentage: 0,
+    currentCount: 0,
+    totalCount: 0,
+    currentBatch: 0,
+    totalBatches: 0,
+    status: '' // 'preparing', 'saving', 'completed', 'error'
+  })
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const recordsPerPage = 20
   
   // Zustand store
   const { getConditionsForDataSource } = useIgnoreRulesStore()
+  
+  // Workflow store for global processing state
+  const { setIsProcessing: setGlobalProcessing } = useWorkflowStore()
+  
+  // Toast hook
+  const { toast } = useToast()
   
   // Column configuration state - generated from Supabase schema
   const [columnConfigs] = useState<ColumnConfig[]>(() => 
@@ -109,6 +138,179 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
   const visibleColumns = columnConfigs
     .filter(config => config.visible)
     .sort((a, b) => a.order - b.order)
+  
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredData.length / recordsPerPage)
+  const startIndex = (currentPage - 1) * recordsPerPage
+  const endIndex = startIndex + recordsPerPage
+  const currentRecords = filteredData.slice(startIndex, endIndex)
+
+  // Helper function to convert CargoData to Supabase format
+  const convertCargoDataToSupabase = (cargoData: CargoData) => {
+    try {
+      return {
+        rec_id: cargoData.recordId || '',
+        inb_flight_date: cargoData.date || '',
+        outb_flight_date: cargoData.outbDate || '',
+        des_no: cargoData.desNo || '',
+        rec_numb: cargoData.recNumb || '',
+        orig_oe: cargoData.origOE || '',
+        dest_oe: cargoData.destOE || '',
+        inb_flight_no: cargoData.inbFlightNo || '',
+        outb_flight_no: cargoData.outbFlightNo || '',
+        mail_cat: cargoData.mailCat || '',
+        mail_class: cargoData.mailClass || '',
+        total_kg: cargoData.totalKg || 0,
+        invoice: cargoData.invoiceExtend || '',
+        assigned_customer: cargoData.customer || '',
+        assigned_rate: cargoData.totalEur || 0,
+        processed_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    } catch (error) {
+      console.error('Error converting cargo data to Supabase format:', error, cargoData)
+      throw error
+    }
+  }
+
+  // Custom save function with progress tracking
+  const saveMergedDataToSupabaseWithProgress = async (
+    dataset: any,
+    mailSystemDataset: any,
+    onProgress: (progress: any) => void
+  ): Promise<{ success: boolean; error?: string; savedCount?: number }> => {
+    try {
+      console.log('Starting Supabase save process with progress tracking...')
+
+      if (!dataset) {
+        return { success: false, error: "No dataset provided" }
+      }
+
+      // Combine the datasets
+      const datasets = []
+      if (dataset) {
+        console.log('Adding dataset data:', dataset.data.summary)
+        datasets.push(dataset.data)
+      }
+      if (mailSystemDataset) {
+        console.log('Adding mail system data:', mailSystemDataset.data.summary)
+        datasets.push(mailSystemDataset.data)
+      }
+      
+      const mergedData = datasets.length > 1 ? combineProcessedData(datasets) : datasets[0]
+      console.log('Merged data summary:', mergedData.summary)
+      
+      // Convert to Supabase format with error handling
+      const supabaseData = []
+      for (let i = 0; i < mergedData.data.length; i++) {
+        try {
+          const converted = convertCargoDataToSupabase(mergedData.data[i])
+          supabaseData.push(converted)
+        } catch (conversionError) {
+          console.error(`Error converting record ${i}:`, conversionError, mergedData.data[i])
+          continue
+        }
+      }
+      
+      console.log(`Converted ${supabaseData.length} records for Supabase`)
+      
+      if (supabaseData.length === 0) {
+        return { success: false, error: "No valid records to save after conversion" }
+      }
+      
+      // Calculate batch information
+      const batchSize = 50
+      const totalBatches = Math.ceil(supabaseData.length / batchSize)
+      
+      // Update progress with batch info
+      onProgress({
+        percentage: 0,
+        currentCount: 0,
+        totalCount: supabaseData.length,
+        currentBatch: 0,
+        totalBatches: totalBatches,
+        status: 'saving'
+      })
+      
+      // Save to Supabase in batches with progress updates
+      let totalSaved = 0
+      
+      for (let i = 0; i < supabaseData.length; i += batchSize) {
+        const batch = supabaseData.slice(i, i + batchSize)
+        const currentBatchNum = Math.floor(i/batchSize) + 1
+        
+        console.log(`Saving batch ${currentBatchNum}/${totalBatches} (${batch.length} records)`)
+        
+        const result = await cargoDataOperations.bulkInsert(batch)
+        
+        if (result.error) {
+          console.error('Error saving batch to Supabase:', result.error)
+          onProgress({
+            percentage: Math.round((totalSaved / supabaseData.length) * 100),
+            currentCount: totalSaved,
+            totalCount: supabaseData.length,
+            currentBatch: currentBatchNum,
+            totalBatches: totalBatches,
+            status: 'error'
+          })
+          return { 
+            success: false, 
+            error: `Failed to save batch ${currentBatchNum}: ${result.error}`,
+            savedCount: totalSaved 
+          }
+        }
+        
+        totalSaved += batch.length
+        
+        // Update progress
+        const percentage = Math.round((totalSaved / supabaseData.length) * 100)
+        onProgress({
+          percentage: percentage,
+          currentCount: totalSaved,
+          totalCount: supabaseData.length,
+          currentBatch: currentBatchNum,
+          totalBatches: totalBatches,
+          status: 'saving'
+        })
+        
+        console.log(`Successfully saved batch. Total saved so far: ${totalSaved}`)
+        
+        // Small delay to allow UI updates
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      
+      // Mark as completed
+      onProgress({
+        percentage: 100,
+        currentCount: totalSaved,
+        totalCount: supabaseData.length,
+        currentBatch: totalBatches,
+        totalBatches: totalBatches,
+        status: 'completed'
+      })
+      
+      console.log(`Successfully saved ${totalSaved} records to Supabase`)
+      return { 
+        success: true, 
+        savedCount: totalSaved 
+      }
+    } catch (error) {
+      console.error('Error saving merged data to Supabase:', error)
+      onProgress({
+        percentage: 0,
+        currentCount: 0,
+        totalCount: 0,
+        currentBatch: 0,
+        totalBatches: 0,
+        status: 'error'
+      })
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }
+    }
+  }
 
   // Format cell values for display
   const formatCellValue = (record: CargoData, key: string): string => {
@@ -155,11 +357,35 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
     return String(value)
   }
 
-  // Handle saving filtered data to Supabase
+  // Handle saving filtered data to Supabase with progress tracking
   const handleContinueToReview = async () => {
     if (!originalData?.data) return
 
     setIsSavingToSupabase(true)
+    setGlobalProcessing(true)
+    
+    // Initialize progress
+    setSaveProgress({
+      percentage: 0,
+      currentCount: 0,
+      totalCount: 0,
+      currentBatch: 0,
+      totalBatches: 0,
+      status: 'preparing'
+    })
+    
+    // Show starting toast
+    toast({
+      title: "Starting Data Save...",
+      description: "Data is being processed and will be saved to the database.",
+      duration: 3000,
+    })
+    
+    // Disable the button immediately to prevent multiple clicks
+    const continueButton = document.querySelector('[data-continue-button]') as HTMLButtonElement
+    if (continueButton) {
+      continueButton.disabled = true
+    }
     
     try {
       // Get persisted conditions from Zustand store
@@ -167,6 +393,13 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
       
       // Apply ignore rules to get filtered data (excluding ignored records)
       const filteredData = applyIgnoreRulesWithConditions(originalData.data, ignoreRules, persistedConditions)
+      
+      // Update progress - data preparation complete
+      setSaveProgress(prev => ({
+        ...prev,
+        status: 'saving',
+        totalCount: filteredData.length
+      }))
       
       // Create filtered ProcessedData
       const filteredProcessedData: ProcessedData = {
@@ -192,61 +425,112 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
         fileName: `filtered-${dataSource}.xlsx`
       }
       
-      // Save filtered data to Supabase
-      const result = await saveMergedDataToSupabase(dataset, undefined)
+      // Save filtered data to Supabase with progress tracking
+      const result = await saveMergedDataToSupabaseWithProgress(dataset, undefined, (progress) => {
+        setSaveProgress(progress)
+      })
       
       if (result.success) {
         console.log(`✅ Successfully saved ${result.savedCount} filtered records to Supabase (${ignoredData.length} records ignored)`)
-        alert(`Data saved successfully!\n- ${result.savedCount} records saved to database\n- ${ignoredData.length} records ignored and excluded`)
         
-        // Call the continue callback
-        onContinue?.()
+        // Update progress to completed
+        setSaveProgress(prev => ({
+          ...prev,
+          status: 'completed',
+          percentage: 100
+        }))
+        
+        // Show success message after a brief delay to show completion
+        setTimeout(() => {
+          toast({
+            title: "Save data successfully! 🎉",
+            description: `${(result.savedCount || 0).toLocaleString()} records successfully saved to database. ${ignoredData.length.toLocaleString()} records ignored according to rules.`,
+            duration: 5000,
+          })
+          
+          // Reset persist data for both mail-agent and mail-system
+          clearUploadSession("mail-agent")
+          clearUploadSession("mail-system")
+          
+          // Call the continue callback
+          onContinue?.()
+        }, 1000)
       } else {
         console.error('❌ Failed to save filtered data to Supabase:', result.error)
-        alert(`Failed to save data: ${result.error}`)
+        setSaveProgress(prev => ({
+          ...prev,
+          status: 'error'
+        }))
+        toast({
+          title: "Failed to Save Data ❌",
+          description: `An error occurred while saving data: ${result.error}`,
+          variant: "destructive",
+          duration: 7000,
+        })
       }
     } catch (error) {
       console.error('❌ Error during save operation:', error)
-      alert(`Error saving data: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setSaveProgress(prev => ({
+        ...prev,
+        status: 'error'
+      }))
+      toast({
+        title: "An Error Occurred ❌",
+        description: `Error while saving data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+        duration: 7000,
+      })
     } finally {
-      setIsSavingToSupabase(false)
+      // Only reset states if not completed (to show completion status briefly)
+      if (saveProgress.status !== 'completed') {
+        setIsSavingToSupabase(false)
+        setGlobalProcessing(false)
+        
+        // Re-enable the button
+        const continueButton = document.querySelector('[data-continue-button]') as HTMLButtonElement
+        if (continueButton) {
+          continueButton.disabled = false
+        }
+      }
     }
   }
 
-  // Calculate ignored data when rules or original data change
+  // Handle cleanup after completion
   useEffect(() => {
-    if (!originalData?.data) {
-      setIgnoredData([])
-      setFilteredData([])
-      return
+    if (saveProgress.status === 'completed') {
+      const timer = setTimeout(() => {
+        setIsSavingToSupabase(false)
+        setGlobalProcessing(false)
+        
+        // Re-enable the button
+        const continueButton = document.querySelector('[data-continue-button]') as HTMLButtonElement
+        if (continueButton) {
+          continueButton.disabled = false
+        }
+      }, 2000) // Show completion status for 2 seconds
+      
+      return () => clearTimeout(timer)
     }
+  }, [saveProgress.status])
 
+  // Always show dummy data for now
+  useEffect(() => {
     setIsLoading(true)
     
-    try {
-      // Get persisted conditions from Zustand store
-      const persistedConditions = getConditionsForDataSource(dataSource)
-      
-      // Apply ignore rules with persisted conditions
-      const filtered = applyIgnoreRulesWithConditions(originalData.data, ignoreRules, persistedConditions)
-      
-      // Calculate ignored data (original - filtered)
-      const ignored = originalData.data.filter(originalRecord => 
-        !filtered.some(filteredRecord => filteredRecord.id === originalRecord.id)
-      )
-      
-      setIgnoredData(ignored)
-      setFilteredData(ignored) // Initially show all ignored data
-    } catch (error) {
-      console.error('Error calculating ignored data:', error)
-      setIgnoredData([])
-      setFilteredData([])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [originalData, ignoreRules, dataSource])
+    // Always use dummy data
+    setUseDummyData(true)
+    setIgnoredData(dummyIgnoredData)
+    setFilteredData(dummyIgnoredData)
+    setCurrentPage(1) // Reset to first page when data changes
+    setIsLoading(false)
+  }, [])
 
   const getIgnoredReason = (record: any): string => {
+    // For dummy data, return a sample reason
+    if (useDummyData) {
+      return `Dummy reason: Flight ${record.inbFlightNo} matches ignore rule`
+    }
+    
     // First check persisted conditions from Zustand store
     const persistedConditions = getConditionsForDataSource(dataSource)
     if (persistedConditions.length > 0) {
@@ -339,16 +623,19 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
     window.URL.revokeObjectURL(url)
   }
 
-  const activeRulesCount = ignoreRules.filter(rule => rule.is_active).length
-  const totalRecords = originalData?.data.length || 0
-  const ignoredCount = ignoredData.length
-  const remainingCount = totalRecords - ignoredCount
 
   return (
     <div className="max-w-6xl mx-auto">
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
+      {/* Dummy Data Banner - Top of Card */}
+      {useDummyData && (
+        <WarningBanner 
+          message="This is sample data and not connected to the database yet"
+          className="mb-4"
+        />
+      )}   
+      <Card className="bg-white border-gray-200 shadow-sm" style={{ padding:"12px 0px 12px 0px" }}>
+        <CardContent>
+          <div className="flex items-center justify-between pb-2">
             <CardTitle className="text-black flex items-center gap-2">
               <EyeOff className="h-5 w-5" />
               Ignored Data
@@ -360,38 +647,12 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
               )}
             </CardTitle>
             <div className="flex flex-wrap gap-2">
-              {/* <Button 
-                variant="outline"
-                onClick={() => setShowDetails(!showDetails)}
-                className="border-gray-300 hover:bg-gray-50"
-              >
-                {showDetails ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
-                {showDetails ? 'Hide Details' : 'Show Details'}
-              </Button>
-              <Button 
-                variant="outline"
-                onClick={exportIgnoredData}
-                disabled={filteredData.length === 0}
-                className="border-gray-300 hover:bg-gray-50"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export CSV
-              </Button>
-              {onRefresh && (
-                <Button 
-                  variant="outline"
-                  onClick={onRefresh}
-                  className="border-gray-300 hover:bg-gray-50"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              )} */}
               {onContinue && (
                 <Button 
                   className="bg-black hover:bg-gray-800 text-white"
                   onClick={handleContinueToReview}
                   disabled={isSavingToSupabase || !originalData}
+                  data-continue-button
                 >
                   {isSavingToSupabase ? (
                     <>
@@ -405,91 +666,67 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
               )}
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {/* Summary Statistics */}
-          <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-gray-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Total Records</p>
-                  <p className="text-2xl font-semibold text-gray-900">{totalRecords}</p>
-                </div>
+          
+          {/* Progress Bar - Show only when saving */}
+          {isSavingToSupabase && (
+            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">
+                  {saveProgress.status === 'preparing' && 'Preparing data...'}
+                  {saveProgress.status === 'saving' && 'Saving to database...'}
+                  {saveProgress.status === 'completed' && 'Save completed!'}
+                  {saveProgress.status === 'error' && 'An error occurred'}
+                </span>
+                <span className="text-sm text-gray-600">
+                  {saveProgress.percentage}%
+                </span>
               </div>
-            </div>
-            <div className="bg-red-50 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <EyeOff className="h-5 w-5 text-red-600" />
-                <div>
-                  <p className="text-sm text-red-600">Ignored</p>
-                  <p className="text-2xl font-semibold text-red-900">{ignoredCount}</p>
-                </div>
+              
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${saveProgress.percentage}%` }}
+                ></div>
               </div>
-            </div>
-            <div className="bg-green-50 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <div>
-                  <p className="text-sm text-green-600">Remaining</p>
-                  <p className="text-2xl font-semibold text-green-900">{remainingCount}</p>
-                </div>
+              
+              {/* Progress Details */}
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>
+                  {saveProgress.currentCount.toLocaleString()} / {saveProgress.totalCount.toLocaleString()} records
+                </span>
+                <span>
+                  Batch {saveProgress.currentBatch} / {saveProgress.totalBatches}
+                </span>
               </div>
-            </div>
-            <div className="bg-blue-50 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <Filter className="h-5 w-5 text-blue-600" />
-                <div>
-                  <p className="text-sm text-blue-600">Active Rules</p>
-                  <p className="text-2xl font-semibold text-blue-900">{activeRulesCount}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* No Data State */}
-          {!originalData && (
-            <div className="text-center py-8">
-              <AlertTriangle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500">No data uploaded yet</p>
-              <p className="text-gray-400 text-sm mt-1">Upload and process Mail System data to see ignored records</p>
             </div>
           )}
-
-          {/* No Ignored Data */}
-          {originalData && ignoredData.length === 0 && (
-            <div className="text-center py-8">
-              <CheckCircle className="h-12 w-12 mx-auto text-green-400 mb-4" />
-              <p className="text-gray-500">No records ignored</p>
-              <p className="text-gray-400 text-sm mt-1">All records passed the ignore rules</p>
-            </div>
-          )}
-
-          {/* Ignored Data Table */}
-          {originalData && ignoredData.length > 0 && (
-            <div className="overflow-x-auto">
-              <Table className="border border-collapse border-radius-lg">
-                <TableHeader>
-                  <TableRow>
-                    {visibleColumns.map((column) => (
-                      <TableHead 
-                        key={column.key}
-                        className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
-                      >
-                        {column.label}
-                      </TableHead>
-                    ))}
-                    {showDetails && (
-                      <TableHead className="border">Reason</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredData.map((record, index) => (
-                    <TableRow key={`row-${index}-${record.id || 'no-id'}`} className="hover:bg-gray-50">
+          
+          {/* Ignored Data Table - Always show */}
+          <div className="overflow-x-auto">
+            <Table className="border border-collapse border-radius-lg">
+              <TableHeader>
+                <TableRow>
+                  {visibleColumns.map((column) => (
+                    <TableHead 
+                      key={column.key}
+                      className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                    >
+                      {column.label}
+                    </TableHead>
+                  ))}
+                  {showDetails && (
+                    <TableHead className="border">Reason</TableHead>
+                  )}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {currentRecords.length > 0 ? (
+                  currentRecords.map((record, index) => (
+                    <TableRow key={`row-${startIndex + index}-${record.id || 'no-id'}`} className="hover:bg-gray-50">
                       {visibleColumns.map((column) => (
                         <TableCell 
-                          key={`cell-${index}-${column.key}`}
+                          key={`cell-${startIndex + index}-${column.key}`}
                           className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
                         >
                           {column.key === 'inb_flight_no' ? (
@@ -512,16 +749,73 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
                         </TableCell>
                       )}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={visibleColumns.length + (showDetails ? 1 : 0)} className="text-center py-8">
+                      <AlertTriangle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <p className="text-gray-500">No data available</p>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
-          {/* Pagination Info */}
+          {/* Pagination Controls */}
           {filteredData.length > 0 && (
-            <div className="mt-4 text-center text-sm text-gray-500">
-              Showing {filteredData.length} of {ignoredData.length} ignored records
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length.toLocaleString()} ignored records
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const pageNum = Math.max(1, currentPage - 2) + i
+                    if (pageNum > totalPages) return null
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={pageNum === currentPage ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    )
+                  })}
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <>
+                      <span className="text-gray-500">...</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(totalPages)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {totalPages}
+                      </Button>
+                    </>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { rateRulesAPI } from '@/lib/api-client'
 import { RateRule } from './types'
+import { useRateRulesStore } from '@/store/rate-rules-store'
 
 export function useRateRulesData() {
-  const [rateRules, setRateRules] = useState<RateRule[]>([])
+  const { rateRules, setRateRules } = useRateRulesStore()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -17,18 +18,10 @@ export function useRateRulesData() {
       }
       setError(null)
 
-      // Try to load from localStorage first for faster initial load
-      if (!isRefresh) {
-        const cached = localStorage.getItem('rateRules')
-        if (cached) {
-          try {
-            const parsedCache = JSON.parse(cached)
-            setRateRules(parsedCache)
-            setLoading(false)
-          } catch (e) {
-            // Invalid cache, continue with API call
-          }
-        }
+      // Data is already loaded from Zustand store
+      if (!isRefresh && rateRules.length > 0) {
+        setLoading(false)
+        return
       }
 
       const { data: rateRulesData, error: fetchError } = await rateRulesAPI.getAll()
@@ -58,9 +51,6 @@ export function useRateRulesData() {
         }))
 
         setRateRules(transformedRules)
-        
-        // Cache in localStorage
-        localStorage.setItem('rateRules', JSON.stringify(transformedRules))
       }
     } catch (err) {
       setError(`Failed to fetch rate rules: ${err instanceof Error ? err.message : 'Unknown error'}`)

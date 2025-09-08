@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Check } from "lucide-react"
+import { ErrorBanner } from "@/components/ui/status-banner"
 import { Input } from "@/components/ui/input"
 import { 
   Settings, 
@@ -37,7 +38,9 @@ import { CreateCustomerRuleModal } from "./CreateCustomerRuleModal"
 import { useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 
+// Customer Rules Configuration Component - Updated
 export function RulesConfiguration() {
+  // Get customer rules data and functions from hook
   const {
     rules,
     setRules,
@@ -52,11 +55,14 @@ export function RulesConfiguration() {
     refetch
   } = useCustomerRules()
 
+  // Local state for UI components
   const [searchTerm, setSearchTerm] = useState("")
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [selectedRule, setSelectedRule] = useState<CustomerRuleExtended | null>(null)
   const [isRuleEditorOpen, setIsRuleEditorOpen] = useState(false)
   const [draggedRule, setDraggedRule] = useState<string | null>(null)
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
+  // Filter state
   const [showFilters, setShowFilters] = useState(false)
   const [filterLogic, setFilterLogic] = useState<"AND" | "OR">("OR")
   const [filterConditions, setFilterConditions] = useState<{
@@ -109,9 +115,23 @@ export function RulesConfiguration() {
     { key: 'assigned_rate', label: 'Rate' }
   ]
 
-  // Load customers from Supabase
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // Load customers from Supabase with caching
   useEffect(() => {
     const loadCustomers = async () => {
+      // Check if we already have customers loaded
+      if (customers.length > 0) {
+        return
+      }
+
       setLoadingCustomers(true)
       try {
         const { data, error } = await supabase
@@ -134,58 +154,73 @@ export function RulesConfiguration() {
     }
     
     loadCustomers()
-  }, [])
+  }, [customers.length]) // Only run when customers array is empty
 
-  // Filter rules based on search and conditions
-  const filteredRules = rules.filter(rule => {
-    // First apply search filter
-    const matchesSearch = !searchTerm || (
-      rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.actions.assignTo.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    
-    if (!matchesSearch) return false
-    
-    // Then apply condition filters if any are set
-    if (!showFilters || filterConditions.every(cond => !cond.value)) return true
-    
-    const activeConditions = filterConditions.filter(cond => cond.value.trim())
-    if (activeConditions.length === 0) return true
-    
-    const conditionResults = activeConditions.map((filterCond) => {
-      const ruleConditions = rule.conditions || []
-      return ruleConditions.some(ruleCond => {
-        const fieldMatch = ruleCond.field === filterCond.field
-        
-        if (!fieldMatch) return false
-        
-        const ruleValue = ruleCond.value.toLowerCase()
-        const filterValue = filterCond.value.toLowerCase()
-        
-        switch (filterCond.operator) {
-          case "contains":
-            return ruleValue.includes(filterValue)
-          case "equals":
-            return ruleValue === filterValue
-          case "starts_with":
-            return ruleValue.startsWith(filterValue)
-          case "ends_with":
-            return ruleValue.endsWith(filterValue)
-          default:
-            return false
-        }
+  // Memoized filtered rules for better performance
+  const filteredRules = useMemo(() => {
+    return rules.filter(rule => {
+      // First apply search filter
+      const matchesSearch = !debouncedSearchTerm || (
+        rule.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        rule.description?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        (rule as any).actions?.assignTo?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+      )
+      
+      if (!matchesSearch) return false
+      
+      // Then apply condition filters if any are set
+      if (!showFilters || filterConditions.every(cond => !cond.value)) return true
+      
+      const activeConditions = filterConditions.filter(cond => cond.value.trim())
+      if (activeConditions.length === 0) return true
+      
+      const conditionResults = activeConditions.map((filterCond) => {
+        const ruleConditions = rule.conditions || []
+        return ruleConditions.some(ruleCond => {
+          const fieldMatch = ruleCond.field === filterCond.field
+          
+          if (!fieldMatch) return false
+          
+          const ruleValue = ruleCond.value.toLowerCase()
+          const filterValue = filterCond.value.toLowerCase()
+          
+          switch (filterCond.operator) {
+            case "contains":
+              return ruleValue.includes(filterValue)
+            case "equals":
+              return ruleValue === filterValue
+            case "starts_with":
+              return ruleValue.startsWith(filterValue)
+            case "ends_with":
+              return ruleValue.endsWith(filterValue)
+            default:
+              return false
+          }
+        })
       })
+      
+      return filterLogic === "OR" 
+        ? conditionResults.some(result => result)
+        : conditionResults.every(result => result)
     })
-    
-    return filterLogic === "OR" 
-      ? conditionResults.some(result => result)
-      : conditionResults.every(result => result)
-  })
+  }, [rules, debouncedSearchTerm, showFilters, filterConditions, filterLogic])
 
-  // Pagination logic
-  const totalItems = filteredRules.length
-  const totalPages = Math.ceil(totalItems / itemsPerPage)
+  // Memoized pagination logic
+  const paginationData = useMemo(() => {
+    const totalItems = filteredRules.length
+    const totalPages = Math.ceil(totalItems / itemsPerPage)
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
+    const currentPageData = filteredRules.slice(startIndex, endIndex)
+    
+    return {
+      totalItems,
+      totalPages,
+      startIndex,
+      endIndex,
+      currentPageData
+    }
+  }, [filteredRules, currentPage, itemsPerPage])
 
   const handleEditRule = (rule: CustomerRuleExtended) => {
     if (expandedRule === rule.id) {
@@ -257,15 +292,15 @@ export function RulesConfiguration() {
       setRules(updatedRules)
       
       // Update in database
-      const success = await updateRulePriorities(updatedRules)
+      const success = await updateRulePriorities(updatedRules as any)
       if (!success) {
         // Revert on failure
         await refetch() // Reload from database to get correct state
         return
       }
       
-      // Update cache with new order
-      localStorage.setItem('customer-rules-cache', JSON.stringify(updatedRules))
+      // Update store with new order
+      setRules(updatedRules)
       
     } catch (err) {
       setError(`Failed to reorder rules: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -303,6 +338,11 @@ export function RulesConfiguration() {
     }))
   }, [])
 
+  // Memoized customers for better performance
+  const memoizedCustomers = useMemo(() => {
+    return customers.sort((a, b) => a.name.localeCompare(b.name))
+  }, [customers])
+
   // Fast field values lookup (no computation during render)
   const getFieldValues = (fieldType: string) => {
     return allFieldValues
@@ -337,7 +377,7 @@ export function RulesConfiguration() {
         name: editingRuleName.trim(),
         conditions: editingRuleConditions.filter(cond => cond.value.trim()),
         actions: { assignTo: editingRuleAssignTo },
-        where_fields: currentRule.where
+        where_fields: (currentRule as any).where || []
       }
 
       // Update in Supabase
@@ -349,7 +389,7 @@ export function RulesConfiguration() {
       }
 
       // Update local state
-      setRules(prev => prev.map(rule => 
+      ;(setRules as any)((prev: any) => prev.map((rule: any) => 
         rule.id === currentRule.id 
           ? { 
               ...rule, 
@@ -361,7 +401,7 @@ export function RulesConfiguration() {
       ))
 
       // Update cache
-      const updatedRules = rules.map(rule => 
+      const updatedRules = rules.map((rule: any) => 
         rule.id === currentRule.id 
           ? { 
               ...rule, 
@@ -371,7 +411,7 @@ export function RulesConfiguration() {
             } 
           : rule
       )
-      localStorage.setItem('customer-rules-cache', JSON.stringify(updatedRules))
+      setRules(updatedRules)
 
       // Close editor
       setExpandedRule(null)
@@ -430,21 +470,11 @@ export function RulesConfiguration() {
     <>
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <p className="text-red-800 font-medium">Error</p>
-          </div>
-          <p className="text-red-700 mt-1">{error}</p>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setError(null)}
-            className="mt-2"
-          >
-            Dismiss
-          </Button>
-        </div>
+        <ErrorBanner 
+          message={error}
+          className="mb-4"
+          onClose={() => setError(null)}
+        />
       )}
 
       {/* Rules Management */}
@@ -496,19 +526,13 @@ export function RulesConfiguration() {
           <div className="mb-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="text-xs text-gray-500">
-                {filteredRules.length} of {rules.length} rules
+                {paginationData.totalItems} of {rules.length} rules
               </div>
             </div>
           </div>
           
           <div className="space-y-1">
-            {(() => {
-              // Get paginated filtered data
-              const startIndex = (currentPage - 1) * itemsPerPage
-              const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
-              const currentPageData = filteredRules.slice(startIndex, endIndex)
-              
-              return currentPageData.map((rule) => (
+            {paginationData.currentPageData.map((rule) => (
               <div key={rule.id} className="border rounded-lg">
                 <div
                   draggable
@@ -517,12 +541,12 @@ export function RulesConfiguration() {
                   onDrop={(e) => handleDrop(e, rule.id)}
                   className={cn(
                     "flex items-center gap-1 p-1 transition-colors duration-150 cursor-pointer hover:bg-gray-50",
-                    rule.is_active ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
+                    (rule as any).is_active ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
                     draggedRule === rule.id && "opacity-50",
                     (expandedRule === rule.id || expandingRuleId === rule.id) && "bg-gray-50",
                     isReordering && "pointer-events-none opacity-75"
                   )}
-                  onClick={() => handleEditRule(rule)}
+                  onClick={() => handleEditRule(rule as any)}
                 >
                   {/* Drag Handle */}
                   <div className="cursor-grab hover:cursor-grabbing">
@@ -536,7 +560,7 @@ export function RulesConfiguration() {
 
                   {/* Toggle Switch */}
                   <Switch
-                    checked={rule.is_active}
+                    checked={(rule as any).is_active}
                     onCheckedChange={() => toggleRule(rule.id)}
                     onClick={(e) => e.stopPropagation()}
                     className="scale-75"
@@ -763,7 +787,7 @@ export function RulesConfiguration() {
                                 >
                                   <span className="truncate">
                                     {editingRuleAssignTo
-                                      ? customers.find((customer) => customer.id === editingRuleAssignTo)?.name
+                                      ? memoizedCustomers.find((customer) => customer.id === editingRuleAssignTo)?.name
                                       : loadingCustomers 
                                         ? "Loading customers..." 
                                         : "Select customer..."}
@@ -778,7 +802,7 @@ export function RulesConfiguration() {
                                     {loadingCustomers ? "Loading..." : "No customer found."}
                                   </CommandEmpty>
                                   <CommandGroup className="max-h-48 overflow-auto">
-                                    {customers.map((customer) => (
+                                    {memoizedCustomers.map((customer) => (
                                       <CommandItem
                                         key={customer.id}
                                         value={`${customer.name} ${customer.code}`}
@@ -840,12 +864,11 @@ export function RulesConfiguration() {
                   </div>
                 )}
               </div>
-              ))
-            })()}
+            ))}
           </div>
 
           {/* Pagination Controls */}
-          {filteredRules.length > 0 && (
+          {paginationData.totalItems > 0 && (
             <div className="flex items-center justify-between mt-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Show</span>
@@ -868,7 +891,7 @@ export function RulesConfiguration() {
               
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
+                  Showing {paginationData.startIndex + 1} to {paginationData.endIndex} of {paginationData.totalItems} entries
                 </span>
                 <div className="flex items-center gap-1">
                   <Button
@@ -885,8 +908,8 @@ export function RulesConfiguration() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalItems / itemsPerPage), prev + 1))}
-                    disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
+                    onClick={() => setCurrentPage(prev => Math.min(paginationData.totalPages, prev + 1))}
+                    disabled={currentPage >= paginationData.totalPages}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -895,7 +918,7 @@ export function RulesConfiguration() {
             </div>
           )}
 
-          {filteredRules.length === 0 && (
+          {paginationData.totalItems === 0 && (
             <div className="text-center py-8">
               <UserCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <p className="text-gray-500">No rules found matching your search criteria</p>

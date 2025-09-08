@@ -1,22 +1,54 @@
 import { useState, useEffect } from "react"
 import { customerAPI, rulesAPI, customerCodesAPI } from "@/lib/api-client"
 import { Customer, CustomerCode, CustomerRuleExtended, CustomerWithCodes } from "./types"
+import { useCustomerRulesStore } from "@/store/customer-rules-store"
 
 export function useCustomerData() {
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const [customers, setCustomers] = useState<CustomerWithCodes[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [customerCodes, setCustomerCodes] = useState<CustomerCode[]>([])
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
 
   const fetchCustomers = async () => {
     try {
-      const { data: customerData, error } = await customerAPI.getAll()
-      if (error) {
-        setError(`Failed to fetch customers: ${error}`)
+      // Fetch customers and customer codes in parallel for better performance
+      const [customersResult, codesResult] = await Promise.all([
+        customerAPI.getAll(),
+        customerCodesAPI.getAll()
+      ])
+
+      if (customersResult.error) {
+        setError(`Failed to fetch customers: ${customersResult.error}`)
         return
       }
+
+      if (codesResult.error) {
+        console.warn('Failed to fetch customer codes:', codesResult.error)
+      }
+
+      const customerData = customersResult.data
+      const allCodes = codesResult.data || []
+
       if (customerData && Array.isArray(customerData)) {
-        setCustomers(customerData)
+        // Group codes by customer_id for faster lookup
+        const codesByCustomer = allCodes.reduce((acc: Record<string, any[]>, code: any) => {
+          const customerId = code.customer_id
+          if (!acc[customerId]) {
+            acc[customerId] = []
+          }
+          acc[customerId].push(code)
+          return acc
+        }, {})
+
+        // Map customers with their codes and sort by name
+        const customersWithCodes = customerData.map((customer: Customer) => ({
+          ...customer,
+          codes: codesByCustomer[customer.id] || []
+        })).sort((a, b) => a.name.localeCompare(b.name))
+
+        setCustomers(customersWithCodes)
+        setLastFetchTime(Date.now())
       }
     } catch (err) {
       setError(`Failed to fetch customers: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -94,7 +126,8 @@ export function useCustomerData() {
           }
         }
         
-        setCustomers(prev => [newCustomer as Customer, ...prev])
+        // Add the new customer with empty codes initially
+        setCustomers(prev => [{ ...newCustomer as Customer, codes: [] }, ...prev])
         return { success: true, data: newCustomer }
       }
     } catch (err) {
@@ -114,7 +147,7 @@ export function useCustomerData() {
       
       if (updatedCustomer) {
         setCustomers(prev => prev.map(customer => 
-          customer.id === customerId ? updatedCustomer as Customer : customer
+          customer.id === customerId ? { ...updatedCustomer as Customer, codes: customer.codes } : customer
         ))
         return { success: true, data: updatedCustomer }
       }
@@ -125,7 +158,16 @@ export function useCustomerData() {
     }
   }
 
-  const loadData = async () => {
+  const loadData = async (forceRefresh = false) => {
+    // Cache for 30 seconds to avoid unnecessary requests
+    const cacheTime = 30 * 1000
+    const now = Date.now()
+    
+    if (!forceRefresh && lastFetchTime > 0 && (now - lastFetchTime) < cacheTime) {
+      console.log('Using cached data, skipping fetch')
+      return
+    }
+
     setLoading(true)
     setError(null)
     await fetchCustomers()
@@ -136,7 +178,7 @@ export function useCustomerData() {
     loadData()
   }, [])
 
-  const fetchCustomerCodes = async (customerId: string) => {
+  const fetchCustomerCodes = async (customerId: string): Promise<CustomerCode[]> => {
     try {
       const { data: codes, error } = await customerCodesAPI.getByCustomerId(customerId)
       if (error) {
@@ -170,6 +212,23 @@ export function useCustomerData() {
         return { success: false, error }
       }
       
+      // Update local state with new codes
+      const updatedCodes = validCodes.map((code, index) => ({
+        id: `temp-${Date.now()}-${index}`, // Temporary ID for local state
+        customer_id: customerId,
+        code: code.code.trim(),
+        accounting_label: code.accounting_label.trim() || null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }))
+      
+      setCustomers(prev => prev.map(customer => 
+        customer.id === customerId 
+          ? { ...customer, codes: updatedCodes }
+          : customer
+      ))
+      
       return { success: true }
     } catch (err) {
       const errorMessage = `Failed to update customer codes: ${err instanceof Error ? err.message : 'Unknown error'}`
@@ -191,29 +250,15 @@ export function useCustomerData() {
     fetchCustomerCodes,
     updateCustomerCodes,
     loadData,
-    refetch: loadData
+    refetch: () => loadData(true) // Force refresh
   }
 }
 
 export function useCustomerRules() {
-  const [rules, setRules] = useState<CustomerRuleExtended[]>([])
+  const { rules, setRules } = useCustomerRulesStore()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-
-  // Load cached data immediately
-  useEffect(() => {
-    const cachedRules = localStorage.getItem('customer-rules-cache')
-    if (cachedRules) {
-      try {
-        const parsedRules = JSON.parse(cachedRules)
-        setRules(parsedRules)
-        setLoading(false) // Show cached data immediately
-      } catch (err) {
-        console.warn('Failed to parse cached rules:', err)
-      }
-    }
-  }, [])
 
   const fetchCustomerRules = async () => {
     try {
@@ -236,8 +281,6 @@ export function useCustomerRules() {
         }))
         console.log('Transformed rules:', transformedRules)
         setRules(transformedRules)
-        // Cache the rules for faster loading next time
-        localStorage.setItem('customer-rules-cache', JSON.stringify(transformedRules))
       } else {
         console.log('No rules data or not an array:', rulesData)
       }
@@ -342,12 +385,9 @@ export function useCustomerRules() {
           where: dbRule.where_fields || []
         }
 
-        // Update local state
-        setRules(prev => [newRule, ...prev])
-        
-        // Update cache
+        // Update store
         const updatedRules = [newRule, ...rules]
-        localStorage.setItem('customer-rules-cache', JSON.stringify(updatedRules))
+        setRules(updatedRules)
       }
       
       return { success: true, data }
@@ -367,12 +407,9 @@ export function useCustomerRules() {
         return { success: false, error }
       }
 
-      // Update local state
-      setRules(prev => prev.filter(r => r.id !== ruleId))
-      
-      // Update cache
+      // Update store
       const updatedRules = rules.filter(r => r.id !== ruleId)
-      localStorage.setItem('customer-rules-cache', JSON.stringify(updatedRules))
+      setRules(updatedRules)
       
       return { success: true }
     } catch (err) {
