@@ -10,12 +10,14 @@ import { useDataStore } from "@/store/data-store"
 import { usePageFilters } from "@/store/filter-store"
 import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
 import { useWorkflowStore } from "@/store/workflow-store"
+import { useColumnMappingStore } from "@/store/column-mapping-store"
 import { useToast } from "@/hooks/use-toast"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
 import { IgnoreTrackingRules } from "./ignore-tracking-rules"
 import { IgnoredDataTable } from "./ignored-data-table"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
+import { FileStorage } from "@/lib/file-storage"
 
 interface ImportMailSystemProps {
   onDataProcessed: (data: ProcessedData | null) => void
@@ -60,11 +62,10 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   React.useEffect(() => {
     const uploadSession = getUploadSession("mail-system")
     if (uploadSession) {
-      // Restore file info (we can't restore the actual File object, but we can restore the state)
-      if (uploadSession.fileName) {
-        // Create a mock file object for display purposes
-        const mockFile = new File([], uploadSession.fileName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-        setUploadedFile(mockFile)
+      // Try to restore the actual file from storage
+      const storedFile = FileStorage.retrieveFile("mail-system")
+      if (storedFile) {
+        setUploadedFile(storedFile)
       }
       
       // Restore processed data
@@ -102,6 +103,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   
   // Ignore rules store for targeted reset
   const { resetMailSystemRules } = useIgnoreRulesStore()
+  
+  // Column mapping store for persistence
+  const { clearColumnMapping } = useColumnMappingStore()
   
   // Workflow store for global processing state
   const { setIsProcessing: setGlobalProcessing } = useWorkflowStore()
@@ -182,6 +186,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       // Reset ignore rules for mail system only (targeted reset)
       resetMailSystemRules()
       
+      // Clear column mapping for mail system
+      clearColumnMapping("mail-system")
+      
       // Reset ignore rules state
       setIgnoreRules([])
       setShowIgnoreRules(false)
@@ -198,6 +205,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       
       // Reset ignore rules for mail system only (targeted reset)
       resetMailSystemRules()
+      
+      // Clear column mapping for mail system
+      clearColumnMapping("mail-system")
       
       // Reset ignore rules state
       setIgnoreRules([])
@@ -246,6 +256,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         })
         if (result.success && result.data) {
           setProcessedData(result.data)
+          
+          // Store file data immediately after successful upload for persistence
+          const fileStored = await FileStorage.storeFile(file, "mail-system")
+          if (!fileStored) {
+            console.warn('Could not store file data for persistence')
+          }
           
           // Show success toast with row count
           const rowCount = result.data.data.length
@@ -298,6 +314,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         setSampleData(samples)
         setProcessedData(result.data)
         
+        // Store file data immediately after successful processing for persistence
+        const fileStored = await FileStorage.storeFile(uploadedFile, "mail-system")
+        if (!fileStored) {
+          console.warn('Could not store file data for persistence')
+        }
+        
         // Show success toast with row count
         const rowCount = result.data.data.length
         toast({
@@ -321,7 +343,14 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   }
 
   const handleMappingComplete = async (mappings: ColumnMappingRule[]) => {
-    if (!uploadedFile) return
+    if (!uploadedFile) {
+      toast({
+        title: "File Required",
+        description: "Please upload a file to continue processing.",
+        variant: "destructive",
+      })
+      return
+    }
     
     setIsProcessing(true)
     setError(null)
@@ -373,7 +402,6 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         
         // Check if we should trigger Supabase save (both datasets available)
         if (shouldTriggerSupabaseSave()) {
-          console.log('Both datasets available - triggering Supabase save...')
           try {
             const supabaseResult = await saveMergedDataToSupabase(
               undefined, // mailAgent dataset will be retrieved from store
@@ -381,22 +409,17 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             )
             
             if (supabaseResult.success) {
-              console.log(`✅ Successfully saved ${supabaseResult.savedCount} records to Supabase database`)
-              // Clear upload sessions after successful Supabase save
+              // Clear upload sessions after successful Supabase save (both datasets processed)
               clearUploadSession("mail-agent")
               clearUploadSession("mail-system")
-              // You could add a toast notification here if you have a toast system
             } else {
-              console.error('❌ Failed to save to Supabase:', supabaseResult.error)
               setError(`Warning: Local processing succeeded, but failed to save to database: ${supabaseResult.error}`)
             }
           } catch (supabaseError) {
-            console.error('❌ Error during Supabase save:', supabaseError)
             setError('Warning: Local processing succeeded, but encountered an error saving to database')
           }
-        } else {
-          console.log('Mail System processed. Waiting for Mail Agent data to trigger Supabase save.')
         }
+        // Note: If database save wasn't triggered, keep upload session for potential retry/reprocessing
         
         // Update component state
         setProcessedData(result.data)
@@ -406,11 +429,30 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         // Go to Ignore Rules step instead of Review Merger Data
         setActiveStep("ignore")
         setShowIgnoreRules(true)
+        
+        // Show success toast
+        toast({
+          title: "Processing Complete",
+          description: "File processed successfully. Proceeding to ignore rules configuration.",
+          variant: "default",
+        })
       } else {
-        setError(result.error || "Failed to process file with mappings")
+        const errorMessage = result.error || "Failed to process file with mappings"
+        setError(errorMessage)
+        toast({
+          title: "Processing Failed",
+          description: errorMessage,
+          variant: "destructive",
+        })
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to process mapped data")
+      const errorMessage = err instanceof Error ? err.message : "Failed to process mapped data"
+      setError(errorMessage)
+      toast({
+        title: "Processing Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setIsProcessing(false)
       setGlobalProcessing(false)
@@ -444,6 +486,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     setShowIgnoreRules(false)
     resetMailSystemRules()
     
+    // Clear stored file data
+    FileStorage.removeFile("mail-system")
+    
     // Clear upload session
     clearUploadSession("mail-system")
   }
@@ -475,6 +520,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     setIgnoreRules([])
     setShowIgnoreRules(false)
     resetMailSystemRules()
+    
+    // Clear stored file data
+    FileStorage.removeFile("mail-system")
     
     // Clear upload session
     clearUploadSession("mail-system")
@@ -672,6 +720,8 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
           sampleData={sampleData} 
           onMappingComplete={handleMappingComplete}
           onCancel={handleCancelMapping}
+          dataSource="mail-system"
+          totalRows={processedData?.data.length}
         />
       )}
 

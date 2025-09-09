@@ -10,12 +10,14 @@ import { useDataStore } from "@/store/data-store"
 import { usePageFilters } from "@/store/filter-store"
 import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
 import { useWorkflowStore } from "@/store/workflow-store"
+import { useColumnMappingStore } from "@/store/column-mapping-store"
 import { useToast } from "@/hooks/use-toast"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ColumnMapping } from "./column-mapping"
 import { IgnoreTrackingRules } from "./ignore-tracking-rules"
 import { IgnoredDataTable } from "./ignored-data-table"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
+import { FileStorage } from "@/lib/file-storage"
 
 interface ImportMailAgentProps {
   onDataProcessed: (data: ProcessedData | null) => void
@@ -30,7 +32,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     updateCurrentSession, 
     saveUploadSession, 
     getUploadSession, 
-    clearUploadSession 
+    clearUploadSession,
+    shouldTriggerSupabaseSave,
+    saveMergedDataToSupabase
   } = useDataStore()
   
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -58,11 +62,10 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   React.useEffect(() => {
     const uploadSession = getUploadSession("mail-agent")
     if (uploadSession) {
-      // Restore file info (we can't restore the actual File object, but we can restore the state)
-      if (uploadSession.fileName) {
-        // Create a mock file object for display purposes
-        const mockFile = new File([], uploadSession.fileName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-        setUploadedFile(mockFile)
+      // Try to restore the actual file from storage
+      const storedFile = FileStorage.retrieveFile("mail-agent")
+      if (storedFile) {
+        setUploadedFile(storedFile)
       }
       
       // Restore processed data
@@ -100,6 +103,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   
   // Ignore rules store for targeted reset
   const { resetMailAgentRules } = useIgnoreRulesStore()
+  
+  // Column mapping store for persistence
+  const { clearColumnMapping } = useColumnMappingStore()
   
   // Workflow store for global processing state
   const { setIsProcessing: setGlobalProcessing } = useWorkflowStore()
@@ -181,6 +187,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
       // Reset ignore rules for mail agent only (targeted reset)
       resetMailAgentRules()
       
+      // Clear column mapping for mail agent
+      clearColumnMapping("mail-agent")
+      
       // Reset ignore rules state
       setIgnoreRules([])
       setShowIgnoreRules(false)
@@ -228,6 +237,12 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         })
         if (result.success && result.data) {
           setProcessedData(result.data)
+          
+          // Store file data immediately after successful upload for persistence
+          const fileStored = await FileStorage.storeFile(file, "mail-agent")
+          if (!fileStored) {
+            console.warn('Could not store file data for persistence')
+          }
           
           // Show success toast with row count
           const rowCount = result.data.data.length
@@ -265,6 +280,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
       // Reset ignore rules for mail agent only (targeted reset)
       resetMailAgentRules()
       
+      // Clear column mapping for mail agent
+      clearColumnMapping("mail-agent")
+      
       // Reset ignore rules state
       setIgnoreRules([])
       setShowIgnoreRules(false)
@@ -312,6 +330,12 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         })
         if (result.success && result.data) {
           setProcessedData(result.data)
+          
+          // Store file data immediately after successful upload for persistence
+          const fileStored = await FileStorage.storeFile(file, "mail-agent")
+          if (!fileStored) {
+            console.warn('Could not store file data for persistence')
+          }
           
           // Show success toast with row count
           const rowCount = result.data.data.length
@@ -387,7 +411,14 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   }
 
   const handleMappingComplete = async (mappings: ColumnMappingRule[]) => {
-    if (!uploadedFile) return
+    if (!uploadedFile) {
+      toast({
+        title: "File Required",
+        description: "Please upload a file to continue processing.",
+        variant: "destructive",
+      })
+      return
+    }
     
     setIsProcessing(true)
     setError(null)
@@ -437,8 +468,26 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         // Update current session
         updateCurrentSession({ mailAgent: dataset })
         
-        // Clear upload session after successful save
-        clearUploadSession("mail-agent")
+        // Check if we should trigger Supabase save (both datasets available)
+        if (shouldTriggerSupabaseSave()) {
+          try {
+            const supabaseResult = await saveMergedDataToSupabase(
+              dataset, // mailAgent dataset
+              undefined // mailSystem dataset will be retrieved from store
+            )
+            
+            if (supabaseResult.success) {
+              // Clear upload sessions after successful Supabase save (both datasets processed)
+              clearUploadSession("mail-agent")
+              clearUploadSession("mail-system")
+            } else {
+              setError(`Warning: Local processing succeeded, but failed to save to database: ${supabaseResult.error}`)
+            }
+          } catch (supabaseError) {
+            setError('Warning: Local processing succeeded, but encountered an error saving to database')
+          }
+        }
+        // Note: If database save wasn't triggered, keep upload session for potential retry/reprocessing
         
         // Update component state
         setProcessedData(result.data)
@@ -448,11 +497,30 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         // Go to Ignore Rules step instead of continuing directly
         setActiveStep("ignore")
         setShowIgnoreRules(true)
+        
+        // Show success toast
+        toast({
+          title: "Processing Complete",
+          description: "File processed successfully. Proceeding to ignore rules configuration.",
+          variant: "default",
+        })
       } else {
-        setError(result.error || "Failed to process file with mappings")
+        const errorMessage = result.error || "Failed to process file with mappings"
+        setError(errorMessage)
+        toast({
+          title: "Processing Failed",
+          description: errorMessage,
+          variant: "destructive",
+        })
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to process mapped data")
+      const errorMessage = err instanceof Error ? err.message : "Failed to process mapped data"
+      setError(errorMessage)
+      toast({
+        title: "Processing Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setIsProcessing(false)
       setGlobalProcessing(false)
@@ -486,6 +554,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     setShowIgnoreRules(false)
     resetMailAgentRules()
     
+    // Clear stored file data
+    FileStorage.removeFile("mail-agent")
+    
     // Clear upload session
     clearUploadSession("mail-agent")
   }
@@ -517,6 +588,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     setIgnoreRules([])
     setShowIgnoreRules(false)
     resetMailAgentRules()
+    
+    // Clear stored file data
+    FileStorage.removeFile("mail-agent")
     
     // Clear upload session
     clearUploadSession("mail-agent")
@@ -642,6 +716,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
             </label>
           </div>
 
+
           {/* Uploaded File */}
           {uploadedFile && (
             <div className="space-y-4">
@@ -751,6 +826,8 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
           sampleData={sampleData} 
           onMappingComplete={handleMappingComplete}
           onCancel={handleCancelMapping}
+          dataSource="mail-agent"
+          totalRows={processedData?.data.length}
         />
       )}
 

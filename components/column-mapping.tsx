@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -7,12 +7,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { CheckCircle, AlertTriangle, ArrowRight, Loader2 } from "lucide-react"
 import type { ColumnMappingRule } from "@/lib/file-processor"
+import { useColumnMappingStore } from "@/store/column-mapping-store"
+import { useHydration } from "@/hooks/use-hydration"
+import { useColumnMappingPersistence } from "@/hooks/use-column-mapping-persistence"
+import { useToast } from "@/hooks/use-toast"
 
 interface ColumnMappingProps {
   excelColumns: string[]
   sampleData: Record<string, string[]>
   onMappingComplete: (mappings: ColumnMappingRule[]) => void
   onCancel?: () => void
+  dataSource: "mail-agent" | "mail-system"
+  totalRows?: number
 }
 
 const FINAL_EXPORT_COLUMNS = [
@@ -30,21 +36,61 @@ const FINAL_EXPORT_COLUMNS = [
   "Total kg",
 ]
 
-export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onCancel }: ColumnMappingProps) {
-  const [mappings, setMappings] = useState<ColumnMappingRule[]>(() => {
-    return excelColumns.map((col, index) => ({
-      excelColumn: col,
-      mappedTo: index < FINAL_EXPORT_COLUMNS.length ? FINAL_EXPORT_COLUMNS[index] : null,
-      finalColumn: FINAL_EXPORT_COLUMNS[index] || "Unmapped",
-      status: (index < FINAL_EXPORT_COLUMNS.length ? "mapped" : "unmapped") as "mapped" | "unmapped" | "warning",
-      sampleData: sampleData[col] || [],
-    }))
-  })
+export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onCancel, dataSource, totalRows }: ColumnMappingProps) {
+  const { 
+    getColumnMapping, 
+    setColumnMapping, 
+    updateMappings, 
+    clearColumnMapping
+  } = useColumnMappingStore()
+  
+  const isHydrated = useHydration()
+  const { isLoaded, saveMapping, clearMapping, getMatchingMapping } = useColumnMappingPersistence(dataSource)
+  const { toast } = useToast()
+  const [mappings, setMappings] = useState<ColumnMappingRule[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [hasInitialized, setHasInitialized] = useState(false)
+  
+  // Initialize mappings from store or create default ones
+  useEffect(() => {
+    // Wait for both hydration and localStorage loading
+    if (!isHydrated || !isLoaded) {
+      return
+    }
+    
+    // Don't run if no excel columns
+    if (excelColumns.length === 0) {
+      return
+    }
+    
+    // Try to get stored mapping using the persistence hook
+    const matchingMapping = getMatchingMapping(excelColumns)
+    
+    if (matchingMapping) {
+      // Use stored mappings if columns match
+      setMappings(matchingMapping.mappings)
+    } else {
+      // Create default mappings
+      const defaultMappings = excelColumns.map((col, index) => ({
+        excelColumn: col,
+        mappedTo: index < FINAL_EXPORT_COLUMNS.length ? FINAL_EXPORT_COLUMNS[index] : null,
+        finalColumn: FINAL_EXPORT_COLUMNS[index] || "Unmapped",
+        status: (index < FINAL_EXPORT_COLUMNS.length ? "mapped" : "unmapped") as "mapped" | "unmapped" | "warning",
+        sampleData: sampleData[col] || [],
+      }))
+      setMappings(defaultMappings)
+      
+      // Save to both Zustand store and localStorage
+      setColumnMapping(dataSource, excelColumns, sampleData, defaultMappings)
+      saveMapping(excelColumns, sampleData, defaultMappings)
+    }
+    
+    setHasInitialized(true)
+  }, [excelColumns, sampleData, dataSource, isHydrated, isLoaded])
 
   const handleMappingChange = (excelColumn: string, finalColumn: string) => {
-    setMappings((prev) =>
-      prev.map((mapping) => {
+    setMappings((prev) => {
+      const newMappings = prev.map((mapping) => {
         if (mapping.excelColumn === excelColumn) {
           // If mapping to a specific column, check for conflicts
           let status: "mapped" | "unmapped" | "warning" = "mapped"
@@ -93,9 +139,19 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
         }
         
         return mapping
-      }),
-    )
+      })
+      
+      return newMappings
+    })
   }
+  
+  // Update store and localStorage when mappings change
+  useEffect(() => {
+    if (mappings.length > 0 && hasInitialized) {
+      updateMappings(dataSource, mappings)
+      saveMapping(excelColumns, sampleData, mappings)
+    }
+  }, [mappings, dataSource, hasInitialized]) // Removed updateMappings and saveMapping from dependencies
 
   const getMappedCount = () => mappings.filter((m) => m.status === "mapped").length
   const getTotalCount = () => mappings.length
@@ -105,7 +161,20 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
 
   const handleContinue = async () => {
     if (hasConflicts()) {
-      alert('Please resolve mapping conflicts before continuing. Multiple Excel columns cannot be mapped to the same final column.')
+      toast({
+        title: "Mapping Conflicts Detected",
+        description: "Please resolve mapping conflicts before continuing. Multiple Excel columns cannot be mapped to the same final column.",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (mappings.length === 0) {
+      toast({
+        title: "No Mappings Available",
+        description: "Please wait for column mappings to be initialized.",
+        variant: "destructive",
+      })
       return
     }
     
@@ -114,10 +183,22 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
     try {
       await onMappingComplete(mappings)
     } catch (error) {
-      console.error('Error processing mappings:', error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to process column mappings"
+      toast({
+        title: "Processing Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  const handleCancel = () => {
+    // Clear the stored mapping when canceling
+    clearColumnMapping(dataSource)
+    clearMapping()
+    onCancel?.()
   }
 
   return (
@@ -126,6 +207,12 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
       <Card className="bg-white border-gray-200 shadow-sm" style={{ paddingBottom: "8px", paddingTop: "8px" }}>
         <CardContent className="space-y-1">
           <CardTitle className="text-lg">Column Mapping</CardTitle>
+          {/* File Info */}
+          {totalRows && (
+            <div className="text-xs text-gray-500 pb-1">
+              Processing {totalRows.toLocaleString()} rows of data
+            </div>
+          )}
           {/* Mapping Summary */}
           <div className="flex items-center justify-between text-sm pb-1">
             <div className="flex items-center gap-1">
@@ -171,7 +258,7 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>No, Continue Mapping</AlertDialogCancel>
-                      <AlertDialogAction onClick={onCancel} className="bg-red-600 hover:bg-red-700">
+                      <AlertDialogAction onClick={handleCancel} className="bg-red-600 hover:bg-red-700">
                         Yes, Cancel and Reset
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -271,3 +358,5 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
     </div>
   )
 }
+
+

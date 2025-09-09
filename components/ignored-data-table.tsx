@@ -448,9 +448,8 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
             duration: 5000,
           })
           
-          // Reset persist data for both mail-agent and mail-system
-          clearUploadSession("mail-agent")
-          clearUploadSession("mail-system")
+          // Reset persist data only for the current data source
+          clearUploadSession(dataSource)
           
           // Call the continue callback
           onContinue?.()
