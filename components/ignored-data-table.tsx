@@ -95,10 +95,11 @@ interface IgnoredDataTableProps {
   onRefresh?: () => void
   onContinue?: () => void
   dataSource?: "mail-agent" | "mail-system"
+  onSavingStateChange?: (isSaving: boolean) => void
 }
 
 
-export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onContinue, dataSource = "mail-system" }: IgnoredDataTableProps) {
+export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onContinue, dataSource = "mail-system", onSavingStateChange }: IgnoredDataTableProps) {
   const { saveMergedDataToSupabase, clearUploadSession } = useDataStore()
   const [ignoredData, setIgnoredData] = useState<any[]>([])
   const [filteredData, setFilteredData] = useState<any[]>([])
@@ -365,6 +366,9 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
     setIsSavingToSupabase(true)
     setGlobalProcessing(true)
     
+    // Notify parent component about saving state change
+    onSavingStateChange?.(true)
+    
     // Initialize progress
     setSaveProgress({
       percentage: 0,
@@ -486,6 +490,9 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
         setIsSavingToSupabase(false)
         setGlobalProcessing(false)
         
+        // Notify parent component about saving state change
+        onSavingStateChange?.(false)
+        
         // Re-enable the button
         const continueButton = document.querySelector('[data-continue-button]') as HTMLButtonElement
         if (continueButton) {
@@ -502,6 +509,9 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
         setIsSavingToSupabase(false)
         setGlobalProcessing(false)
         
+        // Notify parent component about saving state change
+        onSavingStateChange?.(false)
+        
         // Re-enable the button
         const continueButton = document.querySelector('[data-continue-button]') as HTMLButtonElement
         if (continueButton) {
@@ -511,7 +521,7 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
       
       return () => clearTimeout(timer)
     }
-  }, [saveProgress.status])
+  }, [saveProgress.status, onSavingStateChange])
 
   // Always show dummy data for now
   useEffect(() => {

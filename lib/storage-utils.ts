@@ -401,78 +401,81 @@ export async function clearSupabaseData(
   try {
     console.log('🗑️ Starting Supabase data clearing process...')
     
-    // Step 1: Get all cargo data first to know how many records we're deleting
-    onProgress?.(10, "Mengambil data dari database...", 0, 3)
+    // Get all cargo data first to know how much we need to delete
+    onProgress?.(0, "Fetching data from database...", 0, 3)
     
-    // Check if should stop before starting
+    let allData: any[] = []
+    let currentPage = 1
+    let hasMoreData = true
+    
+    // Fetch all data in batches
+    while (hasMoreData) {
     if (shouldStop?.()) {
-      return { success: false, error: "Proses dibatalkan", cancelled: true }
-    }
-    
-    const allDataResult = await cargoDataOperations.getAll(1, 10000) // Get up to 10k records
-    
-    if (allDataResult.error) {
-      return { 
-        success: false, 
-        error: `Failed to fetch data for deletion: ${allDataResult.error}` 
+        return { success: false, error: "Process cancelled", cancelled: true }
+      }
+      
+      const result = await cargoDataOperations.getAll(currentPage, 100)
+      
+      if (result.error) {
+        console.error('Error fetching cargo data:', result.error)
+        return { success: false, error: result.error }
+      }
+      
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+        allData = [...allData, ...result.data]
+        currentPage++
+      } else {
+        hasMoreData = false
+      }
+      
+      // Stop if we've reached the end
+      if (result.data && Array.isArray(result.data) && result.data.length < 100) {
+        hasMoreData = false
       }
     }
     
-    const totalRecords = Array.isArray(allDataResult.data) ? allDataResult.data.length : 0
-    console.log(`Found ${totalRecords} records to delete`)
+    console.log(`Found ${allData.length} records to delete`)
     
-    if (totalRecords === 0) {
-      onProgress?.(100, "Tidak ada data untuk dihapus", 2, 3)
+    if (allData.length === 0) {
+      onProgress?.(100, "No data to delete", 2, 3)
       return { success: true, deletedCount: 0 }
     }
     
-    // Step 2: Delete records in batches
-    onProgress?.(20, "Memulai proses penghapusan data...", 1, 3)
+    // Delete all records one by one
+    onProgress?.(30, "Deleting data from database...", 1, 3)
     let deletedCount = 0
-    const batchSize = 50
-    const totalBatches = Math.ceil(totalRecords / batchSize)
+    const totalRecords = allData.length
     
-    if (Array.isArray(allDataResult.data)) {
-      for (let i = 0; i < allDataResult.data.length; i += batchSize) {
-        // Check if should stop before each batch
+    for (let i = 0; i < allData.length; i++) {
         if (shouldStop?.()) {
-          return { success: false, error: "Proses dibatalkan", cancelled: true, deletedCount }
-        }
+        return { success: false, error: "Process cancelled", cancelled: true, deletedCount }
+      }
+      
+      const record = allData[i]
+      
+      try {
+        const deleteResult = await cargoDataOperations.delete(record.id)
         
-        const batch = allDataResult.data.slice(i, i + batchSize)
-        const currentBatch = Math.floor(i/batchSize) + 1
-        const progress = 20 + (currentBatch / totalBatches) * 70 // 20% to 90%
-        
-        onProgress?.(
-          progress, 
-          `Menghapus batch ${currentBatch}/${totalBatches} (${batch.length} records)`, 
-          1, 
-          3
-        )
-        
-        console.log(`Deleting batch ${currentBatch}/${totalBatches} (${batch.length} records)`)
-        
-        // Delete each record in the batch
-        for (const record of batch) {
-          // Check if should stop before each record
-          if (shouldStop?.()) {
-            return { success: false, error: "Proses dibatalkan", cancelled: true, deletedCount }
-          }
-          
-          const deleteResult = await cargoDataOperations.delete(record.id)
           if (deleteResult.error) {
             console.error(`Failed to delete record ${record.id}:`, deleteResult.error)
-            // Continue with other records even if one fails
           } else {
             deletedCount++
           }
-        }
+      } catch (error) {
+        console.error(`Error deleting record ${record.id}:`, error)
+      }
+      
+      // Update progress every 10 records
+      if (i % 10 === 0 || i === totalRecords - 1) {
+        const progress = 30 + ((i + 1) / totalRecords) * 60
+        onProgress?.(progress, `Deleting data ${i + 1}/${totalRecords}...`, 1, 3)
       }
     }
     
-    // Step 3: Complete
-    onProgress?.(100, "Data berhasil dihapus", 2, 3)
-    console.log(`✅ Successfully deleted ${deletedCount} records from Supabase`)
+    onProgress?.(100, `Successfully deleted ${deletedCount} records`, 2, 3)
+    
+    console.log(`✅ Successfully deleted ${deletedCount} out of ${totalRecords} records`)
+    
     return { 
       success: true, 
       deletedCount 
@@ -505,13 +508,13 @@ export async function clearAllData(
   
   try {
     // Step 1: Clear local storage first
-    onProgress?.(5, "Menghapus data dari local storage...", 0, 2)
+    onProgress?.(5, "Clearing local storage...", 0, 2)
     
     // Check if should stop before clearing local storage
     if (shouldStop?.()) {
       return { 
         success: false, 
-        error: "Proses dibatalkan", 
+        error: "Process cancelled", 
         localCleared: false, 
         supabaseCleared: false, 
         cancelled: true 
@@ -520,7 +523,7 @@ export async function clearAllData(
     
     clearAllLocalStorage()
     localCleared = true
-    onProgress?.(10, "Local storage berhasil dihapus", 0, 2)
+    onProgress?.(10, "Local storage cleared successfully", 0, 2)
   } catch (error) {
     errors.push(`Local storage: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
@@ -684,8 +687,232 @@ export function checkLocalStorageQuota(): { used: number; available: number; per
   }
 }
 
-// Function to safely save data with quota management
-export function safeLocalStorageSetItem(key: string, value: string): boolean {
+// Enhanced storage quota management
+export interface StorageQuotaInfo {
+  used: number
+  available: number
+  percentage: number
+  isNearLimit: boolean
+  isFull: boolean
+}
+
+// Progressive cleanup strategies - more aggressive for auto-cleanup
+const CLEANUP_STRATEGIES = [
+  {
+    name: 'cleanup_old_datasets',
+    description: 'Remove datasets older than 12 hours',
+    execute: () => cleanOldDatasets() // Remove old datasets
+  },
+  {
+    name: 'cleanup_file_storage',
+    description: 'Remove stored file data',
+    execute: () => {
+      const keys = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith('cargo-file-storage-')) {
+          keys.push(key)
+        }
+      }
+      keys.forEach(key => localStorage.removeItem(key))
+      return keys.length
+    }
+  },
+  {
+    name: 'cleanup_upload_sessions',
+    description: 'Clear upload session data',
+    execute: () => {
+      localStorage.removeItem(STORAGE_KEYS.UPLOAD_SESSIONS)
+      return 1
+    }
+  },
+  {
+    name: 'cleanup_column_mappings',
+    description: 'Remove column mapping cache',
+    execute: () => {
+      const keys = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.includes('column-mapping')) {
+          keys.push(key)
+        }
+      }
+      keys.forEach(key => localStorage.removeItem(key))
+      return keys.length
+    }
+  },
+  {
+    name: 'cleanup_recent_datasets',
+    description: 'Remove datasets older than 6 hours',
+    execute: () => cleanOldDatasets() // Remove old datasets (more aggressive)
+  },
+  {
+    name: 'emergency_cleanup',
+    description: 'Clear all cargo-related data except essential session info',
+    execute: () => {
+      const keys = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && (key.includes('cargo') || key.includes('zustand'))) {
+          keys.push(key)
+        }
+      }
+      keys.forEach(key => localStorage.removeItem(key))
+      return keys.length
+    }
+  }
+]
+
+export function getStorageQuotaInfo(): StorageQuotaInfo {
+  try {
+    const test = 'test'
+    const testKey = 'storage-quota-test'
+    
+    // Get current usage
+    let used = 0
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key) {
+        const value = localStorage.getItem(key)
+        if (value) {
+          used += key.length + value.length
+        }
+      }
+    }
+    
+    // Estimate available space by trying to store data
+    let available = 0
+    try {
+      const testData = 'x'.repeat(1024) // 1KB test chunks
+      let testSize = 0
+      
+      while (testSize < 50 * 1024 * 1024) { // Test up to 50MB
+        try {
+          localStorage.setItem(testKey + testSize, testData)
+          testSize += 1024
+        } catch (e) {
+          break
+        }
+      }
+      
+      // Clean up test data
+      for (let i = 0; i < testSize; i += 1024) {
+        localStorage.removeItem(testKey + i)
+      }
+      
+      available = testSize
+    } catch (e) {
+      // Fallback estimation
+      available = Math.max(0, 5 * 1024 * 1024 - used) // Assume 5MB limit
+    }
+    
+    const total = used + available
+    const percentage = total > 0 ? (used / total) * 100 : 0
+    
+    return {
+      used,
+      available,
+      percentage,
+      isNearLimit: percentage > 70, // More aggressive - trigger at 70%
+      isFull: percentage > 90 || available < 200 * 1024 // Less than 200KB available
+    }
+  } catch (error) {
+    console.error('Error checking storage quota:', error)
+    return { used: 0, available: 0, percentage: 0, isNearLimit: false, isFull: false }
+  }
+}
+
+export async function performProgressiveCleanup(
+  onProgress?: (strategy: string, description: string, itemsRemoved: number) => void
+): Promise<{ success: boolean; strategiesUsed: string[]; totalItemsRemoved: number }> {
+  const strategiesUsed: string[] = []
+  let totalItemsRemoved = 0
+  
+  for (const strategy of CLEANUP_STRATEGIES) {
+    const quotaInfo = getStorageQuotaInfo()
+    
+    // Stop if we have enough space
+    if (!quotaInfo.isFull && quotaInfo.percentage < 70) {
+      break
+    }
+    
+    try {
+      console.log(`Executing cleanup strategy: ${strategy.name}`)
+      strategy.execute()
+      strategiesUsed.push(strategy.name)
+      totalItemsRemoved += 1 // Count strategies executed
+      
+      onProgress?.(strategy.name, strategy.description, 1)
+      
+      // Small delay to allow UI updates
+      await new Promise(resolve => setTimeout(resolve, 100))
+    } catch (error) {
+      console.error(`Error executing cleanup strategy ${strategy.name}:`, error)
+    }
+  }
+  
+  const finalQuotaInfo = getStorageQuotaInfo()
+  return {
+    success: !finalQuotaInfo.isFull,
+    strategiesUsed,
+    totalItemsRemoved
+  }
+}
+
+// Enhanced safe localStorage function with progressive cleanup
+export async function safeLocalStorageSetItem(
+  key: string, 
+  value: string,
+  onCleanupProgress?: (strategy: string, description: string, itemsRemoved: number) => void
+): Promise<{ success: boolean; error?: string; cleanupPerformed?: boolean }> {
+  try {
+    localStorage.setItem(key, value)
+    return { success: true }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn(`localStorage quota exceeded for key: ${key}`)
+      
+      // Get storage info
+      const quotaInfo = getStorageQuotaInfo()
+      console.log('Storage quota info:', quotaInfo)
+      
+      // Perform progressive cleanup
+      const cleanupResult = await performProgressiveCleanup(onCleanupProgress)
+      console.log('Cleanup result:', cleanupResult)
+      
+      if (!cleanupResult.success) {
+        return {
+          success: false,
+          error: `Storage is full. Tried ${cleanupResult.strategiesUsed.length} cleanup strategies but couldn't free enough space.`,
+          cleanupPerformed: true
+        }
+      }
+      
+      // Try to save again after cleanup
+      try {
+        localStorage.setItem(key, value)
+        console.log('Successfully saved after progressive cleanup')
+        return { success: true, cleanupPerformed: true }
+      } catch (retryError) {
+        console.error('Failed to save even after progressive cleanup:', retryError)
+        return {
+          success: false,
+          error: 'Storage cleanup completed but still unable to save data. Consider reducing data size.',
+          cleanupPerformed: true
+        }
+      }
+    } else {
+      console.error('Error saving to localStorage:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown storage error'
+      }
+    }
+  }
+}
+
+// Function to safely save data with quota management (backward compatibility)
+export function safeLocalStorageSetItemSync(key: string, value: string): boolean {
   try {
     localStorage.setItem(key, value)
     return true

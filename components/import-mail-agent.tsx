@@ -18,6 +18,7 @@ import { IgnoreTrackingRules } from "./ignore-tracking-rules"
 import { IgnoredDataTable } from "./ignored-data-table"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 import { FileStorage } from "@/lib/file-storage"
+import { StorageMonitor } from "./ui/storage-monitor"
 
 interface ImportMailAgentProps {
   onDataProcessed: (data: ProcessedData | null) => void
@@ -58,6 +59,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     totalRows: 0,
     processedRows: 0
   })
+  const [isSavingToDatabase, setIsSavingToDatabase] = useState(false)
   
   // Load persisted data on component mount
   React.useEffect(() => {
@@ -134,20 +136,58 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   // Save session data whenever relevant state changes
   React.useEffect(() => {
     if (uploadedFile || processedData || excelColumns.length > 0) {
-      try {
-        saveUploadSessionData()
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('quota')) {
+      const saveSessionAsync = async () => {
+        try {
+          // Use the enhanced safe storage function
+          const { safeLocalStorageSetItem } = await import('@/lib/storage-utils')
+          const sessionData = {
+            fileName: uploadedFile?.name || null,
+            processedData,
+            excelColumns,
+            sampleData,
+            activeStep,
+            ignoreRules,
+            timestamp: Date.now()
+          }
+          
+          const result = await safeLocalStorageSetItem(
+            'cargo-upload-sessions',
+            JSON.stringify({ "mail-agent": sessionData }),
+            (strategy, description, itemsRemoved) => {
+              console.log(`Storage cleanup: ${description} - ${itemsRemoved} items removed`)
+            }
+          )
+          
+          if (!result.success) {
+            toast({
+              title: "Storage Warning",
+              description: result.error || "Unable to save session data. Your work will continue but may not persist if you refresh the page.",
+              variant: "destructive",
+              duration: 7000,
+            })
+            
+            if (result.cleanupPerformed) {
+              toast({
+                title: "Storage Cleanup Performed",
+                description: "Old data was automatically cleaned up to make space for your current session.",
+                duration: 5000,
+              })
+            }
+          }
+        } catch (error) {
+          console.error('Error in session save:', error)
           toast({
             title: "Storage Warning",
-            description: "Local storage is full. Some session data may not be saved, but your work will continue normally.",
+            description: "Local storage is experiencing issues. Some session data may not be saved, but your work will continue normally.",
             variant: "destructive",
             duration: 5000,
           })
         }
       }
+      
+      saveSessionAsync()
     }
-  }, [uploadedFile, processedData, excelColumns, sampleData, activeStep, ignoreRules])
+  }, [uploadedFile, processedData, excelColumns, sampleData, activeStep, ignoreRules, toast])
 
   // Auto-hide progress bar when reaching 100%
   React.useEffect(() => {
@@ -611,6 +651,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
 
   return (
     <div className="space-y-4 pt-2">
+      {/* Storage Monitor - Hidden component for auto-cleanup */}
+      <StorageMonitor />
+      
       {/* Header Navigation */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
@@ -618,8 +661,11 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
             variant={activeStep === "upload" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveStep("upload")}
+            disabled={isSavingToDatabase}
             className={
-              activeStep === "upload"
+              isSavingToDatabase
+                ? "cursor-not-allowed opacity-50 text-gray-400"
+                : activeStep === "upload"
                 ? "bg-white shadow-sm text-black hover:bg-white"
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
@@ -631,16 +677,18 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
             variant={activeStep === "map" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (uploadedFile && excelColumns.length > 0) {
+              if (uploadedFile && excelColumns.length > 0 && !isSavingToDatabase) {
                 setActiveStep("map")
                 setShowColumnMapping(true)
               }
             }}
-            disabled={!uploadedFile || excelColumns.length === 0}
+            disabled={!uploadedFile || excelColumns.length === 0 || isSavingToDatabase}
             className={
-              activeStep === "map"
+              isSavingToDatabase || !uploadedFile || excelColumns.length === 0
+                ? "cursor-not-allowed opacity-50 text-gray-400"
+                : activeStep === "map"
                 ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
             <Settings className="h-4 w-4 mr-2" />
@@ -650,16 +698,18 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
             variant={activeStep === "ignore" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData && isMappingComplete) {
+              if (processedData && isMappingComplete && !isSavingToDatabase) {
                 setActiveStep("ignore")
                 setShowIgnoreRules(true)
               }
             }}
-            disabled={!processedData || !isMappingComplete}
+            disabled={!processedData || !isMappingComplete || isSavingToDatabase}
             className={
-              activeStep === "ignore"
+              isSavingToDatabase || !processedData || !isMappingComplete
+                ? "cursor-not-allowed opacity-50 text-gray-400"
+                : activeStep === "ignore"
                 ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
             <Eye className="h-4 w-4 mr-2" />
@@ -669,16 +719,18 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
             variant={activeStep === "ignored" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData && isMappingComplete) {
+              if (processedData && isMappingComplete && !isSavingToDatabase) {
                 setActiveStep("ignored")
                 setShowIgnoreRules(false)
               }
             }}
-            disabled={!processedData || !isMappingComplete}
+            disabled={!processedData || !isMappingComplete || isSavingToDatabase}
             className={
-              activeStep === "ignored"
+              isSavingToDatabase || !processedData || !isMappingComplete
+                ? "cursor-not-allowed opacity-50 text-gray-400"
+                : activeStep === "ignored"
                 ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
             <EyeOff className="h-4 w-4 mr-2" />
@@ -764,7 +816,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
                   <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                     <div 
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-                      style={{ width: `${uploadProgress}%` }}
+                      style={{ width: `${Math.min(uploadProgress, 100)}%` }}
                     ></div>
                   </div>
                   
@@ -807,7 +859,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
               <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                 <div 
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${uploadProgress}%` }}
+                  style={{ width: `${Math.min(uploadProgress, 100)}%` }}
                 ></div>
               </div>
               
@@ -868,6 +920,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
           }}
           onContinue={() => {
             onContinue?.()
+          }}
+          onSavingStateChange={(isSaving) => {
+            setIsSavingToDatabase(isSaving)
           }}
           dataSource="mail-agent"
         />

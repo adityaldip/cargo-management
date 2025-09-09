@@ -15,7 +15,7 @@ export class FileStorage {
   private static readonly MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB limit
 
   /**
-   * Store file data in localStorage
+   * Store file data in localStorage with quota management
    */
   static async storeFile(file: File, key: string): Promise<boolean> {
     try {
@@ -36,10 +36,49 @@ export class FileStorage {
         timestamp: Date.now()
       }
 
-      // Store in localStorage
+      // Store in localStorage with quota handling
       const storageKey = this.STORAGE_PREFIX + key
-      localStorage.setItem(storageKey, JSON.stringify(storedData))
-      return true
+      const dataString = JSON.stringify(storedData)
+      
+      try {
+        localStorage.setItem(storageKey, dataString)
+        return true
+      } catch (storageError) {
+        if (storageError instanceof DOMException && storageError.name === 'QuotaExceededError') {
+          console.warn('localStorage quota exceeded when storing file, attempting cleanup...')
+          
+          // Try to clean up old files first
+          this.cleanupOldFiles()
+          
+          try {
+            localStorage.setItem(storageKey, dataString)
+            console.log('Successfully stored file after cleanup')
+            return true
+          } catch (retryError) {
+            console.error('Failed to store file even after cleanup:', retryError)
+            
+            // Try to store without file data as last resort
+            const minimalData = {
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: '', // Empty data
+              timestamp: Date.now()
+            }
+            
+            try {
+              localStorage.setItem(storageKey + '-meta', JSON.stringify(minimalData))
+              console.log('Stored file metadata only due to storage constraints')
+              return false // Return false to indicate partial storage
+            } catch (metaError) {
+              console.error('Failed to store even file metadata:', metaError)
+              return false
+            }
+          }
+        } else {
+          throw storageError
+        }
+      }
     } catch (error) {
       console.error('Error storing file:', error)
       return false

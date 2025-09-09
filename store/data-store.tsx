@@ -5,6 +5,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ProcessedData, CargoData } from "@/types/cargo-data"
 import { cargoDataOperations } from "@/lib/supabase-operations"
 import { combineProcessedData } from "@/lib/file-processor"
+import { clearSupabaseData } from "@/lib/storage-utils"
 
 // Types
 export interface StoredDataset {
@@ -113,12 +114,47 @@ interface DataState {
 const createLightweightDataset = (dataset: StoredDataset): StoredDataset => ({
   ...dataset,
   data: {
-    data: [], // Empty data array
+    data: [], // Empty data array to save space
     summary: dataset.data.summary, // Keep summary for reference
-    missingFields: [],
-    warnings: []
+    missingFields: dataset.data.missingFields?.slice(0, 10) || [], // Limit missing fields
+    warnings: dataset.data.warnings?.slice(0, 10) || [] // Limit warnings
   }
 })
+
+// Helper function to create ultra-lightweight dataset for extreme quota situations
+const createUltraLightweightDataset = (dataset: StoredDataset): StoredDataset => ({
+  id: dataset.id,
+  name: dataset.name,
+  type: dataset.type,
+  timestamp: dataset.timestamp,
+  fileName: dataset.fileName,
+  data: {
+    data: [],
+    summary: {
+      totalRows: dataset.data.summary.totalRows,
+      validRows: dataset.data.summary.validRows,
+      invalidRows: dataset.data.summary.invalidRows
+    },
+    missingFields: [],
+    warnings: []
+  },
+  mappings: dataset.mappings.map(m => ({
+    excelColumn: m.excelColumn,
+    mappedTo: m.mappedTo,
+    finalColumn: m.finalColumn,
+    status: m.status,
+    sampleData: [] // Remove sample data to save space
+  }))
+})
+
+// Helper function to estimate dataset size in localStorage
+const estimateDatasetSize = (dataset: StoredDataset): number => {
+  try {
+    return JSON.stringify(dataset).length * 2 // Rough estimate (UTF-16)
+  } catch {
+    return 0
+  }
+}
 
 // Helper function to convert CargoData to Supabase format
 const convertCargoDataToSupabase = (cargoData: CargoData) => {
@@ -189,15 +225,21 @@ export const useDataStore = create<DataState>()(
       saveUploadSession: (dataSource, sessionData) => {
         // Use the safe localStorage function from storage-utils
         const { saveUploadSession: safeSaveUploadSession } = require('@/lib/storage-utils')
-        safeSaveUploadSession(dataSource, sessionData)
         
-        // Update the state as well
-        set((state) => ({
-          uploadSessions: {
-            ...state.uploadSessions,
-            [dataSource]: sessionData
-          }
-        }))
+        try {
+          safeSaveUploadSession(dataSource, sessionData)
+          
+          // Update the state as well
+          set((state) => ({
+            uploadSessions: {
+              ...state.uploadSessions,
+              [dataSource]: sessionData
+            }
+          }))
+        } catch (error) {
+          console.error('Error saving upload session:', error)
+          // Continue without throwing to prevent UI breaks
+        }
       },
       
       getUploadSession: (dataSource) => {
@@ -307,156 +349,8 @@ export const useDataStore = create<DataState>()(
       },
       
       clearSupabaseData: async (onProgress, shouldStop) => {
-        try {
-          console.log('🗑️ Starting Supabase data clearing process...')
-          
-          // Step 1: Get all IDs first
-          onProgress?.(0, "Fetching from database...", 0, 3)
-          console.log("Getting all record IDs...")
-          
-          if (shouldStop?.()) {
-            return { success: false, error: "Process cancelled", cancelled: true }
-          }
-          
-          // Get all IDs by fetching all pages
-          let allIds: string[] = []
-          let currentPage = 1
-          const pageSize = 1000
-          let hasMoreData = true
-          
-          while (hasMoreData) {
-            if (shouldStop?.()) {
-              return { success: false, error: "Process cancelled", cancelled: true }
-            }
-            
-            console.log(`🔍 Fetching IDs page ${currentPage} with pageSize ${pageSize}...`)
-            const batchResult = await cargoDataOperations.getAllIds(currentPage, pageSize)
-            console.log(`📊 Batch result for page ${currentPage}:`, batchResult)
-            
-            if (batchResult.error) {
-              console.error(`❌ Error fetching IDs page ${currentPage}:`, batchResult.error)
-              break
-            }
-            
-            const batchIds = Array.isArray(batchResult.data) ? batchResult.data.map(item => item.id) : []
-            
-            if (batchIds.length === 0) {
-              hasMoreData = false
-              break
-            }
-            
-            allIds = [...allIds, ...batchIds]
-            console.log(`📊 Fetched ${allIds.length} IDs so far... (page ${currentPage})`)
-            
-            currentPage++
-            
-            // If we got less than pageSize, we've reached the end
-            if (batchIds.length < pageSize) {
-              hasMoreData = false
-            }
-          }
-          
-          const totalRecords = allIds.length
-          console.log(`Found ${totalRecords} records to delete`)
-          
-          if (totalRecords === 0) {
-            onProgress?.(100, "No data to delete", 2, 3)
-            return { success: true, deletedCount: 0 }
-          }
-          
-          // Step 2: Delete records in batches (progress bar starts here)
-          onProgress?.(0, "Starting deletion process...", 1, 3)
-          let deletedCount = 0
-          const batchSize = 1000 // Process 1000 records per batch
-          const totalBatches = Math.ceil(allIds.length / batchSize)
-          
-          for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-            // Check if should stop before each batch
-            if (shouldStop?.()) {
-              console.log('🛑 Process stopped by user')
-              return { success: false, error: "Process cancelled", cancelled: true, deletedCount }
-            }
-            
-            const startIndex = batchIndex * batchSize
-            const endIndex = Math.min(startIndex + batchSize, allIds.length)
-            const batchIds = allIds.slice(startIndex, endIndex)
-            
-            console.log(`Processing batch ${batchIndex + 1}/${totalBatches} with ${batchIds.length} records`)
-            
-            // Update progress for batch start
-            const batchProgress = (batchIndex / totalBatches) * 100
-            onProgress?.(
-              batchProgress, 
-              `Processing batch ${batchIndex + 1}/${totalBatches} (${batchIds.length} records in this batch)`, 
-              1, 
-              3
-            )
-            
-            // Delete each record in the batch with immediate stop check
-            for (let i = 0; i < batchIds.length; i++) {
-              const recordId = batchIds[i]
-              
-              // Check if should stop before each record
-              if (shouldStop?.()) {
-                console.log('🛑 Process stopped by user during record deletion')
-                return { success: false, error: "Process cancelled", cancelled: true, deletedCount }
-              }
-              
-              try {
-                // Perform delete operation
-                const deleteResult = await cargoDataOperations.delete(recordId) as any
-                
-                if (deleteResult && !deleteResult.error) {
-                  deletedCount++
-                  
-                  // Check if should stop after successful deletion
-                  if (shouldStop?.()) {
-                    console.log('🛑 Process stopped by user after successful deletion')
-                    return { success: false, error: "Process cancelled", cancelled: true, deletedCount }
-                  }
-                  
-                  // Update progress after each successful deletion
-                  const progress = (deletedCount / allIds.length) * 100
-                  const remainingRecords = allIds.length - deletedCount
-                  
-                  onProgress?.(
-                    progress, 
-                    `Batch ${batchIndex + 1}/${totalBatches}: Deleted ${deletedCount}/${allIds.length} records (${remainingRecords} remaining)`, 
-                    1, 
-                    3
-                  )
-                  
-                  // Log every 100 deletions for performance
-                  if (deletedCount % 100 === 0) {
-                    console.log(`✅ Batch ${batchIndex + 1}/${totalBatches}: Deleted ${deletedCount}/${allIds.length} records`)
-                  }
-                } else if (deleteResult && deleteResult.error) {
-                  console.error(`Failed to delete record ${recordId}:`, deleteResult.error)
-                }
-              } catch (deleteError: any) {
-                console.error(`Error deleting record ${recordId}:`, deleteError)
-                // Continue with next record instead of stopping the entire process
-              }
-            }
-            
-            // Log batch completion
-            console.log(`✅ Completed batch ${batchIndex + 1}/${totalBatches}: Deleted ${batchIds.length} records`)
-          }
-          
-          // Step 3: Complete
-          onProgress?.(100, `Successfully deleted ${deletedCount} records`, 2, 3)
-          console.log(`✅ Successfully deleted ${deletedCount} records from Supabase`)
-          return { 
-            success: true, 
-            deletedCount 
-          }
-        } catch (error) {
-          console.error('❌ Error clearing Supabase data:', error)
-          return { 
-            success: false, 
-            error: error instanceof Error ? error.message : 'Unknown error occurred' 
-          }
-        }
+        // Use the utility function from storage-utils
+        return clearSupabaseData(onProgress, shouldStop)
       },
       
       clearAllData: async (onProgress, shouldStop) => {
@@ -582,15 +476,54 @@ export const useDataStore = create<DataState>()(
       name: 'cargo-data-storage',
       storage: createJSONStorage(() => localStorage),
       // Only persist essential data to avoid quota issues
-      partialize: (state) => ({
-        datasets: state.datasets.map(createLightweightDataset),
-        currentSession: state.currentSession ? {
-          mailAgent: state.currentSession.mailAgent ? createLightweightDataset(state.currentSession.mailAgent) : undefined,
-          mailSystem: state.currentSession.mailSystem ? createLightweightDataset(state.currentSession.mailSystem) : undefined,
-          supabaseSaved: state.currentSession.supabaseSaved
-        } : null,
-        uploadSessions: state.uploadSessions
-      })
+      partialize: (state) => {
+        try {
+          // Create lightweight version first
+          const lightweightState = {
+            datasets: state.datasets.map(createLightweightDataset),
+            currentSession: state.currentSession ? {
+              mailAgent: state.currentSession.mailAgent ? createLightweightDataset(state.currentSession.mailAgent) : undefined,
+              mailSystem: state.currentSession.mailSystem ? createLightweightDataset(state.currentSession.mailSystem) : undefined,
+              supabaseSaved: state.currentSession.supabaseSaved
+            } : null,
+            uploadSessions: state.uploadSessions
+          }
+          
+          // Check estimated size
+          const estimatedSize = JSON.stringify(lightweightState).length * 2
+          const maxSize = 2 * 1024 * 1024 // 2MB threshold
+          
+          if (estimatedSize > maxSize) {
+            console.warn('State too large for localStorage, using ultra-lightweight version')
+            return {
+              datasets: state.datasets.map(createUltraLightweightDataset),
+              currentSession: state.currentSession ? {
+                mailAgent: state.currentSession.mailAgent ? createUltraLightweightDataset(state.currentSession.mailAgent) : undefined,
+                mailSystem: state.currentSession.mailSystem ? createUltraLightweightDataset(state.currentSession.mailSystem) : undefined,
+                supabaseSaved: state.currentSession.supabaseSaved
+              } : null,
+              uploadSessions: {} // Clear upload sessions in extreme cases
+            }
+          }
+          
+          return lightweightState
+        } catch (error) {
+          console.error('Error creating persistent state:', error)
+          // Return minimal state in case of error
+          return {
+            datasets: [],
+            currentSession: null,
+            uploadSessions: {}
+          }
+        }
+      },
+      // Handle storage errors gracefully
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error('Error rehydrating storage:', error)
+          // Continue with empty state rather than crashing
+        }
+      }
     }
   )
 )

@@ -18,6 +18,7 @@ import { IgnoreTrackingRules } from "./ignore-tracking-rules"
 import { IgnoredDataTable } from "./ignored-data-table"
 import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 import { FileStorage } from "@/lib/file-storage"
+import { StorageMonitor } from "./ui/storage-monitor"
 
 interface ImportMailSystemProps {
   onDataProcessed: (data: ProcessedData | null) => void
@@ -58,6 +59,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     totalRows: 0,
     processedRows: 0
   })
+  const [isSavingToDatabase, setIsSavingToDatabase] = useState(false)
   
   // Load persisted data on component mount
   React.useEffect(() => {
@@ -540,6 +542,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
 
   return (
     <div className="space-y-4 pt-2">
+      {/* Storage Monitor - Hidden component for auto-cleanup */}
+      <StorageMonitor />
+      
       {/* Header Navigation */}
       <div className="flex justify-start">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
@@ -547,8 +552,11 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "upload" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveStep("upload")}
+            disabled={isSavingToDatabase}
             className={
-              activeStep === "upload"
+              isSavingToDatabase
+                ? "cursor-not-allowed opacity-50 text-gray-400"
+                : activeStep === "upload"
                 ? "bg-white shadow-sm text-black hover:bg-white"
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
@@ -560,16 +568,18 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "map" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (uploadedFile && excelColumns.length > 0) {
+              if (uploadedFile && excelColumns.length > 0 && !isSavingToDatabase) {
                 setActiveStep("map")
                 setShowColumnMapping(true)
               }
             }}
-            disabled={!uploadedFile || excelColumns.length === 0}
+            disabled={!uploadedFile || excelColumns.length === 0 || isSavingToDatabase}
             className={
-              activeStep === "map"
+              isSavingToDatabase || !uploadedFile || excelColumns.length === 0
+                ? "cursor-not-allowed opacity-50 text-gray-400"
+                : activeStep === "map"
                 ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
             <Settings className="h-4 w-4 mr-2" />
@@ -579,16 +589,18 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "ignore" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData && isMappingComplete) {
+              if (processedData && isMappingComplete && !isSavingToDatabase) {
                 setActiveStep("ignore")
                 setShowIgnoreRules(true)
               }
             }}
-            disabled={!processedData || !isMappingComplete}
+            disabled={!processedData || !isMappingComplete || isSavingToDatabase}
             className={
-              activeStep === "ignore"
+              isSavingToDatabase || !processedData || !isMappingComplete
+                ? "cursor-not-allowed opacity-50 text-gray-400"
+                : activeStep === "ignore"
                 ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
             <Eye className="h-4 w-4 mr-2" />
@@ -598,16 +610,18 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "ignored" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData && isMappingComplete) {
+              if (processedData && isMappingComplete && !isSavingToDatabase) {
                 setActiveStep("ignored")
                 setShowIgnoreRules(false)
               }
             }}
-            disabled={!processedData || !isMappingComplete}
+            disabled={!processedData || !isMappingComplete || isSavingToDatabase}
             className={
-              activeStep === "ignored"
+              isSavingToDatabase || !processedData || !isMappingComplete
+                ? "cursor-not-allowed opacity-50 text-gray-400"
+                : activeStep === "ignored"
                 ? "bg-white shadow-sm text-black hover:bg-white"
-                : "text-gray-600 hover:text-black hover:bg-gray-50 disabled:opacity-50"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
             <EyeOff className="h-4 w-4 mr-2" />
@@ -762,6 +776,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
           }}
           onContinue={() => {
             onContinue?.()
+          }}
+          onSavingStateChange={(isSaving) => {
+            setIsSavingToDatabase(isSaving)
           }}
           dataSource="mail-system"
         />

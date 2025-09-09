@@ -38,6 +38,19 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         console.log(`- Supabase: ${result.supabaseDeletedCount || 0} records deleted`)
         
         alert(`Data cleared successfully!\n- Local storage cleared\n- ${result.supabaseDeletedCount || 0} records deleted from database`)
+        
+        // Reload page after successful clear
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      } else if (result.cancelled) {
+        console.log('❌ Clear data process was cancelled')
+        alert('Clear data process was cancelled')
+        
+        // Reload page when cancelled
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
       } else {
         console.error('❌ Failed to clear all data:', result.error)
         alert(`Failed to clear data: ${result.error}`)
