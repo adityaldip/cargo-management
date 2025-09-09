@@ -27,6 +27,7 @@ import { dummyIgnoredData } from "@/lib/dummy-data"
 import { combineProcessedData } from "@/lib/file-processor"
 import { cargoDataOperations } from "@/lib/supabase-operations"
 import { useToast } from "@/hooks/use-toast"
+import { Pagination } from "@/components/ui/pagination"
 
 // Type for Supabase cargo_data row
 type CargoDataRow = Database['public']['Tables']['cargo_data']['Row']
@@ -762,61 +763,18 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
           </div>
 
           {/* Pagination Controls */}
-          {filteredData.length > 0 && (
-            <div className="mt-4 flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length.toLocaleString()} ignored records
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </Button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = Math.max(1, currentPage - 2) + i
-                    if (pageNum > totalPages) return null
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={pageNum === currentPage ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                        className="w-8 h-8 p-0"
-                      >
-                        {pageNum}
-                      </Button>
-                    )
-                  })}
-                  {totalPages > 5 && currentPage < totalPages - 2 && (
-                    <>
-                      <span className="text-gray-500">...</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(totalPages)}
-                        className="w-8 h-8 p-0"
-                      >
-                        {totalPages}
-                      </Button>
-                    </>
-                  )}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalRecords={filteredData.length}
+            recordsPerPage={recordsPerPage}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            onPageChange={setCurrentPage}
+            showRecordsPerPage={false}
+            showGoToPage={false}
+            recordsLabel="ignored records"
+          />
         </CardContent>
       </Card>
     </div>

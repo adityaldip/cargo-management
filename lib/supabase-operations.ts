@@ -264,18 +264,30 @@ export const cargoDataOperations = {
     search?: string
     sortBy?: string
     sortOrder?: 'asc' | 'desc'
+    filters?: string
+    filterLogic?: string
   } = {}) {
-    const { page = 1, limit = 50, search = '', sortBy = 'created_at', sortOrder = 'desc' } = params
+    const { page = 1, limit = 50, search = '', sortBy = 'created_at', sortOrder = 'desc', filters, filterLogic } = params
     const offset = (page - 1) * limit
     
     try {
-      const response = await fetch(`/api/cargo-data?${new URLSearchParams({
+      const searchParams: Record<string, string> = {
         page: page.toString(),
         limit: limit.toString(),
         search,
         sortBy,
         sortOrder
-      })}`)
+      }
+      
+      // Add filter parameters if provided
+      if (filters) {
+        searchParams.filters = filters
+      }
+      if (filterLogic) {
+        searchParams.filterLogic = filterLogic
+      }
+      
+      const response = await fetch(`/api/cargo-data?${new URLSearchParams(searchParams)}`)
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

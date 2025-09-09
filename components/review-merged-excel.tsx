@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Settings, Eye } from "lucide-react"
 import { combineProcessedData } from "@/lib/file-processor"
 import { useDataStore } from "@/store/data-store"
 import { useWorkflowStore } from "@/store/workflow-store"
+import { useReviewTabStore } from "@/store/review-tab-store"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ConfigureColumns, DatabasePreview } from "./assign-custom-modules"
 
@@ -17,13 +18,14 @@ interface ReviewMergedExcelProps {
 }
 
 export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData, onContinue }: ReviewMergedExcelProps) {
-  const [activeStep, setActiveStep] = useState<"preview" | "configure">("configure")
+  // Review tab store for persistence
+  const { activeTab, setActiveTab } = useReviewTabStore()
   
   // Data store
   const { clearAllData } = useDataStore()
   
   // Workflow store
-  const { isClearingData } = useWorkflowStore()
+  const { isClearingData, isExporting } = useWorkflowStore()
 
   // Handle clear data
   const handleClearData = async () => {
@@ -77,21 +79,21 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
       <div className="flex justify-between items-center">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
           <Button
-            variant={activeStep === "configure" ? "default" : "ghost"}
+            variant={activeTab === "configure" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveStep("configure")}
-            disabled={isClearingData}
-            className={activeStep === "configure" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
+            onClick={() => setActiveTab("configure")}
+            disabled={isClearingData || isExporting}
+            className={activeTab === "configure" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Settings className="h-4 w-4 mr-2" />
             Configure Columns
           </Button>
           <Button
-            variant={activeStep === "preview" ? "default" : "ghost"}
+            variant={activeTab === "preview" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveStep("preview")}
-            disabled={isClearingData}
-            className={activeStep === "preview" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
+            onClick={() => setActiveTab("preview")}
+            disabled={isClearingData || isExporting}
+            className={activeTab === "preview" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Eye className="h-4 w-4 mr-2" />
             Database Preview
@@ -102,7 +104,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           <Button 
             className="bg-black hover:bg-gray-800 text-white"
             onClick={onContinue}
-            disabled={isClearingData}
+            disabled={isClearingData || isExporting}
           >
             Continue to Assign Customers
           </Button>
@@ -110,13 +112,14 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
 
       <div className="space-y-2">
         {/* Configure Columns section */}
-        {activeStep === "configure" && (
-          <ConfigureColumns onSwitchToPreview={() => setActiveStep("preview")} />
+        {activeTab === "configure" && (
+          <ConfigureColumns onSwitchToPreview={() => setActiveTab("preview")} />
         )}
 
         {/* Database Preview section */}
-        {activeStep === "preview" && (
+        {activeTab === "preview" && (
           <DatabasePreview 
+            key={`preview-${activeTab}`}
             onClearData={handleClearData}
           />
         )}

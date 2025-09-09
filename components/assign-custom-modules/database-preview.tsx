@@ -10,11 +10,15 @@ import { AlertTriangle, RefreshCw, Download, Filter, Loader2, Trash2 } from "luc
 import { cargoDataOperations } from "@/lib/supabase-operations"
 import type { CargoData } from "@/types/cargo-data"
 import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
+import { applyFilters } from "@/lib/filter-utils"
+import { generateCSV, prepareReportData, downloadFile, generateFilename, type ExportOptions } from "@/lib/export-utils"
+import { useToast } from "@/hooks/use-toast"
 import { usePageFilters } from "@/store/filter-store"
 import { useWorkflowStore } from "@/store/workflow-store"
 import { useDataStore } from "@/store/data-store"
 import { useColumnConfigStore, type ColumnConfig } from "@/store/column-config-store"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Pagination } from "@/components/ui/pagination"
 
 
 interface DatabasePreviewProps {
@@ -24,7 +28,7 @@ interface DatabasePreviewProps {
 
 export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   // Workflow store
-  const { setIsClearingData, shouldStopProcess, setShouldStopProcess } = useWorkflowStore()
+  const { setIsClearingData, shouldStopProcess, setShouldStopProcess, isExporting: globalIsExporting, setIsExporting: setGlobalIsExporting } = useWorkflowStore()
   
   // Data store
   const { clearAllData } = useDataStore()
@@ -32,6 +36,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   // Column config store
   const { columnConfigs } = useColumnConfigStore()
   const [realData, setRealData] = useState<CargoData[]>([])
+  const [unfilteredData, setUnfilteredData] = useState<CargoData[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [dataSource, setDataSource] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -65,6 +70,9 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const { conditions: filterConditions, logic: filterLogic, hasActiveFilters, setFilters, clearFilters } = usePageFilters("review-merged-excel")
   
+  // Toast for notifications
+  const { toast } = useToast()
+  
   // Statistics state
   const [stats, setStats] = useState({
     totalWeight: 0,
@@ -83,7 +91,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   }))
 
   // Load real data from database with server-side pagination
-  const loadRealData = async (page: number = currentPage) => {
+  const loadRealData = async (page: number = currentPage, limit: number = recordsPerPage) => {
     setIsLoadingData(true)
     setRealData([])
     setDataSource("")
@@ -94,13 +102,22 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     }
     
     try {
+      // Prepare filters for API
+      const filters = hasActiveFilters ? filterConditions : []
+      const filterParams = filters.length > 0 ? {
+        filters: JSON.stringify(filters),
+        filterLogic
+      } : {}
+      
       const result = await cargoDataOperations.getPaginated({
         page,
-        limit: recordsPerPage,
+        limit: limit,
         search: "",
         sortBy,
-        sortOrder
+        sortOrder,
+        ...filterParams
       })
+      
       
       if (result.data && Array.isArray(result.data)) {
         const convertedData = result.data.map((record: any) => ({
@@ -126,7 +143,9 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
           outbDate: record.outb_flight_date || ''
         }))
         
+        // For server-side pagination, store the data directly
         setRealData(convertedData)
+        setUnfilteredData(convertedData)
         setDataSource(`Database (${result.pagination?.total || 0} total records)`)
         setDataCleared(false)
         
@@ -139,6 +158,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
       } else {
         console.error('Error loading data from database:', result.error)
         setRealData([])
+        setUnfilteredData([])
         setDataSource("Error loading from database")
         setTotalRecords(0)
         setTotalPages(0)
@@ -148,6 +168,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     } catch (error) {
       console.error('Error loading real data:', error)
       setRealData([])
+      setUnfilteredData([])
       setDataSource("Error loading data")
       setTotalRecords(0)
       setTotalPages(0)
@@ -187,10 +208,16 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     [columnConfigs]
   )
 
-  // Calculate pagination
+  // Calculate pagination for server-side data
   const startIndex = (currentPage - 1) * recordsPerPage
-  const endIndex = startIndex + recordsPerPage
-  const currentRecords = sampleExcelData
+  const endIndex = startIndex + sampleExcelData.length // Use actual data length from server
+  const currentRecords = sampleExcelData // Server already returns the correct page data
+  
+  // Use server pagination values
+  const paginationTotalPages = totalPages
+  const paginationTotalRecords = totalRecords
+  const paginationHasPrevPage = hasPrevPage
+  const paginationHasNextPage = hasNextPage
 
   // Format cell values for display
   const formatCellValue = (record: CargoData, key: string): string => {
@@ -236,12 +263,21 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   // Handle page change
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage)
-    loadRealData(newPage)
+    loadRealData(newPage) // Load new page from server
+  }
+
+  // Handle records per page change
+  const handleRecordsPerPageChange = async (newLimit: number) => {
+    setRecordsPerPage(newLimit)
+    setCurrentPage(1)
+    await loadRealData(1, newLimit) // Pass the new limit directly
+    await loadStats()
   }
 
   const handleClearFilters = () => {
     clearFilters()
     setCurrentPage(1)
+    // Reload data without filters
     loadRealData(1)
     loadStats()
   }
@@ -249,6 +285,9 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const handleApplyFilters = (conditions: FilterCondition[], logic: "AND" | "OR") => {
     setFilters(conditions, logic)
     setCurrentPage(1)
+    // Reload data with new filters
+    loadRealData(1)
+    loadStats()
   }
 
   const handleClearData = async () => {
@@ -282,6 +321,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
       if (result.success) {
         setDataCleared(true)
         setRealData([])
+        setUnfilteredData([])
         setDataSource("")
         setTotalRecords(0)
         setTotalPages(0)
@@ -323,6 +363,144 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     setShouldStopProcess(true)
   }
 
+  // Export all data functionality - use global state instead of local
+  // const [isExporting, setIsExporting] = useState(false) // Replaced with global state
+  const [exportProgress, setExportProgress] = useState(0)
+  const [exportCurrentBatch, setExportCurrentBatch] = useState(0)
+  const [exportTotalBatches, setExportTotalBatches] = useState(0)
+
+  // Generate custom CSV with configured column order - data only
+  const generateCustomCSV = (data: CargoData[], columns: ColumnConfig[]): string => {
+    let csv = ""
+
+    // Add headers based on visible columns in order
+    const headers = columns.map(col => col.label)
+    csv += headers.join(",") + "\n"
+
+    // Add data rows
+    data.forEach((record: CargoData) => {
+      const row = columns.map(col => {
+        const value = formatCellValue(record, col.key)
+        return `"${value}"`
+      })
+      csv += row.join(",") + "\n"
+    })
+
+    return csv
+  }
+
+  const handleExportData = async () => {
+    setGlobalIsExporting(true)
+    setExportProgress(0)
+    setExportCurrentBatch(0)
+    setExportTotalBatches(0)
+    
+    try {
+      console.log(`🔄 Starting export of ${totalRecords} records using batched approach...`)
+      
+      // Use batched approach to fetch all data
+      const batchSize = 1000 // Fetch 1000 records per batch
+      const totalBatches = Math.ceil(totalRecords / batchSize)
+      let allData: any[] = []
+      
+      setExportTotalBatches(totalBatches)
+      console.log(`📦 Will fetch ${totalBatches} batches of ${batchSize} records each`)
+      
+      for (let batch = 0; batch < totalBatches; batch++) {
+        const currentPage = batch + 1
+        setExportCurrentBatch(currentPage)
+        
+        // Calculate progress percentage
+        const progressPercent = Math.round((batch / totalBatches) * 100)
+        setExportProgress(progressPercent)
+        
+        console.log(`📦 Fetching batch ${batch + 1}/${totalBatches}...`)
+        
+        const result = await cargoDataOperations.getPaginated({
+          page: currentPage,
+          limit: batchSize,
+          search: "",
+          sortBy: "created_at",
+          sortOrder: "desc",
+          // Include current filters if any
+          ...(hasActiveFilters ? {
+            filters: JSON.stringify(filterConditions),
+            filterLogic
+          } : {})
+        })
+        
+        if (result.data && Array.isArray(result.data)) {
+          allData.push(...result.data)
+          console.log(`📦 Batch ${batch + 1} completed: ${result.data.length} records (Total so far: ${allData.length})`)
+        } else {
+          console.error(`❌ Failed to fetch batch ${batch + 1}:`, result.error)
+          throw new Error(`Failed to fetch batch ${batch + 1}: ${result.error}`)
+        }
+      }
+      
+      // Set progress to 100% when all batches are done
+      setExportProgress(100)
+      console.log(`✅ All batches completed! Total records fetched: ${allData.length}`)
+
+      // Convert API data to CargoData format
+      const exportData: CargoData[] = allData.map((record: any) => ({
+        id: record.id,
+        origOE: record.orig_oe || '',
+        destOE: record.dest_oe || '',
+        inbFlightNo: record.inb_flight_no || '',
+        outbFlightNo: record.outb_flight_no || '',
+        mailCat: record.mail_cat || '',
+        mailClass: record.mail_class || '',
+        totalKg: record.total_kg || 0,
+        invoiceExtend: record.invoice || '',
+        customer: record.assigned_customer || '',
+        date: record.inb_flight_date || '',
+        sector: record.orig_oe && record.dest_oe ? `${record.orig_oe}-${record.dest_oe}` : '',
+        euromail: record.mail_cat || '',
+        combined: record.rec_id || '',
+        totalEur: record.assigned_rate || 0,
+        vatEur: 0,
+        recordId: record.rec_id || '',
+        desNo: record.des_no || '',
+        recNumb: record.rec_numb || '',
+        outbDate: record.outb_flight_date || ''
+      }))
+
+      // Generate CSV content - data only, no summary
+      const csvContent = generateCustomCSV(exportData, visibleColumns)
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split("T")[0]
+      const filename = `cargo_data_export_${timestamp}.csv`
+      
+      // Download the file
+      downloadFile(csvContent, filename, 'text/csv')
+
+      console.log(`✅ Successfully exported ${exportData.length} records to ${filename}`)
+      
+      // Show success toast
+      toast({
+        title: "Export Completed! 🎉",
+        description: `Successfully exported ${exportData.length.toLocaleString()} records to ${filename}`,
+        duration: 5000,
+      })
+      
+    } catch (error) {
+      console.error('Error exporting data:', error)
+      toast({
+        title: "Export Failed ❌",
+        description: `Error occurred while exporting data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+        duration: 5000,
+      })
+    } finally {
+      setGlobalIsExporting(false)
+      setExportProgress(0)
+      setExportCurrentBatch(0)
+      setExportTotalBatches(0)
+    }
+  }
+
   useEffect(() => {
     setIsHydrated(true)
   }, [])
@@ -356,7 +534,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsFilterOpen(!isFilterOpen)}
-                disabled={isClearingData}
+                disabled={isClearingData || globalIsExporting}
                 className={hasActiveFilters ? "border-blue-300 bg-blue-50 text-blue-700" : ""}
               >
                 <Filter className="w-4 h-4 mr-2" />
@@ -388,7 +566,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 await loadRealData(currentPage)
                 await loadStats()
               }}
-              disabled={isLoadingData || isClearingData}
+              disabled={isLoadingData || isClearingData || globalIsExporting}
             >
               {isLoadingData ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -402,7 +580,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={isClearingData}
+                  disabled={isClearingData || globalIsExporting}
                   className="text-red-600 border-red-300 hover:bg-red-50"
                 >
                   {isClearingData ? (
@@ -432,13 +610,17 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
               </AlertDialogContent>
             </AlertDialog>
             <Button
-              onClick={() => alert("Excel file would be exported here (demo mode)")}
+              onClick={handleExportData}
               className="bg-black text-white"
               size="sm"
-              disabled={sampleExcelData.length === 0 || isClearingData}
+              disabled={totalRecords === 0 || isClearingData || globalIsExporting}
             >
-              <Download className="w-4 h-4 mr-2" />
-              Export Data
+              {globalIsExporting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              {globalIsExporting ? 'Exporting...' : 'Export Data'}
             </Button>
           </div>
         </div>
@@ -453,7 +635,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                   variant="ghost"
                   size="sm"
                   onClick={handleClearFilters}
-                  disabled={isClearingData}
+                  disabled={isClearingData || globalIsExporting}
                   className="h-6 text-xs text-gray-500 hover:text-gray-700"
                 >
                   Clear filters
@@ -470,7 +652,43 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         </div>
       </CardHeader>
       
-      {/* Progress Bar Section */}
+      {/* Export Progress Bar Section */}
+      {globalIsExporting && (
+        <div className="px-6 pb-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                <span className="text-sm font-medium text-gray-900">Exporting Data...</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">{exportProgress}%</span>
+              </div>
+            </div>
+            
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-2 overflow-hidden">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                style={{ 
+                  width: `${Math.min(100, Math.max(0, exportProgress))}%`,
+                  transform: 'translateX(0)'
+                }}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between text-xs text-gray-600">
+              <span className="flex-1">
+                {exportCurrentBatch > 0 && exportTotalBatches > 0 
+                  ? `Fetching batch ${exportCurrentBatch} of ${exportTotalBatches}...`
+                  : 'Preparing export...'
+                }
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Data Progress Bar Section */}
       {isClearingData && (
         <div className="px-6 pb-4">
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -540,7 +758,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 await loadRealData(1)
                 await loadStats()
               }}
-              disabled={isClearingData}
+              disabled={isClearingData || globalIsExporting}
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Try Loading Data
@@ -580,134 +798,20 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         )}
         
         {/* Pagination Controls */}
-        {totalRecords > 0 && (
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <div className="flex items-center gap-4">
-                <span>
-                  Showing <strong className="text-black">{startIndex + 1}</strong> to <strong className="text-black">{Math.min(endIndex, totalRecords)}</strong> of <strong className="text-black">{totalRecords.toLocaleString()}</strong> records
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Show:</span>
-                <select 
-                  value={recordsPerPage} 
-                  onChange={async (e) => {
-                    const newLimit = parseInt(e.target.value)
-                    setRecordsPerPage(newLimit)
-                    setCurrentPage(1)
-                    await loadRealData(1)
-                    await loadStats()
-                  }}
-                  className="px-2 py-1 border border-gray-300 rounded text-sm"
-                  disabled={isLoadingData || isClearingData}
-                  aria-label="Records per page"
-                  title="Select number of records to show per page"
-                >
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                  <option value={200}>200</option>
-                </select>
-                <span className="text-sm text-gray-600">per page</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Go to page:</span>
-                <input
-                  type="number"
-                  min="1"
-                  max={totalPages}
-                  value={currentPage}
-                  onChange={(e) => {
-                    const page = parseInt(e.target.value)
-                    if (page >= 1 && page <= totalPages) {
-                      handlePageChange(page)
-                    }
-                  }}
-                  className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
-                  disabled={isLoadingData || isClearingData}
-                  aria-label="Go to page number"
-                  title="Enter page number to jump to"
-                  placeholder="Page"
-                />
-                <span className="text-sm text-gray-600">of {totalPages}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(1)}
-                  disabled={currentPage === 1 || isLoadingData || isClearingData}
-                  className="px-3"
-                >
-                  First
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
-                  disabled={!hasPrevPage || isLoadingData || isClearingData}
-                >
-                  Previous
-                </Button>
-                
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
-                    let pageNum
-                    if (totalPages <= 7) {
-                      pageNum = i + 1
-                    } else if (currentPage <= 4) {
-                      pageNum = i + 1
-                    } else if (currentPage >= totalPages - 3) {
-                      pageNum = totalPages - 6 + i
-                    } else {
-                      pageNum = currentPage - 3 + i
-                    }
-                    
-                    if (pageNum < 1 || pageNum > totalPages) return null
-                    
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={pageNum === currentPage ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => handlePageChange(pageNum)}
-                        className="w-8 h-8 p-0"
-                        disabled={isLoadingData || isClearingData}
-                      >
-                        {pageNum}
-                      </Button>
-                    )
-                  })}
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
-                  disabled={!hasNextPage || isLoadingData || isClearingData}
-                >
-                  Next
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(totalPages)}
-                  disabled={currentPage === totalPages || isLoadingData || isClearingData}
-                  className="px-3"
-                >
-                  Last
-                </Button>
-              </div>
-            </div>
-
-          </div>
-        )}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={paginationTotalPages}
+          totalRecords={paginationTotalRecords}
+          recordsPerPage={recordsPerPage}
+          startIndex={startIndex}
+          endIndex={endIndex}
+          onPageChange={handlePageChange}
+          onRecordsPerPageChange={handleRecordsPerPageChange}
+          disabled={isLoadingData || isClearingData || globalIsExporting}
+          hasPrevPage={paginationHasPrevPage}
+          hasNextPage={paginationHasNextPage}
+          recordsPerPageOptions={[25, 50, 100, 200]}
+        />
       </CardContent>
 
     </Card>

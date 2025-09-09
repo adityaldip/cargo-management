@@ -48,6 +48,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   const [activeStep, setActiveStep] = useState<"upload" | "map" | "ignore" | "ignored">("upload")
   const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
   const [showIgnoreRules, setShowIgnoreRules] = useState(false)
+  const [isMappingComplete, setIsMappingComplete] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState("")
   const [isFileProcessing, setIsFileProcessing] = useState(false)
@@ -88,6 +89,9 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
           setShowColumnMapping(true)
         } else if (uploadSession.activeStep === "ignore") {
           setShowIgnoreRules(true)
+          setIsMappingComplete(true) // If we're on ignore step, mapping must be complete
+        } else if (uploadSession.activeStep === "ignored") {
+          setIsMappingComplete(true) // If we're on ignored step, mapping must be complete
         }
       }
       
@@ -192,6 +196,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       // Reset ignore rules state
       setIgnoreRules([])
       setShowIgnoreRules(false)
+      setIsMappingComplete(false)
     }
   }
 
@@ -212,6 +217,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       // Reset ignore rules state
       setIgnoreRules([])
       setShowIgnoreRules(false)
+      setIsMappingComplete(false)
       
       // Automatically process the file and go to map headers
       setIsProcessing(true)
@@ -424,6 +430,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         // Update component state
         setProcessedData(result.data)
         setShowColumnMapping(false)
+        setIsMappingComplete(true) // Mark mapping as complete
         onDataProcessed(result.data)
         
         // Go to Ignore Rules step instead of Review Merger Data
@@ -484,6 +491,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     // Reset ignore rules when file is removed (targeted reset)
     setIgnoreRules([])
     setShowIgnoreRules(false)
+    setIsMappingComplete(false)
     resetMailSystemRules()
     
     // Clear stored file data
@@ -519,6 +527,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     // Reset ignore rules (targeted reset)
     setIgnoreRules([])
     setShowIgnoreRules(false)
+    setIsMappingComplete(false)
     resetMailSystemRules()
     
     // Clear stored file data
@@ -570,12 +579,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "ignore" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData) {
+              if (processedData && isMappingComplete) {
                 setActiveStep("ignore")
                 setShowIgnoreRules(true)
               }
             }}
-            disabled={!processedData}
+            disabled={!processedData || !isMappingComplete}
             className={
               activeStep === "ignore"
                 ? "bg-white shadow-sm text-black hover:bg-white"
@@ -589,12 +598,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "ignored" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData) {
+              if (processedData && isMappingComplete) {
                 setActiveStep("ignored")
                 setShowIgnoreRules(false)
               }
             }}
-            disabled={!processedData}
+            disabled={!processedData || !isMappingComplete}
             className={
               activeStep === "ignored"
                 ? "bg-white shadow-sm text-black hover:bg-white"

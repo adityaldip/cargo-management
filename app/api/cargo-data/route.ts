@@ -9,25 +9,77 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = (page - 1) * limit
+    const isExport = limit > 1000 // Detect export requests by high limit
+    
+    
     
     // Parse filter parameters
     const search = searchParams.get('search') || ''
     const sortBy = searchParams.get('sortBy') || 'created_at'
     const sortOrder = searchParams.get('sortOrder') || 'desc'
+    const filtersParam = searchParams.get('filters')
+    const filterLogic = searchParams.get('filterLogic') || 'AND'
     
     // Build query
     let query = supabase
       .from('cargo_data')
       .select('*', { count: 'exact' })
       .order(sortBy, { ascending: sortOrder === 'asc' })
-      .range(offset, offset + limit - 1)
+    
+    // Only apply range for normal pagination, not for exports
+    if (!isExport) {
+      query = query.range(offset, offset + limit - 1)
+    }
     
     // Apply search filter if provided
     if (search) {
       query = query.or(`rec_id.ilike.%${search}%,orig_oe.ilike.%${search}%,dest_oe.ilike.%${search}%,inb_flight_no.ilike.%${search}%,outb_flight_no.ilike.%${search}%,mail_cat.ilike.%${search}%,mail_class.ilike.%${search}%`)
     }
     
+    // Apply advanced filters if provided
+    if (filtersParam) {
+      try {
+        const filters = JSON.parse(filtersParam)
+        if (Array.isArray(filters) && filters.length > 0) {
+          filters.forEach(filter => {
+            const { field, operator, value } = filter
+            
+            switch (operator) {
+              case 'equals':
+                query = query.eq(field, value)
+                break
+              case 'contains':
+                query = query.ilike(field, `%${value}%`)
+                break
+              case 'starts_with':
+                query = query.ilike(field, `${value}%`)
+                break
+              case 'ends_with':
+                query = query.ilike(field, `%${value}`)
+                break
+              case 'greater_than':
+                query = query.gt(field, parseFloat(value))
+                break
+              case 'less_than':
+                query = query.lt(field, parseFloat(value))
+                break
+              case 'not_empty':
+                query = query.not(field, 'is', null)
+                break
+              case 'is_empty':
+                query = query.is(field, null)
+                break
+            }
+          })
+        }
+      } catch (error) {
+        console.error('Error parsing filters:', error)
+      }
+    }
+    
     const { data, error, count } = await query
+    
+    
     
     if (error) {
       console.error('Error fetching cargo data:', error)
@@ -38,9 +90,9 @@ export async function GET(request: NextRequest) {
     }
     
     // Calculate pagination info
-    const totalPages = Math.ceil((count || 0) / limit)
-    const hasNextPage = page < totalPages
-    const hasPrevPage = page > 1
+    const totalPages = isExport ? 1 : Math.ceil((count || 0) / limit)
+    const hasNextPage = isExport ? false : page < totalPages
+    const hasPrevPage = isExport ? false : page > 1
     
     return NextResponse.json({
       data: data || [],

@@ -48,6 +48,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
   const [activeStep, setActiveStep] = useState<"upload" | "map" | "ignore" | "ignored">("upload")
   const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
   const [showIgnoreRules, setShowIgnoreRules] = useState(false)
+  const [isMappingComplete, setIsMappingComplete] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState("")
   const [isFileProcessing, setIsFileProcessing] = useState(false)
@@ -88,6 +89,9 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
           setShowColumnMapping(true)
         } else if (uploadSession.activeStep === "ignore") {
           setShowIgnoreRules(true)
+          setIsMappingComplete(true) // If we're on ignore step, mapping must be complete
+        } else if (uploadSession.activeStep === "ignored") {
+          setIsMappingComplete(true) // If we're on ignored step, mapping must be complete
         }
       }
       
@@ -193,6 +197,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
       // Reset ignore rules state
       setIgnoreRules([])
       setShowIgnoreRules(false)
+      setIsMappingComplete(false)
       
       // Automatically process the file and go to map headers
       setIsProcessing(true)
@@ -286,6 +291,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
       // Reset ignore rules state
       setIgnoreRules([])
       setShowIgnoreRules(false)
+      setIsMappingComplete(false)
       
       // Automatically process the file and go to map headers
       setIsProcessing(true)
@@ -492,6 +498,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
         // Update component state
         setProcessedData(result.data)
         setShowColumnMapping(false)
+        setIsMappingComplete(true) // Mark mapping as complete
         onDataProcessed(result.data)
         
         // Go to Ignore Rules step instead of continuing directly
@@ -552,6 +559,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     // Reset ignore rules when file is removed (targeted reset)
     setIgnoreRules([])
     setShowIgnoreRules(false)
+    setIsMappingComplete(false)
     resetMailAgentRules()
     
     // Clear stored file data
@@ -587,6 +595,7 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
     // Reset ignore rules (targeted reset)
     setIgnoreRules([])
     setShowIgnoreRules(false)
+    setIsMappingComplete(false)
     resetMailAgentRules()
     
     // Clear stored file data
@@ -641,12 +650,12 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
             variant={activeStep === "ignore" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData) {
+              if (processedData && isMappingComplete) {
                 setActiveStep("ignore")
                 setShowIgnoreRules(true)
               }
             }}
-            disabled={!processedData}
+            disabled={!processedData || !isMappingComplete}
             className={
               activeStep === "ignore"
                 ? "bg-white shadow-sm text-black hover:bg-white"
@@ -660,12 +669,12 @@ export function ImportMailAgent({ onDataProcessed, onContinue }: ImportMailAgent
             variant={activeStep === "ignored" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData) {
+              if (processedData && isMappingComplete) {
                 setActiveStep("ignored")
                 setShowIgnoreRules(false)
               }
             }}
-            disabled={!processedData}
+            disabled={!processedData || !isMappingComplete}
             className={
               activeStep === "ignored"
                 ? "bg-white shadow-sm text-black hover:bg-white"
