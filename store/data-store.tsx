@@ -354,6 +354,7 @@ export const useDataStore = create<DataState>()(
       },
       
       clearAllData: async (onProgress, shouldStop) => {
+        console.log('🔍 clearAllData called from data store')
         let localCleared = false
         let supabaseCleared = false
         let supabaseDeletedCount = 0

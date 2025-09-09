@@ -33,10 +33,12 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
 
   // Handle clear data
   const handleClearData = async () => {
+    console.log('🔍 handleClearData called in review-merged-excel')
     try {
       const result = await clearAllData()
       
       if (result.success) {
+        console.log(`result`, result)
         console.log(`✅ Successfully cleared all data:`)
         console.log(`- Local storage: ${result.localCleared ? 'cleared' : 'failed'}`)
         console.log(`- Supabase: ${result.supabaseDeletedCount || 0} records deleted`)
@@ -47,11 +49,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           description: `${result.supabaseDeletedCount || 0} records deleted from database`,
           duration: 5000,
         })
-        
-        // Reload page after successful clear
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
       } else if (result.cancelled) {
         console.log('❌ Clear data process was cancelled')
         toast({
@@ -60,11 +57,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           variant: "destructive",
           duration: 3000,
         })
-        
-        // Reload page when cancelled
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
       } else {
         console.error('❌ Failed to clear all data:', result.error)
         toast({

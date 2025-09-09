@@ -337,19 +337,9 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         
         // Call the original onClearData callback
         await onClearData()
-        
-        // Reload page after successful clear
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
       } else if (result.cancelled) {
         setClearError("Process cancelled by user")
         setDataCleared(false)
-        
-        // Reload page when cancelled instead of refreshing data
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
         return // Exit early to prevent further processing
       } else {
         setClearError(result.error || "Failed to clear data")
@@ -376,11 +366,6 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const handleStopProcess = () => {
     setIsStopping(true)
     setShouldStopProcess(true)
-    
-    // Reload page after a short delay to ensure the stop signal is processed
-    setTimeout(() => {
-      window.location.reload()
-    }, 1000)
   }
 
   // Export all data functionality - use global state instead of local
