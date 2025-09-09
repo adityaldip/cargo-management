@@ -7,6 +7,7 @@ import { combineProcessedData } from "@/lib/file-processor"
 import { useDataStore } from "@/store/data-store"
 import { useWorkflowStore } from "@/store/workflow-store"
 import { useReviewTabStore } from "@/store/review-tab-store"
+import { useToast } from "@/hooks/use-toast"
 import type { ProcessedData } from "@/types/cargo-data"
 import { ConfigureColumns, DatabasePreview } from "./assign-custom-modules"
 
@@ -26,6 +27,9 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   
   // Workflow store
   const { isClearingData, isExporting } = useWorkflowStore()
+  
+  // Toast for notifications
+  const { toast } = useToast()
 
   // Handle clear data
   const handleClearData = async () => {
@@ -37,7 +41,12 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         console.log(`- Local storage: ${result.localCleared ? 'cleared' : 'failed'}`)
         console.log(`- Supabase: ${result.supabaseDeletedCount || 0} records deleted`)
         
-        alert(`Data cleared successfully!\n- Local storage cleared\n- ${result.supabaseDeletedCount || 0} records deleted from database`)
+        // Show success toast with only database count
+        toast({
+          title: "Data cleared successfully! ✅",
+          description: `${result.supabaseDeletedCount || 0} records deleted from database`,
+          duration: 5000,
+        })
         
         // Reload page after successful clear
         setTimeout(() => {
@@ -45,7 +54,12 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         }, 1000)
       } else if (result.cancelled) {
         console.log('❌ Clear data process was cancelled')
-        alert('Clear data process was cancelled')
+        toast({
+          title: "Process cancelled",
+          description: "Clear data process was cancelled by user",
+          variant: "destructive",
+          duration: 3000,
+        })
         
         // Reload page when cancelled
         setTimeout(() => {
@@ -53,11 +67,21 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         }, 1000)
       } else {
         console.error('❌ Failed to clear all data:', result.error)
-        alert(`Failed to clear data: ${result.error}`)
+        toast({
+          title: "Failed to clear data",
+          description: result.error || "Unknown error occurred",
+          variant: "destructive",
+          duration: 5000,
+        })
       }
     } catch (error) {
       console.error('❌ Error during clear operation:', error)
-      alert(`Error clearing data: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast({
+        title: "Error clearing data",
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: "destructive",
+        duration: 5000,
+      })
     }
   }
 

@@ -399,86 +399,142 @@ export async function clearSupabaseData(
   shouldStop?: () => boolean
 ): Promise<{ success: boolean; error?: string; deletedCount?: number; cancelled?: boolean }> {
   try {
-    console.log('🗑️ Starting Supabase data clearing process...')
+    console.log('🗑️ Starting Supabase data clearing process with batch deletion...')
     
-    // Get all cargo data first to know how much we need to delete
-    onProgress?.(0, "Fetching data from database...", 0, 3)
+    // Step 1: Get all IDs for batch deletion (more efficient than getting full records)
+    onProgress?.(0, "Fetching record IDs from database...", 0, 3)
     
-    let allData: any[] = []
+    let allIds: string[] = []
     let currentPage = 1
     let hasMoreData = true
+    const fetchBatchSize = 1000 // Large batches for fetching IDs
     
-    // Fetch all data in batches
+    // Fetch all IDs in large batches
     while (hasMoreData) {
-    if (shouldStop?.()) {
+      if (shouldStop?.()) {
         return { success: false, error: "Process cancelled", cancelled: true }
       }
       
-      const result = await cargoDataOperations.getAll(currentPage, 100)
+      const result = await cargoDataOperations.getAllIds(currentPage, fetchBatchSize)
       
       if (result.error) {
-        console.error('Error fetching cargo data:', result.error)
+        console.error('Error fetching cargo data IDs:', result.error)
         return { success: false, error: result.error }
       }
       
       if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-        allData = [...allData, ...result.data]
+        const batchIds = result.data.map(item => item.id)
+        allIds = [...allIds, ...batchIds]
         currentPage++
+        
+        // Update progress during ID fetching (0-20%)
+        const fetchProgress = Math.min(20, (allIds.length / 10000) * 20) // Estimate progress
+        onProgress?.(fetchProgress, `Fetching IDs... Found ${allIds.length} records`, 0, 3)
       } else {
         hasMoreData = false
       }
       
       // Stop if we've reached the end
-      if (result.data && Array.isArray(result.data) && result.data.length < 100) {
+      if (result.data && Array.isArray(result.data) && result.data.length < fetchBatchSize) {
         hasMoreData = false
       }
     }
     
-    console.log(`Found ${allData.length} records to delete`)
+    console.log(`Found ${allIds.length} records to delete using batch deletion`)
     
-    if (allData.length === 0) {
+    if (allIds.length === 0) {
       onProgress?.(100, "No data to delete", 2, 3)
       return { success: true, deletedCount: 0 }
     }
     
-    // Delete all records one by one
-    onProgress?.(30, "Deleting data from database...", 1, 3)
+    // Step 2: Delete in optimized batches using Supabase's IN operator
+    onProgress?.(20, "Starting batch deletion...", 1, 3)
     let deletedCount = 0
-    const totalRecords = allData.length
+    const deleteBatchSize = 500 // Optimal batch size for Supabase deletion
+    const totalBatches = Math.ceil(allIds.length / deleteBatchSize)
     
-    for (let i = 0; i < allData.length; i++) {
-        if (shouldStop?.()) {
+    // Import supabase client for direct batch operations
+    const { supabase } = await import('@/lib/supabase')
+    
+    for (let i = 0; i < allIds.length; i += deleteBatchSize) {
+      if (shouldStop?.()) {
         return { success: false, error: "Process cancelled", cancelled: true, deletedCount }
       }
       
-      const record = allData[i]
+      const batchIds = allIds.slice(i, i + deleteBatchSize)
+      const currentBatch = Math.floor(i / deleteBatchSize) + 1
+      
+      // Real-time progress updates (20-95%)
+      const batchProgress = 20 + (currentBatch / totalBatches) * 75
+      onProgress?.(
+        batchProgress, 
+        `Batch ${currentBatch}/${totalBatches}: Deleting ${batchIds.length} records... (${deletedCount} deleted so far)`, 
+        1, 
+        3
+      )
       
       try {
-        const deleteResult = await cargoDataOperations.delete(record.id)
+        console.log(`🔄 Executing batch ${currentBatch}/${totalBatches}: Deleting ${batchIds.length} records`)
         
-          if (deleteResult.error) {
-            console.error(`Failed to delete record ${record.id}:`, deleteResult.error)
-          } else {
-            deletedCount++
+        // Use Supabase's IN operator for efficient batch deletion with count
+        const deleteResult = await supabase
+          .from('cargo_data')
+          .delete({ count: 'exact' })
+          .in('id', batchIds)
+        
+        if (deleteResult.error) {
+          console.error(`❌ Failed to delete batch ${currentBatch}:`, deleteResult.error)
+          // Continue with next batch instead of failing completely
+        } else {
+          // Count actual deleted records from Supabase response
+          const actualDeletedCount = deleteResult.count || batchIds.length
+          deletedCount += actualDeletedCount
+          console.log(`✅ Batch ${currentBatch}: Successfully deleted ${actualDeletedCount} out of ${batchIds.length} records`)
+          
+          // Log if there's a discrepancy
+          if (actualDeletedCount !== batchIds.length) {
+            console.warn(`⚠️ Batch ${currentBatch}: Expected to delete ${batchIds.length} records, but actually deleted ${actualDeletedCount}`)
           }
+        }
       } catch (error) {
-        console.error(`Error deleting record ${record.id}:`, error)
+        console.error(`❌ Error deleting batch ${currentBatch}:`, error)
+        // Continue with next batch
       }
       
-      // Update progress every 10 records
-      if (i % 10 === 0 || i === totalRecords - 1) {
-        const progress = 30 + ((i + 1) / totalRecords) * 60
-        onProgress?.(progress, `Deleting data ${i + 1}/${totalRecords}...`, 1, 3)
-      }
+      // Small delay to prevent overwhelming the database and allow UI updates
+      await new Promise(resolve => setTimeout(resolve, 50))
     }
     
-    onProgress?.(100, `Successfully deleted ${deletedCount} records`, 2, 3)
-    
-    console.log(`✅ Successfully deleted ${deletedCount} out of ${totalRecords} records`)
-    
-    return { 
-      success: true, 
-      deletedCount 
+    // Final verification: check how many records remain
+    try {
+      const verificationResult = await cargoDataOperations.getAll(1, 1)
+      const remainingRecords = (verificationResult as any).count || 0
+      const actualDeletedCount = Math.max(0, allIds.length - remainingRecords)
+      
+      console.log(`📊 Verification: Started with ${allIds.length} records, ${remainingRecords} remaining, actually deleted ${actualDeletedCount}`)
+      
+      // Use the verified count if it's different from our tracked count
+      const finalDeletedCount = actualDeletedCount > 0 ? actualDeletedCount : deletedCount
+      
+      onProgress?.(100, `Successfully deleted ${finalDeletedCount} records`, 2, 3)
+      
+      console.log(`✅ Successfully deleted ${finalDeletedCount} out of ${allIds.length} records using batch deletion`)
+      
+      return { 
+        success: true, 
+        deletedCount: finalDeletedCount 
+      }
+    } catch (verificationError) {
+      console.warn('⚠️ Could not verify final count, using tracked count:', verificationError)
+      
+      onProgress?.(100, `Successfully deleted ${deletedCount} records`, 2, 3)
+      
+      console.log(`✅ Successfully deleted ${deletedCount} out of ${allIds.length} records using batch deletion`)
+      
+      return { 
+        success: true, 
+        deletedCount 
+      }
     }
   } catch (error) {
     console.error('❌ Error clearing Supabase data:', error)

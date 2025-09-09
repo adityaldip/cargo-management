@@ -328,6 +328,13 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         setHasNextPage(false)
         setHasPrevPage(false)
         
+        // Show success toast with only database count
+        toast({
+          title: "Data cleared successfully! ✅",
+          description: `${result.supabaseDeletedCount || 0} records deleted from database`,
+          duration: 5000,
+        })
+        
         // Call the original onClearData callback
         await onClearData()
         
@@ -682,10 +689,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
             <div className="w-full bg-gray-200 rounded-full h-2 mb-2 overflow-hidden">
               <div 
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-                style={{ 
-                  width: `${Math.min(100, Math.max(0, exportProgress))}%`,
-                  transform: 'translateX(0)'
-                }}
+                style={{ width: `${Math.min(100, Math.max(0, exportProgress))}%` }}
               />
             </div>
             
@@ -718,10 +722,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
             <div className="w-full bg-gray-200 rounded-full h-2 mb-2 overflow-hidden">
               <div 
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-                style={{ 
-                  width: `${Math.min(100, Math.max(0, progress))}%`,
-                  transform: 'translateX(0)'
-                }}
+                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
               />
             </div>
             
@@ -757,26 +758,6 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
             <Loader2 className="h-6 w-6 animate-spin mr-2" />
             <span>Loading data...</span>
           </div>
-        ) : sampleExcelData.length === 0 ? (
-          <div className="text-center py-8">
-            <AlertTriangle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
-            <p className="text-gray-600 mb-4">
-              No data found in the database. Upload and process Excel files in the previous steps to see data here.
-            </p>
-            <Button 
-              variant="outline" 
-              onClick={async () => {
-                setDataCleared(false)
-                await loadRealData(1)
-                await loadStats()
-              }}
-              disabled={isClearingData || globalIsExporting}
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Try Loading Data
-            </Button>
-          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table className="border border-collapse border-radius-lg">
@@ -793,18 +774,29 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {currentRecords.map((record, index) => (
-                  <TableRow key={`row-${startIndex + index}-${record.id || 'no-id'}`}>
-                    {visibleColumns.map((column) => (
-                      <TableCell 
-                        key={`cell-${startIndex + index}-${column.key}`}
-                        className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
-                      >
-                        {formatCellValue(record, column.key)}
-                      </TableCell>
-                    ))}
+                {currentRecords.length === 0 ? (
+                  <TableRow>
+                    <TableCell 
+                      colSpan={visibleColumns.length} 
+                      className="border text-center py-8 text-gray-500"
+                    >
+                      No data available
+                    </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  currentRecords.map((record, index) => (
+                    <TableRow key={`row-${startIndex + index}-${record.id || 'no-id'}`}>
+                      {visibleColumns.map((column) => (
+                        <TableCell 
+                          key={`cell-${startIndex + index}-${column.key}`}
+                          className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                        >
+                          {formatCellValue(record, column.key)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
