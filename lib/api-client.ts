@@ -2,29 +2,41 @@
 
 const API_BASE = '/api'
 
-// Generic API request helper
+// Generic API request helper with timeout and retry logic
 async function apiRequest<T>(
   endpoint: string, 
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeout: number = 10000
 ): Promise<{ data: T | null; error: string | null }> {
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      signal: controller.signal,
       ...options,
     })
 
-    const result = await response.json()
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
-      return { data: null, error: result.error || 'Request failed' }
+      const result = await response.json().catch(() => ({ error: 'Request failed' }))
+      return { data: null, error: result.error || `HTTP ${response.status}: Request failed` }
     }
 
+    const result = await response.json()
     return { data: result.data || result, error: null }
   } catch (error) {
     console.error('API Request Error:', error)
+    
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { data: null, error: 'Request timeout' }
+    }
+    
     return { 
       data: null, 
       error: error instanceof Error ? error.message : 'Network error' 
@@ -117,6 +129,14 @@ export const customerCodesAPI = {
     return apiRequest(`/customers/${customerId}/codes/bulk`, {
       method: 'PUT',
       body: JSON.stringify({ codes }),
+    })
+  },
+
+  // Toggle customer code active status
+  async toggleActive(codeId: string, isActive: boolean) {
+    return apiRequest(`/customer-codes/${codeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
     })
   },
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,16 +10,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { ArrowUp, ArrowDown } from "lucide-react"
 import { ErrorBanner } from "@/components/ui/status-banner"
 import { 
   UserCheck, 
   Plus, 
   Edit,
   Trash2,
-  AlertTriangle,
-  X,
-  Save
+  X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCustomerData } from "./hooks"
@@ -39,14 +37,19 @@ export function CustomerManagement() {
     updateCustomer,
     fetchCustomerCodes,
     updateCustomerCodes,
+    toggleCustomerCode,
     refetch
   } = useCustomerData()
   
   const [customerSearchTerm, setCustomerSearchTerm] = useState("")
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [customerCodeAssignmentEnabled, setCustomerCodeAssignmentEnabled] = useState(true)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithCodes | null>(null)
   const [isCustomerEditorOpen, setIsCustomerEditorOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [itemsPerPage, setItemsPerPage] = useState(20) // Increased default page size
+  const [showAll, setShowAll] = useState(false)
   
   // New customer form state
   const [newCustomerForm, setNewCustomerForm] = useState({
@@ -59,20 +62,49 @@ export function CustomerManagement() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
-  // Filter and sort customers based on search and sort order
-  const filteredCustomers = customers
-    .filter(customer => 
-      customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-      customer.code.toLowerCase().includes(customerSearchTerm.toLowerCase())
-    )
-    .sort((a, b) => {
-      const comparison = a.name.localeCompare(b.name)
-      return sortOrder === 'asc' ? comparison : -comparison
-    })
+  // Debounce search term for better performance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(customerSearchTerm)
+    }, 300) // 300ms delay
 
-  // Pagination logic
+    return () => clearTimeout(timer)
+  }, [customerSearchTerm])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchTerm, statusFilter])
+
+  // Memoized filtered customers for better performance
+  const filteredCustomers = useMemo(() => {
+    return customers
+      .filter(customer => {
+        // Search filter
+        const matchesSearch = customer.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+          customer.code.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+          (customer.codes && customer.codes.some(code => 
+            code.code.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+          ))
+        
+        // Status filter
+        const matchesStatus = statusFilter === 'all' || 
+          (statusFilter === 'active' && customer.is_active) ||
+          (statusFilter === 'inactive' && !customer.is_active)
+        
+        return matchesSearch && matchesStatus
+      })
+      .sort((a, b) => {
+        const comparison = a.name.localeCompare(b.name)
+        return sortOrder === 'asc' ? comparison : -comparison
+      })
+  }, [customers, debouncedSearchTerm, statusFilter, sortOrder])
+
+  // Pagination logic with performance optimization
   const totalItems = filteredCustomers.length
+  const displayItems = showAll ? filteredCustomers : filteredCustomers.slice(0, itemsPerPage)
   const totalPages = Math.ceil(totalItems / itemsPerPage)
+  const hasMoreItems = filteredCustomers.length > itemsPerPage
 
   const handleToggleCustomer = async (customerId: string) => {
     setTogglingCustomer(customerId)
@@ -80,6 +112,29 @@ export function CustomerManagement() {
       await toggleCustomer(customerId)
     } finally {
       setTogglingCustomer(null)
+    }
+  }
+
+  const handleToggleCustomerCode = async (customerId: string, codeId: string | number) => {
+    // Find the customer and code
+    const customer = customers.find(c => c.id === customerId)
+    if (!customer) return
+
+    const codeIndex = customer.codes.findIndex(code => 
+      (typeof codeId === 'string' && code.id === codeId) || 
+      (typeof codeId === 'number' && customer.codes.indexOf(code) === codeId)
+    )
+    
+    if (codeIndex === -1) return
+
+    const code = customer.codes[codeIndex]
+    const newActiveState = !code.is_active
+
+    // Call the API to toggle the customer code
+    if (typeof codeId === 'string') {
+      await toggleCustomerCode(codeId, newActiveState)
+    } else {
+      console.warn('Cannot toggle customer code without proper ID')
     }
   }
 
@@ -281,6 +336,7 @@ export function CustomerManagement() {
                 variant="outline" 
                 size="sm"
                 onClick={handleCreateNewCustomer}
+                disabled={!customerCodeAssignmentEnabled}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Customer Code
@@ -300,8 +356,57 @@ export function CustomerManagement() {
                   'Refresh'
                 )}
               </Button>
+              <Select value={statusFilter} onValueChange={(value: 'all' | 'active' | 'inactive') => setStatusFilter(value)}>
+                <SelectTrigger className="h-8 w-auto min-w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
+          
+          {/* Search and Code Assignment Controls */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="flex-1 relative">
+              <Input
+                placeholder="Search customers by name or code..."
+                value={customerSearchTerm}
+                onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                className="w-full pr-8"
+              />
+              {customerSearchTerm !== debouncedSearchTerm && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={customerCodeAssignmentEnabled}
+                onCheckedChange={setCustomerCodeAssignmentEnabled}
+                className="scale-75"
+              />
+              <span className="text-sm text-gray-600">Allow Code Assignment</span>
+            </div>
+          </div>
+          
+          {/* Results Summary */}
+          {filteredCustomers.length > 0 && (
+            <div className="mb-3 text-sm text-gray-600">
+              Showing {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''}
+              {statusFilter !== 'all' && ` (${statusFilter} only)`}
+              {debouncedSearchTerm && ` matching "${debouncedSearchTerm}"`}
+              {!customerCodeAssignmentEnabled && (
+                <span className="ml-2 text-orange-600 font-medium">
+                  • Customer Code Assignment Disabled
+                </span>
+              )}
+            </div>
+          )}
           
           <div className="overflow-x-auto">
             <Table>
@@ -328,13 +433,7 @@ export function CustomerManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(() => {
-                  // Get paginated filtered data
-                  const startIndex = (currentPage - 1) * itemsPerPage
-                  const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
-                  const currentPageData = filteredCustomers.slice(startIndex, endIndex)
-                  
-                  return currentPageData.map((customer) => (
+                {displayItems.map((customer) => (
                   <TableRow key={customer.id} className="">
                     <TableCell className="py-1 px-1">
                       <div className="flex items-center gap-1">
@@ -364,13 +463,23 @@ export function CustomerManagement() {
                         </Badge> */}
                         {/* Display additional codes from customer_codes table */}
                         {customer.codes && customer.codes.length > 0 && customer.codes.map((codeItem, index) => (
-                          <Badge 
-                            key={codeItem.id || index} 
-                            variant="secondary" 
-                            className="font-mono text-xs px-1 py-0 h-5"
-                          >
-                            {codeItem.code}
-                          </Badge>
+                          <div key={codeItem.id || index} className="flex items-center gap-1">
+                            <Switch
+                              checked={codeItem.is_active}
+                              onCheckedChange={() => handleToggleCustomerCode(customer.id, codeItem.id || index)}
+                              disabled={!customerCodeAssignmentEnabled}
+                              className="scale-50"
+                            />
+                            <Badge 
+                              variant={codeItem.is_active ? "secondary" : "outline"} 
+                              className={cn(
+                                "font-mono text-xs px-1 py-0 h-5",
+                                !codeItem.is_active && "opacity-50"
+                              )}
+                            >
+                              {codeItem.code}
+                            </Badge>
+                          </div>
                         ))}
                       </div>
                     </TableCell>
@@ -395,59 +504,57 @@ export function CustomerManagement() {
                       </div>
                     </TableCell>
                   </TableRow>
-                  ))
-                })()}
+                ))}
               </TableBody>
             </Table>
           </div>
 
-          {/* Pagination Controls */}
+          {/* Performance Controls */}
           {filteredCustomers.length > 0 && (
             <div className="flex items-center justify-between mt-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Show</span>
                 <Select value={itemsPerPage.toString()} onValueChange={(value) => {
                   setItemsPerPage(Number(value))
-                  setCurrentPage(1)
+                  setShowAll(false)
                 }}>
                   <SelectTrigger className="w-20">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
                     <SelectItem value="10">10</SelectItem>
                     <SelectItem value="20">20</SelectItem>
                     <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
                   </SelectContent>
                 </Select>
                 <span className="text-sm text-gray-600">entries</span>
               </div>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-600">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
+                  {showAll ? `Showing all ${totalItems} entries` : `Showing ${displayItems.length} of ${totalItems} entries`}
                 </span>
-                <div className="flex items-center gap-1">
+                
+                {hasMoreItems && !showAll && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
+                    onClick={() => setShowAll(true)}
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    Show All
                   </Button>
-                  <span className="px-3 py-1 text-sm bg-gray-100 rounded">
-                    {currentPage}
-                  </span>
+                )}
+                
+                {showAll && hasMoreItems && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalItems / itemsPerPage), prev + 1))}
-                    disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
+                    onClick={() => setShowAll(false)}
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    Show Less
                   </Button>
-                </div>
+                )}
               </div>
             </div>
           )}

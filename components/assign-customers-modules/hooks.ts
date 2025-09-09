@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { customerAPI, rulesAPI, customerCodesAPI } from "@/lib/api-client"
 import { Customer, CustomerCode, CustomerRuleExtended, CustomerWithCodes } from "./types"
 import { useCustomerRulesStore } from "@/store/customer-rules-store"
@@ -31,20 +31,20 @@ export function useCustomerData() {
       const allCodes = codesResult.data || []
 
       if (customerData && Array.isArray(customerData)) {
-        // Group codes by customer_id for faster lookup
-        const codesByCustomer = allCodes.reduce((acc: Record<string, any[]>, code: any) => {
+        // Group codes by customer_id for faster lookup using Map for better performance
+        const codesByCustomer = new Map<string, any[]>()
+        allCodes.forEach((code: any) => {
           const customerId = code.customer_id
-          if (!acc[customerId]) {
-            acc[customerId] = []
+          if (!codesByCustomer.has(customerId)) {
+            codesByCustomer.set(customerId, [])
           }
-          acc[customerId].push(code)
-          return acc
-        }, {})
+          codesByCustomer.get(customerId)!.push(code)
+        })
 
         // Map customers with their codes and sort by name
         const customersWithCodes = customerData.map((customer: Customer) => ({
           ...customer,
-          codes: codesByCustomer[customer.id] || []
+          codes: codesByCustomer.get(customer.id) || []
         })).sort((a, b) => a.name.localeCompare(b.name))
 
         setCustomers(customersWithCodes)
@@ -158,9 +158,9 @@ export function useCustomerData() {
     }
   }
 
-  const loadData = async (forceRefresh = false) => {
-    // Cache for 30 seconds to avoid unnecessary requests
-    const cacheTime = 30 * 1000
+  const loadData = useCallback(async (forceRefresh = false) => {
+    // Cache for 60 seconds to avoid unnecessary requests
+    const cacheTime = 60 * 1000
     const now = Date.now()
     
     if (!forceRefresh && lastFetchTime > 0 && (now - lastFetchTime) < cacheTime) {
@@ -172,7 +172,7 @@ export function useCustomerData() {
     setError(null)
     await fetchCustomers()
     setLoading(false)
-  }
+  }, [lastFetchTime])
 
   useEffect(() => {
     loadData()
@@ -237,6 +237,34 @@ export function useCustomerData() {
     }
   }
 
+  const toggleCustomerCode = async (codeId: string, isActive: boolean) => {
+    try {
+      const { data: updatedCode, error } = await customerCodesAPI.toggleActive(codeId, isActive)
+      if (error) {
+        setError(`Failed to toggle customer code: ${error}`)
+        return { success: false, error }
+      }
+      
+      if (updatedCode) {
+        // Update local state
+        setCustomers(prev => prev.map(customer => ({
+          ...customer,
+          codes: customer.codes.map(code => 
+            code.id === codeId 
+              ? { ...code, is_active: isActive }
+              : code
+          )
+        })))
+      }
+      
+      return { success: true, data: updatedCode }
+    } catch (err) {
+      const errorMessage = `Failed to toggle customer code: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
+    }
+  }
+
   return {
     customers,
     customerCodes,
@@ -249,6 +277,7 @@ export function useCustomerData() {
     updateCustomer,
     fetchCustomerCodes,
     updateCustomerCodes,
+    toggleCustomerCode,
     loadData,
     refetch: () => loadData(true) // Force refresh
   }
