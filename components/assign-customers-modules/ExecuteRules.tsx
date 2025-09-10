@@ -5,13 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Play, ArrowLeft, Filter, RefreshCw } from "lucide-react"
+import { Loader2, Play, ArrowLeft, Filter, RefreshCw, Download } from "lucide-react"
 import { WarningBanner } from "@/components/ui/status-banner"
 import { useCustomerRules } from "./hooks"
 import { FilterPopup } from "@/components/ui/filter-popup"
 import { usePageFilters } from "@/store/filter-store"
 import { supabase } from "@/lib/supabase"
 import { Pagination } from "@/components/ui/pagination"
+import { useToast } from "@/hooks/use-toast"
+import { downloadFile } from "@/lib/export-utils"
 import { 
   ExecuteRulesProps, 
   CargoDataRecord, 
@@ -43,9 +45,18 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
   // Filter application state
   const [isApplyingFilters, setIsApplyingFilters] = useState(false)
   
+  // Export state
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState(0)
+  const [exportCurrentBatch, setExportCurrentBatch] = useState(0)
+  const [exportTotalBatches, setExportTotalBatches] = useState(0)
+  
   // Filter state - now persistent
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const { conditions: filterConditions, logic: filterLogic, hasActiveFilters, setFilters, clearFilters } = usePageFilters("execute-rules")
+  
+  // Toast for notifications
+  const { toast } = useToast()
   
   // Define filter fields based on actual cargo_data columns
   const filterFields: FilterField[] = [
@@ -270,6 +281,212 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
 
   // Note: Filtering is now handled server-side in fetchCargoData
 
+  // Export all data functionality - batched approach to fetch all data
+  const handleExportData = async () => {
+    setIsExporting(true)
+    setExportProgress(0)
+    setExportCurrentBatch(0)
+    setExportTotalBatches(0)
+    
+    try {
+      console.log(`🔄 Starting export of ${totalRecords} assigned cargo records using batched approach...`)
+      
+      // Use batched approach to fetch all data
+      const batchSize = 1000 // Fetch 1000 records per batch
+      const totalBatches = Math.ceil(totalRecords / batchSize)
+      let allData: any[] = []
+      
+      setExportTotalBatches(totalBatches)
+      console.log(`📦 Will fetch ${totalBatches} batches of ${batchSize} records each`)
+      
+      for (let batch = 0; batch < totalBatches; batch++) {
+        const currentPage = batch + 1
+        setExportCurrentBatch(currentPage)
+        
+        // Calculate progress percentage
+        const progressPercent = Math.round((batch / totalBatches) * 100)
+        setExportProgress(progressPercent)
+        
+        console.log(`📦 Fetching batch ${batch + 1}/${totalBatches}...`)
+        
+        // Build query for this batch
+        let dataQuery = supabase
+          .from('cargo_data')
+          .select('*')
+          .not('assigned_customer', 'is', null)
+          .neq('assigned_customer', '')
+        
+        // Apply filters if any
+        if (hasActiveFilters && filterConditions.length > 0) {
+          filterConditions.forEach((condition) => {
+            const { field, operator, value } = condition
+            
+            if (value && value.trim() !== '') {
+              switch (operator) {
+                case 'equals':
+                  dataQuery = dataQuery.eq(field, value)
+                  break
+                case 'contains':
+                  dataQuery = dataQuery.ilike(field, `%${value}%`)
+                  break
+                case 'starts_with':
+                  dataQuery = dataQuery.ilike(field, `${value}%`)
+                  break
+                case 'ends_with':
+                  dataQuery = dataQuery.ilike(field, `%${value}`)
+                  break
+                case 'greater_than':
+                  const numValue = parseFloat(value)
+                  if (!isNaN(numValue)) {
+                    dataQuery = dataQuery.gt(field, numValue)
+                  }
+                  break
+                case 'less_than':
+                  const numValue2 = parseFloat(value)
+                  if (!isNaN(numValue2)) {
+                    dataQuery = dataQuery.lt(field, numValue2)
+                  }
+                  break
+                case 'not_empty':
+                  dataQuery = dataQuery.not(field, 'is', null).neq(field, '')
+                  break
+                case 'is_empty':
+                  dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
+                  break
+              }
+            }
+          })
+        }
+        
+        // Fetch paginated data for this batch
+        const { data: batchData, error: batchError } = await dataQuery
+          .order('created_at', { ascending: false })
+          .range((currentPage - 1) * batchSize, currentPage * batchSize - 1)
+        
+        if (batchError) {
+          throw new Error(`Failed to fetch batch ${batch + 1}: ${batchError.message}`)
+        }
+        
+        if (batchData && batchData.length > 0) {
+          allData.push(...batchData)
+          console.log(`📦 Batch ${batch + 1} completed: ${batchData.length} records (Total so far: ${allData.length})`)
+        }
+      }
+      
+      // Set progress to 100% when all batches are done
+      setExportProgress(100)
+      console.log(`✅ All batches completed! Total records fetched: ${allData.length}`)
+
+      // Fetch customer data to resolve customer names for all records
+      let enrichedData: any[] = allData
+      if (allData.length > 0) {
+        // Get unique customer IDs from the cargo data
+        const customerIds = [...new Set(allData.map((record: any) => record.assigned_customer).filter(Boolean))]
+        
+        if (customerIds.length > 0) {
+          const { data: customersData, error: customersError } = await supabase
+            .from('customers')
+            .select('id, name, code')
+            .in('id', customerIds)
+          
+          if (customersError) {
+            console.error('Error fetching customers:', customersError)
+          } else {
+            // Merge customer data with cargo data
+            enrichedData = allData.map((record: any) => {
+              const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+              return {
+                ...record,
+                customers: customer || null
+              }
+            })
+          }
+        }
+      }
+
+      // Generate CSV content
+      const csvContent = generateCSV(enrichedData)
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split("T")[0]
+      const filename = `assigned_cargo_data_export_${timestamp}.csv`
+      
+      // Download the file
+      downloadFile(csvContent, filename, 'text/csv')
+
+      console.log(`✅ Successfully exported ${enrichedData.length} records to ${filename}`)
+      
+      // Show success toast
+      toast({
+        title: "Export Completed! 🎉",
+        description: `Successfully exported ${enrichedData.length.toLocaleString()} assigned cargo records to ${filename}`,
+        duration: 5000,
+      })
+      
+    } catch (error) {
+      console.error('Error exporting data:', error)
+      toast({
+        title: "Export Failed ❌",
+        description: `Error occurred while exporting data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+        duration: 5000,
+      })
+    } finally {
+      setIsExporting(false)
+      setExportProgress(0)
+      setExportCurrentBatch(0)
+      setExportTotalBatches(0)
+    }
+  }
+
+  // Generate CSV content for assigned cargo data
+  const generateCSV = (data: any[]): string => {
+    let csv = ""
+    
+    // Add headers
+    const headers = [
+      'Inb. Flight Date',
+      'Outb. Flight Date', 
+      'Rec. ID',
+      'Des. No.',
+      'Rec. Number',
+      'Orig. OE',
+      'Dest. OE',
+      'Inb. Flight No.',
+      'Outb. Flight No.',
+      'Mail Category',
+      'Mail Class',
+      'Total Weight (kg)',
+      'Invoice',
+      'Assigned Customer',
+      'Assigned At'
+    ]
+    csv += headers.join(",") + "\n"
+    
+    // Add data rows
+    data.forEach((record: any) => {
+      const row = [
+        record.inb_flight_date || '',
+        record.outb_flight_date || '',
+        record.rec_id || '',
+        record.des_no || '',
+        record.rec_numb || '',
+        record.orig_oe || '',
+        record.dest_oe || '',
+        record.inb_flight_no || '',
+        record.outb_flight_no || '',
+        record.mail_cat || '',
+        record.mail_class || '',
+        record.total_kg || '0.0',
+        record.invoice || '',
+        record.customers?.name || record.assigned_customer || '',
+        record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : ''
+      ]
+      csv += row.map(field => `"${field}"`).join(",") + "\n"
+    })
+    
+    return csv
+  }
 
   // Calculate pagination for server-side data - like database-preview.tsx
   const startIndex = (currentPage - 1) * recordsPerPage
@@ -334,7 +551,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   variant="outline"
                   size="sm"
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  disabled={isApplyingFilters}
+                  disabled={isApplyingFilters || isExporting}
                   className={hasActiveFilters ? "border-blue-300 bg-blue-50 text-blue-700" : ""}
                 >
                   {isApplyingFilters ? (
@@ -363,6 +580,19 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   />
                 )}
               </div>
+              <Button
+                onClick={handleExportData}
+                className="bg-black text-white hover:bg-gray-800"
+                size="sm"
+                disabled={totalRecords === 0 || isExporting || isApplyingFilters}
+              >
+                {isExporting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
+                {isExporting ? 'Exporting...' : 'Export Data'}
+              </Button>
                {/* <Button 
                 className="bg-black hover:bg-gray-800 text-white"
                 onClick={() => setCurrentView("results")}
@@ -406,6 +636,40 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
             </div>
           </div>
         </CardHeader>
+        
+        {/* Export Progress Bar Section */}
+        {isExporting && (
+          <div className="px-6 pb-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  <span className="text-sm font-medium text-gray-900">Exporting Assigned Cargo Data...</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">{exportProgress}%</span>
+                </div>
+              </div>
+              
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-2 overflow-hidden">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${Math.min(100, Math.max(0, exportProgress))}%` }}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between text-xs text-gray-600">
+                <span className="flex-1">
+                  {exportCurrentBatch > 0 && exportTotalBatches > 0 
+                    ? `Fetching batch ${exportCurrentBatch} of ${exportTotalBatches}...`
+                    : 'Preparing export...'
+                  }
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center py-8">
