@@ -1,15 +1,19 @@
 "use client"
 
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { CustomerManagement } from "./CustomerManagement"
 import { RulesConfiguration } from "./RulesConfiguration"
 import { ExecuteRules } from "./ExecuteRules"
-import { AssignCustomersProps, TabType, ViewType } from "./types"
+import { AssignCustomersProps } from "./types"
+import { useAssignCustomersTabStore } from "@/store/assign-customers-tab-store"
 
 export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityConditions }: AssignCustomersProps) {
-  const [activeTab, setActiveTab] = useState<TabType>("customers")
-  const [currentView, setCurrentView] = useState<ViewType>("rules")
+  const { 
+    activeTab, 
+    currentView, 
+    setActiveTab, 
+    setCurrentView 
+  } = useAssignCustomersTabStore()
 
   return (
     <div className="space-y-4 pt-2">
@@ -76,7 +80,6 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
           {/* Execute Rules Tab */}
           {activeTab === "execute" && (
             <ExecuteRules 
-              data={data} 
               currentView={currentView} 
               setCurrentView={setCurrentView} 
             />
@@ -87,7 +90,6 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
       {/* Results View */}
       {currentView === "results" && data && (
         <ExecuteRules 
-          data={data} 
           currentView={currentView} 
           setCurrentView={setCurrentView} 
         />

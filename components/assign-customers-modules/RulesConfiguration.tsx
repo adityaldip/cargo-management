@@ -37,6 +37,8 @@ import { SAMPLE_CUSTOMER_RULES } from "@/lib/sample-rules"
 import { CreateCustomerRuleModal } from "./CreateCustomerRuleModal"
 import { useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
+import { SweetAlert } from "@/components/ui/sweet-alert"
 
 // Customer Rules Configuration Component - Updated
 export function RulesConfiguration() {
@@ -95,6 +97,15 @@ export function RulesConfiguration() {
   const [openCustomerSelect, setOpenCustomerSelect] = useState(false)
   const [openFieldSelects, setOpenFieldSelects] = useState<Record<number, boolean>>({})
   const [openOperatorSelects, setOpenOperatorSelects] = useState<Record<number, boolean>>({})
+  const [isExecuting, setIsExecuting] = useState(false)
+  const [executionProgress, setExecutionProgress] = useState(0)
+  const [executionStep, setExecutionStep] = useState("")
+  const { toast } = useToast()
+  
+  // Sweet Alert state for delete confirmation
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false)
+  const [ruleToDelete, setRuleToDelete] = useState<CustomerRuleExtended | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   // Available field options from cargo_data columns (matching review-merged-excel.tsx)
   const cargoDataFields = [
@@ -186,6 +197,7 @@ export function RulesConfiguration() {
 
   // Memoized filtered rules for better performance
   const filteredRules = useMemo(() => {
+    if (!Array.isArray(rules)) return []
     return rules.filter(rule => {
       // First apply search filter
       const matchesSearch = !debouncedSearchTerm || (
@@ -235,6 +247,15 @@ export function RulesConfiguration() {
 
   // Memoized pagination logic
   const paginationData = useMemo(() => {
+    if (!Array.isArray(filteredRules)) {
+      return {
+        totalItems: 0,
+        totalPages: 0,
+        startIndex: 0,
+        endIndex: 0,
+        currentPageData: []
+      }
+    }
     const totalItems = filteredRules.length
     const totalPages = Math.ceil(totalItems / itemsPerPage)
     const startIndex = (currentPage - 1) * itemsPerPage
@@ -295,7 +316,7 @@ export function RulesConfiguration() {
   const handleDrop = async (e: React.DragEvent, targetRuleId: string) => {
     e.preventDefault()
     
-    if (!draggedRule || draggedRule === targetRuleId || isReordering) return
+    if (!draggedRule || draggedRule === targetRuleId || isReordering || !Array.isArray(rules)) return
 
     const draggedIndex = rules.findIndex(r => r.id === draggedRule)
     const targetIndex = rules.findIndex(r => r.id === targetRuleId)
@@ -393,6 +414,7 @@ export function RulesConfiguration() {
 
   // Save changes to Supabase
   const handleSaveChanges = async () => {
+    if (!Array.isArray(rules)) return
     const currentRule = rules.find(r => r.id === expandedRule)
     if (!currentRule) return
 
@@ -451,6 +473,161 @@ export function RulesConfiguration() {
       setError(`Failed to save changes: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  // Handle delete rule confirmation
+  const handleDeleteRuleClick = (rule: CustomerRuleExtended) => {
+    setRuleToDelete(rule)
+    setShowDeleteAlert(true)
+  }
+
+  const confirmDeleteRule = async () => {
+    if (!ruleToDelete) return
+
+    setIsDeleting(true)
+    
+    try {
+      const result = await deleteRule(ruleToDelete.id)
+      if (!result.success) {
+        toast({
+          title: "Delete Failed",
+          description: `Failed to delete rule: ${result.error}`,
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Rule Deleted",
+          description: `"${ruleToDelete.name}" has been deleted successfully.`,
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Delete Failed",
+        description: `An error occurred while deleting the rule: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+      setRuleToDelete(null)
+      setShowDeleteAlert(false)
+    }
+  }
+
+  const cancelDeleteRule = () => {
+    setRuleToDelete(null)
+    setShowDeleteAlert(false)
+  }
+
+  // Execute rules to assign customers
+  const handleExecuteRules = async () => {
+    if (!Array.isArray(rules) || rules.length === 0) {
+      setError("No rules available to execute")
+      return
+    }
+
+    const activeRules = rules.filter(rule => (rule as any).is_active)
+    console.log('Total rules:', rules.length)
+    console.log('Active rules:', activeRules.length)
+    console.log('Active rules details:', activeRules.map(r => ({ id: r.id, name: r.name, is_active: (r as any).is_active })))
+    
+    if (activeRules.length === 0) {
+      setError("No active rules found. Please activate at least one rule before executing.")
+      return
+    }
+
+    setIsExecuting(true)
+    setExecutionProgress(0)
+    setExecutionStep("Starting rule execution...")
+    setError(null)
+
+    try {
+      // Simulate progress updates with realistic steps
+      const progressInterval = setInterval(() => {
+        setExecutionProgress(prev => {
+          if (prev >= 90) return prev
+          return prev + Math.random() * 15
+        })
+      }, 300)
+
+      // Update step messages
+      const stepInterval = setInterval(() => {
+        setExecutionStep(prev => {
+          const steps = [
+            "Starting rule execution...",
+            "Fetching active rules...",
+            "Loading cargo data...",
+            "Processing rule conditions...",
+            "Matching cargo records...",
+            "Updating assignments...",
+            "Finalizing results..."
+          ]
+          const currentIndex = steps.indexOf(prev)
+          return steps[Math.min(currentIndex + 1, steps.length - 1)]
+        })
+      }, 800)
+
+      console.log('Calling rulesAPI.executeRules()...')
+      const { data, error } = await rulesAPI.executeRules()
+      console.log('API Response:', { data, error })
+      
+      clearInterval(progressInterval)
+      clearInterval(stepInterval)
+      setExecutionProgress(100)
+      setExecutionStep("Execution completed!")
+      
+      if (error) {
+        setError(`Failed to execute rules: ${error}`)
+        toast({
+          title: "Execution Failed",
+          description: `Failed to execute rules: ${error}`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (data && (data as any).success) {
+        // Show success message with results
+        const results = (data as any).results
+        
+        toast({
+          title: "Rules Executed Successfully!",
+          description: `Processed ${results.totalProcessed} records, assigned ${results.totalAssigned} customers`,
+          duration: 5000,
+        })
+
+        // Show detailed results in a second toast
+        setTimeout(() => {
+          const ruleBreakdown = results.ruleResults.map((r: any) => `${r.ruleName}: ${r.matches} matches`).join(', ')
+          toast({
+            title: "Rule Breakdown",
+            description: ruleBreakdown,
+            duration: 8000,
+          })
+        }, 1000)
+        
+        // Refresh rules to get updated match counts
+        await refetch()
+      } else {
+        setError("Failed to execute rules: Unknown error")
+        toast({
+          title: "Execution Failed",
+          description: "Failed to execute rules: Unknown error",
+          variant: "destructive",
+        })
+      }
+      
+    } catch (err) {
+      setError(`Failed to execute rules: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      toast({
+        title: "Execution Failed",
+        description: `Failed to execute rules: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsExecuting(false)
+      setExecutionProgress(0)
+      setExecutionStep("")
     }
   }
 
@@ -526,6 +703,7 @@ export function RulesConfiguration() {
                   size="sm"
                   onClick={() => setIsCreateModalOpen(true)}
                   disabled={isReordering}
+                  className="h-9 w-32"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   New Rule
@@ -535,6 +713,7 @@ export function RulesConfiguration() {
                   size="sm"
                   onClick={refetch}
                   disabled={isRefreshing}
+                  className="h-9 w-32"
                 >
                   {isRefreshing ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
@@ -542,13 +721,82 @@ export function RulesConfiguration() {
                     "Refresh"
                   )}
                 </Button>
-                <Button className="bg-black hover:bg-gray-800 text-white">
-                  <Play className="h-4 w-4 mr-2" />
-                  Execute
-                </Button>
+                {/* <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={async () => {
+                    console.log('Testing API connection...')
+                    const { data, error } = await rulesAPI.testConnection()
+                    console.log('Test result:', { data, error })
+                    toast({
+                      title: "API Test",
+                      description: error ? `Error: ${error}` : `Success: ${data?.message}`,
+                      variant: error ? "destructive" : "default"
+                    })
+                  }}
+                  className="h-9 w-32"
+                >
+                  Test API
+                </Button> */}
+                <div className="relative">
+                  <Button 
+                    className="bg-black hover:bg-gray-800 text-white h-9 w-32"
+                    onClick={handleExecuteRules}
+                    disabled={isExecuting || isReordering}
+                  >
+                    {isExecuting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Executing...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Execute
+                      </>
+                    )}
+                  </Button>
+                  {isExecuting && (
+                    <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                        style={{ width: `${executionProgress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </CardHeader>
+
+          {/* Execution Progress Bar Section */}
+          {isExecuting && (
+            <div className="px-6 pb-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span className="text-sm font-medium text-gray-900">Executing Rules...</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">{executionProgress.toFixed(0)}%</span>
+                  </div>
+                </div>
+                
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-2 overflow-hidden">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${Math.min(100, Math.max(0, executionProgress))}%` }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between text-xs text-gray-600">
+                  <span className="flex-1 truncate">{executionStep}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <CardContent>
           {/* Filter Section - Notion Style */}
           <div className="mb-4 space-y-2">
@@ -612,14 +860,9 @@ export function RulesConfiguration() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.stopPropagation()
-                      if (confirm(`Are you sure you want to delete "${rule.name}"? This action cannot be undone.`)) {
-                        const result = await deleteRule(rule.id)
-                        if (!result.success) {
-                          alert(`Failed to delete rule: ${result.error}`)
-                        }
-                      }
+                      handleDeleteRuleClick(rule as any)
                     }}
                     className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
                   >
@@ -976,6 +1219,21 @@ export function RulesConfiguration() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSave={createRule}
+      />
+
+      {/* Delete Rule Confirmation SweetAlert */}
+      <SweetAlert
+        isVisible={showDeleteAlert}
+        title="Delete Rule"
+        text={`Are you sure you want to delete "${ruleToDelete?.name}"? This action cannot be undone.`}
+        type="warning"
+        showCancelButton={!isDeleting}
+        confirmButtonText="Yes, Delete!"
+        cancelButtonText="Cancel"
+        onConfirm={confirmDeleteRule}
+        onCancel={cancelDeleteRule}
+        onClose={() => !isDeleting && setShowDeleteAlert(false)}
+        disabled={isDeleting}
       />
     </>
   )

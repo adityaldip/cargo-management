@@ -1,40 +1,53 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight } from "lucide-react"
-import { 
-  Play,
-  ArrowLeft,
-  Filter
-} from "lucide-react"
+import { Loader2, Play, ArrowLeft, Filter, RefreshCw } from "lucide-react"
 import { WarningBanner } from "@/components/ui/status-banner"
 import { useCustomerRules } from "./hooks"
-import { AssignCustomersProps, ViewType } from "./types"
-import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
+import { FilterPopup } from "@/components/ui/filter-popup"
 import { usePageFilters } from "@/store/filter-store"
+import { supabase } from "@/lib/supabase"
+import { Pagination } from "@/components/ui/pagination"
+import { 
+  ExecuteRulesProps, 
+  CargoDataRecord, 
+  Customer, 
+  FilterField, 
+  FilterCondition 
+} from "@/types/execute-rules"
 
-interface ExecuteRulesProps extends Pick<AssignCustomersProps, 'data'> {
-  currentView: ViewType
-  setCurrentView: (view: ViewType) => void
-}
-
-export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRulesProps) {
+export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps) {
   const { rules } = useCustomerRules()
   
-  // Pagination state
+  // Data fetching state
+  const [cargoData, setCargoData] = useState<CargoDataRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  
+  // Pagination state - like database-preview.tsx
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [recordsPerPage, setRecordsPerPage] = useState(50)
+  
+  // Server-side pagination state
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [hasNextPage, setHasNextPage] = useState(false)
+  const [hasPrevPage, setHasPrevPage] = useState(false)
+  
+  // Filter application state
+  const [isApplyingFilters, setIsApplyingFilters] = useState(false)
   
   // Filter state - now persistent
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const { conditions: filterConditions, logic: filterLogic, hasActiveFilters, setFilters, clearFilters } = usePageFilters("execute-rules")
   
-  // Define filter fields based on table columns
+  // Define filter fields based on actual cargo_data columns
   const filterFields: FilterField[] = [
     { key: 'inb_flight_date', label: 'Inb. Flight Date', type: 'date' },
     { key: 'outb_flight_date', label: 'Outb. Flight Date', type: 'date' },
@@ -49,148 +62,286 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
     { key: 'mail_class', label: 'Mail Class', type: 'text' },
     { key: 'total_kg', label: 'Total Weight (kg)', type: 'number' },
     { key: 'invoice', label: 'Invoice', type: 'text' },
-    { key: 'customer', label: 'Customer', type: 'text' }
+    { key: 'assigned_customer', label: 'Assigned Customer', type: 'text' }
   ]
 
-  // Filter handlers
-  const handleApplyFilters = (conditions: FilterCondition[], logic: "AND" | "OR") => {
-    setFilters(conditions, logic)
-    setCurrentPage(1) // Reset to first page when filters change
-  }
+  // Fetch customers from Supabase
+  const fetchCustomers = async () => {
+    try {
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name')
 
-  const handleClearFilters = () => {
-    clearFilters()
-    setCurrentPage(1)
-  }
-
-  // Generate sample data
-  const generateSampleData = () => {
-    const origins = ["USFRAT", "GBLON", "DEFRAA", "FRPAR", "ITROM", "ESMADD", "NLAMS", "BEBRUB"]
-    const destinations = ["USRIXT", "USROMT", "USVNOT", "USCHIC", "USMIA", "USANC", "USHOU", "USDAL"]
-    const flightNos = ["BT234", "BT633", "BT341", "AF123", "LH456", "BA789", "KL012", "IB345"]
-    const mailCats = ["A", "B", "C", "D", "E"]
-    const mailClasses = ["7C", "7D", "7E", "7F", "7G", "8A", "8B", "8C"]
-    const invoiceTypes = ["Airmail", "Express", "Priority", "Standard", "Economy"]
-    const customers = [
-      "POST DANMARK A/S / QDKCPHA",
-      "DIRECT LINK WORLWIDE INC. / QDLW", 
-      "POSTNORD SVERIGE AB / QSTO",
-      "Premium Express Ltd",
-      "Nordic Post AS",
-      "Baltic Express Network",
-      "Cargo Masters International"
-    ]
-
-    return Array.from({ length: 20 }, (_, index) => {
-      const year = 2025
-      const month = Math.floor(Math.random() * 12) + 1
-      const day = Math.floor(Math.random() * 28) + 1
-      const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-      
-      const inbDate = `${year} ${monthNames[month - 1]} ${day.toString().padStart(2, '0')}`
-      const outbDate = `${year} ${monthNames[month - 1]} ${(day + 1).toString().padStart(2, '0')}`
-      
-      const origOE = origins[Math.floor(Math.random() * origins.length)]
-      const destOE = destinations[Math.floor(Math.random() * destinations.length)]
-      const mailCat = mailCats[Math.floor(Math.random() * mailCats.length)]
-      const mailClass = mailClasses[Math.floor(Math.random() * mailClasses.length)]
-      
-      const desNo = (50700 + Math.floor(Math.random() * 100)).toString()
-      const recNumb = (Math.floor(Math.random() * 999) + 1).toString().padStart(3, '0')
-      const recId = `${origOE}${destOE}${mailCat}${mailClass}${desNo}${recNumb}${(70000 + Math.floor(Math.random() * 9999)).toString()}`
-      const totalKg = (Math.random() * 50 + 0.1).toFixed(1)
-      const customer = customers[Math.floor(Math.random() * customers.length)]
-      const invoice = invoiceTypes[Math.floor(Math.random() * invoiceTypes.length)]
-      const inbFlightNo = flightNos[Math.floor(Math.random() * flightNos.length)]
-      const outbFlightNo = flightNos[Math.floor(Math.random() * flightNos.length)]
-
-      return {
-        inb_flight_date: inbDate,
-        outb_flight_date: outbDate,
-        rec_id: recId,
-        des_no: desNo,
-        rec_numb: recNumb,
-        orig_oe: origOE,
-        dest_oe: destOE,
-        inb_flight_no: inbFlightNo,
-        outb_flight_no: outbFlightNo,
-        mail_cat: mailCat,
-        mail_class: mailClass,
-        total_kg: totalKg,
-        invoice: invoice,
-        customer: customer,
-        rate: (Math.random() * 15 + 2.5).toFixed(2)
+      if (customersError) {
+        console.error('Error fetching customers:', customersError)
+        return
       }
-    })
+
+      setCustomers(customersData || [])
+    } catch (err) {
+      console.error('Error fetching customers:', err)
+    }
   }
 
-  // Apply filters to the data
-  const applyFilters = (data: any[], conditions: FilterCondition[], logic: "AND" | "OR") => {
-    if (conditions.length === 0) return data
+  // Fetch cargo data from Supabase - only assigned customers with server-side pagination
+  const fetchCargoData = async (page: number = currentPage, limit: number = recordsPerPage, isRefresh = false, customFilters?: FilterCondition[], customLogic?: "AND" | "OR") => {
+    try {
+      console.log(`🔄 fetchCargoData called: page=${page}, limit=${limit}, isRefresh=${isRefresh}`)
+      if (isRefresh) {
+        setRefreshing(true)
+      } else {
+        setLoading(true)
+      }
+      setError(null)
 
-    return data.filter(record => {
-      const conditionResults = conditions.map(condition => {
-        const value = String(record[condition.field] || '').toLowerCase()
-        const filterValue = condition.value.toLowerCase()
+      // Use custom filters if provided, otherwise use current state
+      const activeFilters = customFilters || filterConditions
+      const activeLogic = customLogic || filterLogic
+      const hasFilters = customFilters ? customFilters.length > 0 : hasActiveFilters
+      
+      console.log('🔍 Using filters:', activeFilters, 'logic:', activeLogic)
 
-        switch (condition.operator) {
-          case "equals":
-            return value === filterValue
-          case "contains":
-            return value.includes(filterValue)
-          case "starts_with":
-            return value.startsWith(filterValue)
-          case "ends_with":
-            return value.endsWith(filterValue)
-          case "greater_than":
-            return parseFloat(value) > parseFloat(filterValue)
-          case "less_than":
-            return parseFloat(value) < parseFloat(filterValue)
-          case "not_empty":
-            return value.trim() !== ""
-          case "is_empty":
-            return value.trim() === ""
-          default:
-            return false
+      // Build base query for assigned customers
+      let countQuery = supabase
+        .from('cargo_data')
+        .select('*', { count: 'exact', head: true })
+        .not('assigned_customer', 'is', null)
+        .neq('assigned_customer', '')
+
+      let dataQuery = supabase
+        .from('cargo_data')
+        .select('*')
+        .not('assigned_customer', 'is', null)
+        .neq('assigned_customer', '')
+
+      // Apply filters if any
+      if (hasFilters && activeFilters.length > 0) {
+        console.log('🔍 Applying filters:', activeFilters)
+        
+        activeFilters.forEach((condition, index) => {
+          const { field, operator, value } = condition
+          
+          if (value && value.trim() !== '') {
+            switch (operator) {
+              case 'equals':
+                countQuery = countQuery.eq(field, value)
+                dataQuery = dataQuery.eq(field, value)
+                break
+              case 'contains':
+                countQuery = countQuery.ilike(field, `%${value}%`)
+                dataQuery = dataQuery.ilike(field, `%${value}%`)
+                break
+              case 'starts_with':
+                countQuery = countQuery.ilike(field, `${value}%`)
+                dataQuery = dataQuery.ilike(field, `${value}%`)
+                break
+              case 'ends_with':
+                countQuery = countQuery.ilike(field, `%${value}`)
+                dataQuery = dataQuery.ilike(field, `%${value}`)
+                break
+              case 'greater_than':
+                const numValue = parseFloat(value)
+                if (!isNaN(numValue)) {
+                  countQuery = countQuery.gt(field, numValue)
+                  dataQuery = dataQuery.gt(field, numValue)
+                }
+                break
+              case 'less_than':
+                const numValue2 = parseFloat(value)
+                if (!isNaN(numValue2)) {
+                  countQuery = countQuery.lt(field, numValue2)
+                  dataQuery = dataQuery.lt(field, numValue2)
+                }
+                break
+              case 'not_empty':
+                countQuery = countQuery.not(field, 'is', null).neq(field, '')
+                dataQuery = dataQuery.not(field, 'is', null).neq(field, '')
+                break
+              case 'is_empty':
+                countQuery = countQuery.or(`${field}.is.null,${field}.eq.`)
+                dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
+                break
+            }
+          }
+        })
+      }
+
+      // Get total count with filters applied
+      const { count: totalCount, error: countError } = await countQuery
+
+      if (countError) {
+        throw new Error(`Failed to get count: ${countError.message}`)
+      }
+
+      // Calculate pagination
+      const total = totalCount || 0
+      const totalPages = Math.ceil(total / limit)
+      const hasNextPage = page < totalPages
+      const hasPrevPage = page > 1
+
+      // Fetch paginated data with filters applied
+      const { data: cargo, error: cargoError } = await dataQuery
+        .order('created_at', { ascending: false })
+        .range((page - 1) * limit, page * limit - 1)
+
+      if (cargoError) {
+        throw new Error(`Failed to fetch cargo data: ${cargoError.message}`)
+      }
+
+      // Fetch customer data to resolve customer names
+      let enrichedCargo: any[] = cargo || []
+      if (cargo && cargo.length > 0) {
+        // Get unique customer IDs from the cargo data
+        const customerIds = [...new Set(cargo.map((record: any) => record.assigned_customer).filter(Boolean))]
+        
+        if (customerIds.length > 0) {
+          const { data: customersData, error: customersError } = await supabase
+            .from('customers')
+            .select('id, name, code')
+            .in('id', customerIds)
+          
+          if (customersError) {
+            console.error('Error fetching customers:', customersError)
+          } else {
+            // Merge customer data with cargo data
+            enrichedCargo = cargo.map((record: any) => {
+              const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+              return {
+                ...record,
+                customers: customer || null
+              }
+            })
+          }
         }
-      })
+      }
 
-      return logic === "OR" 
-        ? conditionResults.some(result => result)
-        : conditionResults.every(result => result)
-    })
+      setCargoData(enrichedCargo)
+      setTotalRecords(total)
+      setTotalPages(totalPages)
+      setHasNextPage(hasNextPage)
+      setHasPrevPage(hasPrevPage)
+      
+      console.log(`✅ fetchCargoData completed: ${cargo?.length || 0} records, total=${total}, page=${page}`)
+    } catch (err) {
+      console.error('Error fetching cargo data:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch cargo data')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
-  // Get filtered data for preview
-  const allPreviewData = generateSampleData()
-  const filteredPreviewData = applyFilters(allPreviewData, filterConditions, filterLogic)
-  const totalPreviewItems = filteredPreviewData.length
+  // Load data on component mount
+  useEffect(() => {
+    fetchCustomers()
+    fetchCargoData()
+  }, [])
+
+  // Note: Filter reloading is now handled directly in filter handlers
+
+  // Filter handlers
+  const handleApplyFilters = async (conditions: FilterCondition[], logic: "AND" | "OR") => {
+    console.log('🔍 Applying filters:', conditions, logic)
+    setIsApplyingFilters(true)
+    setCurrentPage(1) // Reset to first page when filters change
+    
+    // Set filters in state
+    setFilters(conditions, logic)
+    
+    // Immediately reload data with the new filters
+    await fetchCargoData(1, recordsPerPage, false, conditions, logic)
+    setIsApplyingFilters(false)
+  }
+
+  const handleClearFilters = async () => {
+    console.log('🧹 Clearing filters')
+    setIsApplyingFilters(true)
+    setCurrentPage(1)
+    
+    // Clear filters in state
+    clearFilters()
+    
+    // Immediately reload data without filters
+    await fetchCargoData(1, recordsPerPage, false, [], "AND")
+    setIsApplyingFilters(false)
+  }
+
+  // Note: Filtering is now handled server-side in fetchCargoData
+
+
+  // Calculate pagination for server-side data - like database-preview.tsx
+  const startIndex = (currentPage - 1) * recordsPerPage
+  const endIndex = startIndex + cargoData.length // Use actual data length from server
+  
+  // Use server pagination values
+  const paginationTotalPages = totalPages
+  const paginationTotalRecords = totalRecords
+  const paginationHasPrevPage = hasPrevPage
+  const paginationHasNextPage = hasNextPage
+
+  // Calculate statistics for the current page data
+  const totalItems = totalRecords // Use total records from server
+  const totalWeight = cargoData.reduce((sum, record) => sum + parseFloat(String(record.total_kg || 0)), 0)
+  const avgWeight = cargoData.length > 0 ? totalWeight / cargoData.length : 0
+  const assignedCount = totalRecords // All records are assigned since we filter them
+  const unassignedCount = 0 // No unassigned records shown
 
   if (currentView === "rules") {
     return (
       <div className="space-y-4 pt-2">
-        {/* Sample Data Banner */}
+        {/* Error Banner */}
+        {error && (
         <WarningBanner 
-          message="This is sample data and not connected to the database yet"
+            message={error}
           className="mb-4"
         />
+        )}
 
         <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
           <div className="flex justify-between items-start">
             <div>
-              <CardTitle className="text-black">Cargo Data Preview</CardTitle>
-              <p className="text-sm text-gray-600">Preview of cargo data that will be processed by automation rules</p>
+              <CardTitle className="text-black">Assigned Cargo Data Preview</CardTitle>
+              <p className="text-sm text-gray-600">Showing only cargo records with assigned customers</p>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  console.log('🔄 Refresh button clicked')
+                  try {
+                    await fetchCustomers()
+                    await fetchCargoData(currentPage, recordsPerPage, true)
+                    console.log('✅ Refresh completed successfully')
+                  } catch (error) {
+                    console.error('❌ Refresh failed:', error)
+                  }
+                }}
+                disabled={refreshing}
+              >
+                {refreshing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Refresh
+              </Button>
               <div className="relative">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  disabled={isApplyingFilters}
                   className={hasActiveFilters ? "border-blue-300 bg-blue-50 text-blue-700" : ""}
                 >
-                  <Filter className="w-4 h-4 mr-2" />
+                  {isApplyingFilters ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Filter className="w-4 h-4 mr-2" />
+                  )}
                   Filter
                   {hasActiveFilters && (
                     <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-200 text-blue-800 rounded-full">
@@ -208,17 +359,18 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                     fields={filterFields}
                     initialConditions={filterConditions}
                     initialLogic={filterLogic}
-                    title="Filter Customer Data"
+                    title="Filter Cargo Data"
                   />
                 )}
               </div>
-              <Button 
+               {/* <Button 
                 className="bg-black hover:bg-gray-800 text-white"
                 onClick={() => setCurrentView("results")}
+                disabled={loading || cargoData.length === 0}
               >
                 <Play className="h-4 w-4 mr-2" />
                 Execute All Rules
-              </Button>
+              </Button>*/}
             </div>
           </div>
           <div className="flex justify-between">
@@ -232,26 +384,35 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                     variant="ghost"
                     size="sm"
                     onClick={handleClearFilters}
+                    disabled={isApplyingFilters}
                     className="h-6 text-xs text-gray-500 hover:text-gray-700"
                   >
+                    {isApplyingFilters ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : null}
                     Clear filters
                   </Button>
                 </div>
               )}
             </div>
             <div className="flex gap-4 text-sm text-gray-600">
-              {hasActiveFilters && (
-                <span>Filtered: <strong className="text-black">{filteredPreviewData.length}</strong> / <strong className="text-gray-500">{allPreviewData.length}</strong></span>
+              {hasActiveFilters ? (
+                <span>Filtered: <strong className="text-black">{totalItems.toLocaleString()}</strong> records</span>
+              ) : (
+                <span>Total Records: <strong className="text-black">{totalItems.toLocaleString()}</strong></span>
               )}
-              {!hasActiveFilters && (
-                <span>Total Records: <strong className="text-black">{filteredPreviewData.length}</strong></span>
-              )}
-              <span>Total Weight: <strong className="text-black">{filteredPreviewData.reduce((sum, record) => sum + parseFloat(record.total_kg), 0).toFixed(1)} kg</strong></span>
-              <span>Avg Weight: <strong className="text-black">{filteredPreviewData.length > 0 ? (filteredPreviewData.reduce((sum, record) => sum + parseFloat(record.total_kg), 0) / filteredPreviewData.length).toFixed(1) : '0.0'} kg</strong></span>
+              <span>Total Weight: <strong className="text-black">{totalWeight.toFixed(1)} kg</strong></span>
+              <span>Avg Weight: <strong className="text-black">{avgWeight.toFixed(1)} kg</strong></span>
             </div>
           </div>
         </CardHeader>
         <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <span className="ml-2 text-gray-600">Loading cargo data...</span>
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <Table className="border border-collapse">
               <TableHeader>
@@ -269,97 +430,68 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                   <TableHead className="border">Mail Class</TableHead>
                   <TableHead className="border text-right">Total kg</TableHead>
                   <TableHead className="border">Invoice</TableHead>
-                  <TableHead className="border bg-yellow-200">Customer</TableHead>
-                  <TableHead className="border bg-yellow-200">Rate</TableHead>
+                    <TableHead className="border bg-yellow-200">Assigned Customer</TableHead>
+                    <TableHead className="border bg-yellow-200">Assigned At</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {(() => {
-                  // Get paginated filtered data
-                  const startIndex = (currentPage - 1) * itemsPerPage
-                  const endIndex = Math.min(startIndex + itemsPerPage, totalPreviewItems)
-                  const currentPageData = filteredPreviewData.slice(startIndex, endIndex)
-                  
-                  return currentPageData.map((record, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="border">{record.inb_flight_date}</TableCell>
-                    <TableCell className="border">{record.outb_flight_date}</TableCell>
-                    <TableCell className="border font-mono text-xs">{record.rec_id}</TableCell>
-                    <TableCell className="border">{record.des_no}</TableCell>
-                    <TableCell className="border">{record.rec_numb}</TableCell>
-                    <TableCell className="border">{record.orig_oe}</TableCell>
-                    <TableCell className="border">{record.dest_oe}</TableCell>
-                    <TableCell className="border">{record.inb_flight_no}</TableCell>
-                    <TableCell className="border">{record.outb_flight_no}</TableCell>
-                    <TableCell className="border">{record.mail_cat}</TableCell>
-                    <TableCell className="border">{record.mail_class}</TableCell>
-                    <TableCell className="border text-right">{record.total_kg}</TableCell>
-                    <TableCell className="border">{record.invoice}</TableCell>
-                    <TableCell className="border text-xs bg-yellow-200">{record.customer}</TableCell>
-                    <TableCell className="border text-xs bg-yellow-200">{record.rate}</TableCell>
+                <TableBody>
+                  {cargoData.map((record, index) => (
+                    <TableRow key={record.id || index}>
+                      <TableCell className="border">{record.inb_flight_date || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.outb_flight_date || 'N/A'}</TableCell>
+                      <TableCell className="border font-mono text-xs">{record.rec_id || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.des_no || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.rec_numb || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.orig_oe || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.dest_oe || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.inb_flight_no || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.outb_flight_no || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.mail_cat || 'N/A'}</TableCell>
+                      <TableCell className="border">{record.mail_class || 'N/A'}</TableCell>
+                      <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
+                      <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
+                      <TableCell className="border text-xs bg-yellow-200">
+                        {record.customers?.name || record.assigned_customer || 'Unassigned'}
+                      </TableCell>
+                      <TableCell className="border text-xs bg-yellow-200">
+                        {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
+                      </TableCell>
                   </TableRow>
-                  ))
-                })()}
+                  ))}
               </TableBody>
             </Table>
           </div>
+          )}
 
-          {/* Pagination Controls */}
-          {filteredPreviewData.length > 0 && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Show</span>
-                <Select value={itemsPerPage.toString()} onValueChange={(value) => {
-                  setItemsPerPage(Number(value))
-                  setCurrentPage(1)
-                }}>
-                  <SelectTrigger className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span className="text-sm text-gray-600">entries</span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalPreviewItems)} of {totalPreviewItems} entries
-                </span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="px-3 py-1 text-sm bg-gray-100 rounded">
-                    {currentPage}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalPreviewItems / itemsPerPage), prev + 1))}
-                    disabled={currentPage >= Math.ceil(totalPreviewItems / itemsPerPage)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+          {/* Pagination Controls - like database-preview.tsx */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={paginationTotalPages}
+            totalRecords={paginationTotalRecords}
+            recordsPerPage={recordsPerPage}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            onPageChange={(newPage) => {
+              setCurrentPage(newPage)
+              fetchCargoData(newPage, recordsPerPage)
+            }}
+            onRecordsPerPageChange={async (newLimit) => {
+              setRecordsPerPage(newLimit)
+              setCurrentPage(1)
+              await fetchCargoData(1, newLimit)
+            }}
+            disabled={loading}
+            hasPrevPage={paginationHasPrevPage}
+            hasNextPage={paginationHasNextPage}
+            recordsPerPageOptions={[25, 50, 100, 200]}
+          />
+          
+          {!loading && totalItems === 0 && (
+            <div className="text-center py-8">
+              <p className="text-gray-500">No cargo data found</p>
             </div>
           )}
           
-          <div className="mt-2 text-center">
-            <p className="text-sm text-gray-500">
-              This data will be processed by the active automation rules to assign customers and rates
-            </p>
-          </div>
         </CardContent>
       </Card>
       </div>
@@ -367,16 +499,10 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
   }
 
   // Results View
-  if (currentView === "results" && data) {
-    const totalResultsItems = data.data.length
+  if (currentView === "results") {
+    const totalResultsItems = totalRecords
     return (
       <div className="space-y-4 pt-2">
-        {/* Sample Data Banner */}
-        <WarningBanner 
-          message="This is sample data and not connected to the database yet"
-          className="mb-4"
-        />
-
         {/* Navigation Button */}
         <div className="flex justify-start mb-4">
           <Button 
@@ -396,11 +522,14 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
             <div className="flex items-center justify-between">
               <CardTitle className="text-black flex items-center gap-2">
                 <Play className="h-5 w-5" />
-                Cargo Data Table
+                Cargo Data Results
               </CardTitle>
             </div>
             <p className="text-gray-600 text-sm">
-              Showing {data.data.length} cargo records with automation rules applied
+              {hasActiveFilters 
+                ? `Showing ${totalResultsItems.toLocaleString()} filtered cargo records with automation rules applied`
+                : `Showing ${totalResultsItems.toLocaleString()} cargo records with automation rules applied`
+              }
             </p>
           </CardHeader>
           <CardContent>
@@ -414,83 +543,46 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                     <TableHead>Flight No.</TableHead>
                     <TableHead>Mail Cat.</TableHead>
                     <TableHead>Weight (kg)</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Assigned Team</TableHead>
+                    <TableHead>Assigned Customer</TableHead>
+                    <TableHead>Assigned At</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(() => {
-                    // Get paginated results data
-                    const startIndex = (currentPage - 1) * itemsPerPage
-                    const endIndex = Math.min(startIndex + itemsPerPage, totalResultsItems)
-                    const currentPageData = data.data.slice(startIndex, endIndex)
-                    
-                    return currentPageData.map((row: any, index: number) => {
-                    // Apply rule matching logic to determine assigned team
-                    const matchedRule = rules.find(rule => {
-                      if (!rule.is_active) return false
-                      return rule.conditions.some(condition => {
-                        const fieldValue = String(row[condition.field] || '').toLowerCase()
-                        const conditionValue = condition.value.toLowerCase()
-                        
-                        switch (condition.operator) {
-                          case 'contains':
-                            return fieldValue.includes(conditionValue)
-                          case 'equals':
-                            return fieldValue === conditionValue
-                          case 'greater_than':
-                            return parseFloat(fieldValue) > parseFloat(conditionValue)
-                          case 'less_than':
-                            return parseFloat(fieldValue) < parseFloat(conditionValue)
-                          default:
-                            return false
-                        }
-                      })
-                    })
-
-                    return (
-                      <TableRow key={index}>
+                  {cargoData.map((row: CargoDataRecord, index: number) => (
+                      <TableRow key={row.id || index}>
                         <TableCell className="font-medium">
-                          {String(row["Rec. ID"] || row["Record ID"] || `REC-${index + 1}`).substring(0, 12)}...
+                          {String(row.rec_id || `REC-${index + 1}`).substring(0, 12)}...
                         </TableCell>
                         <TableCell>
-                          {row["Inb.Flight Date"] || row["Flight Date"] || "N/A"}
+                          {row.inb_flight_date || "N/A"}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <span>{row["Orig. OE"] || "N/A"}</span>
+                            <span>{row.orig_oe || "N/A"}</span>
                             <span>→</span>
-                            <span>{row["Dest. OE"] || "N/A"}</span>
+                            <span>{row.dest_oe || "N/A"}</span>
                           </div>
                         </TableCell>
                         <TableCell>
-                          {row["Inb. Flight No."] || row["Flight No."] || "N/A"}
+                          {row.inb_flight_no || "N/A"}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            {row["Mail Cat."] || row["Category"] || "N/A"}
+                            {row.mail_cat || "N/A"}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {row["Total kg"] || row["Weight"] || "0.0"}
+                          {row.total_kg || "0.0"}
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate">
-                          {String(row["Customer name / number"] || row["Customer"] || "Unknown").split("/")[0].trim()}
+                          {row.customers?.name || row.assigned_customer || 'Unassigned'}
                         </TableCell>
                         <TableCell>
-                          {matchedRule ? (
-                            <Badge className="bg-green-100 text-green-800 text-xs">
-                              {matchedRule.actions.assignTo}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-xs text-gray-500">
-                              Unassigned
-                            </Badge>
-                          )}
+                          {row.assigned_at ? new Date(row.assigned_at).toLocaleDateString() : "N/A"}
                         </TableCell>
                         <TableCell>
-                          {matchedRule ? (
+                          {row.assigned_customer ? (
                             <Badge className="bg-blue-100 text-blue-800 text-xs">
                               Processed
                             </Badge>
@@ -501,96 +593,52 @@ export function ExecuteRules({ data, currentView, setCurrentView }: ExecuteRules
                           )}
                         </TableCell>
                       </TableRow>
-                    )
-                    })
-                  })()}
+                    ))}
                 </TableBody>
               </Table>
             </div>
 
-            {/* Pagination Controls */}
-            {data.data.length > 0 && (
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Show</span>
-                  <Select value={itemsPerPage.toString()} onValueChange={(value) => {
-                    setItemsPerPage(Number(value))
-                    setCurrentPage(1)
-                  }}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span className="text-sm text-gray-600">entries</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalResultsItems)} of {totalResultsItems} entries
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="px-3 py-1 text-sm bg-gray-100 rounded">
-                      {currentPage}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalResultsItems / itemsPerPage), prev + 1))}
-                      disabled={currentPage >= Math.ceil(totalResultsItems / itemsPerPage)}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Pagination Controls - like database-preview.tsx */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={paginationTotalPages}
+              totalRecords={paginationTotalRecords}
+              recordsPerPage={recordsPerPage}
+              startIndex={startIndex}
+              endIndex={endIndex}
+              onPageChange={(newPage) => {
+                setCurrentPage(newPage)
+                fetchCargoData(newPage, recordsPerPage)
+              }}
+              onRecordsPerPageChange={async (newLimit) => {
+                setRecordsPerPage(newLimit)
+                setCurrentPage(1)
+                await fetchCargoData(1, newLimit)
+              }}
+              disabled={false}
+              hasPrevPage={paginationHasPrevPage}
+              hasNextPage={paginationHasNextPage}
+              recordsPerPageOptions={[25, 50, 100, 200]}
+            />
             
             {/* Summary Footer */}
             <div className="mt-6 pt-4 border-t border-gray-200">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-black">{data.data.length}</div>
+                  <div className="text-2xl font-bold text-black">{totalResultsItems}</div>
                   <div className="text-sm text-gray-600">Total Records</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">
-                    {data.data.filter((row: any) => 
-                      rules.some(rule => rule.is_active && rule.conditions.some(condition => {
-                        const fieldValue = String(row[condition.field] || '').toLowerCase()
-                        return fieldValue.includes(condition.value.toLowerCase())
-                      }))
-                    ).length}
-                  </div>
-                  <div className="text-sm text-gray-600">Assigned</div>
+                  <div className="text-2xl font-bold text-green-600">{assignedCount}</div>
+                  <div className="text-sm text-gray-600">Assigned Records</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-yellow-600">
-                    {data.data.length - data.data.filter((row: any) => 
-                      rules.some(rule => rule.is_active && rule.conditions.some(condition => {
-                        const fieldValue = String(row[condition.field] || '').toLowerCase()
-                        return fieldValue.includes(condition.value.toLowerCase())
-                      }))
-                    ).length}
-                  </div>
-                  <div className="text-sm text-gray-600">Pending</div>
+                  <div className="text-2xl font-bold text-blue-600">{totalWeight.toFixed(1)}</div>
+                  <div className="text-sm text-gray-600">Total Weight (kg)</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{rules.filter(r => r.is_active).length}</div>
-                  <div className="text-sm text-gray-600">Rules Applied</div>
+                  <div className="text-2xl font-bold text-blue-600">{rules.filter((r: any) => (r as any).is_active).length}</div>
+                  <div className="text-sm text-gray-600">Active Rules</div>
                 </div>
               </div>
             </div>

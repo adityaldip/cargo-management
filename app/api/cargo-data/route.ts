@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const filtersParam = searchParams.get('filters')
     const filterLogic = searchParams.get('filterLogic') || 'AND'
     
-    // Build query
+    // Build query for cargo data
     let query = supabase
       .from('cargo_data')
       .select('*', { count: 'exact' })
@@ -79,8 +79,6 @@ export async function GET(request: NextRequest) {
     
     const { data, error, count } = await query
     
-    
-    
     if (error) {
       console.error('Error fetching cargo data:', error)
       return NextResponse.json(
@@ -88,6 +86,35 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       )
     }
+
+    // Fetch customer data to resolve customer names
+    let customersData: any[] = []
+    if (data && data.length > 0) {
+      // Get unique customer IDs from the cargo data
+      const customerIds = [...new Set(data.map(record => record.assigned_customer).filter(Boolean))]
+      
+      if (customerIds.length > 0) {
+        const { data: customers, error: customersError } = await supabase
+          .from('customers')
+          .select('id, name, code')
+          .in('id', customerIds)
+        
+        if (customersError) {
+          console.error('Error fetching customers:', customersError)
+        } else {
+          customersData = customers || []
+        }
+      }
+    }
+
+    // Merge customer data with cargo data
+    const enrichedData = data?.map(record => {
+      const customer = customersData.find(c => c.id === record.assigned_customer)
+      return {
+        ...record,
+        customers: customer || null
+      }
+    }) || []
     
     // Calculate pagination info
     const totalPages = isExport ? 1 : Math.ceil((count || 0) / limit)
@@ -95,7 +122,7 @@ export async function GET(request: NextRequest) {
     const hasPrevPage = isExport ? false : page > 1
     
     return NextResponse.json({
-      data: data || [],
+      data: enrichedData,
       pagination: {
         page,
         limit,

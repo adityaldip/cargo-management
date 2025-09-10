@@ -14,6 +14,7 @@ interface SweetAlertProps {
   onConfirm: () => void
   onCancel?: () => void
   onClose: () => void
+  disabled?: boolean
 }
 
 export function SweetAlert({
@@ -26,7 +27,8 @@ export function SweetAlert({
   cancelButtonText = "Batal",
   onConfirm,
   onCancel,
-  onClose
+  onClose,
+  disabled = false
 }: SweetAlertProps) {
   const [isAnimating, setIsAnimating] = useState(false)
 
@@ -128,9 +130,17 @@ export function SweetAlert({
             )}
             <button
               onClick={handleConfirm}
-              className={`px-6 py-2 text-sm rounded-lg transition-colors ${getConfirmButtonClass()}`}
+              disabled={disabled}
+              className={`px-6 py-2 text-sm rounded-lg transition-colors ${getConfirmButtonClass()} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {confirmButtonText}
+              {disabled ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                  {confirmButtonText}
+                </div>
+              ) : (
+                confirmButtonText
+              )}
             </button>
           </div>
         </div>

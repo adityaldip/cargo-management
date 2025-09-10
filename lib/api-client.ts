@@ -191,6 +191,22 @@ export const rulesAPI = {
       body: JSON.stringify({ rules }),
     })
   },
+
+  // Execute rules to assign customers
+  async executeRules(ruleIds?: string[], dryRun: boolean = false) {
+    return apiRequest('/rules/execute', {
+      method: 'POST',
+      body: JSON.stringify({ ruleIds, dryRun }),
+    }, 150000) // 2.5 minutes timeout for rule execution
+  },
+
+  // Test API connection
+  async testConnection() {
+    return apiRequest('/rules/test', {
+      method: 'POST',
+      body: JSON.stringify({ test: true }),
+    })
+  },
 }
 
 // Rate Rules API operations
