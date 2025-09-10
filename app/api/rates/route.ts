@@ -14,32 +14,19 @@ const supabaseAdmin = createClient<Database>(
   }
 )
 
-// GET - Fetch all rate rules with rate information
+// GET - Fetch all rates
 export async function GET() {
   try {
-    const { data: rateRules, error } = await supabaseAdmin
-      .from('rate_rules')
-      .select(`
-        *,
-        rates (
-          id,
-          name,
-          description,
-          rate_type,
-          base_rate,
-          currency,
-          multiplier,
-          tags,
-          is_active
-        )
-      `)
-      .order('priority', { ascending: true })
+    const { data: rates, error } = await supabaseAdmin
+      .from('rates')
+      .select('*')
+      .order('name', { ascending: true })
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ data: rateRules, error: null })
+    return NextResponse.json({ data: rates, error: null })
   } catch (error) {
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -48,7 +35,7 @@ export async function GET() {
   }
 }
 
-// POST - Create new rate rule
+// POST - Create new rate
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -61,50 +48,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!body.rate_id || typeof body.rate_id !== 'string') {
-      return NextResponse.json(
-        { error: 'Rate ID is required and must be a string' },
-        { status: 400 }
-      )
-    }
-
     // Set default values
-    const ruleData = {
+    const rateData = {
       ...body,
-      priority: body.priority || 1,
+      rate_type: body.rate_type || 'fixed',
+      base_rate: body.base_rate || 0,
+      currency: body.currency || 'EUR',
+      multiplier: body.multiplier || 1.0,
+      tags: body.tags || [],
       is_active: body.is_active !== undefined ? body.is_active : true,
-      conditions: body.conditions || [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
 
-    const { data: rateRule, error } = await supabaseAdmin
-      .from('rate_rules')
-      .insert(ruleData)
-      .select(`
-        *,
-        rates (
-          id,
-          name,
-          description,
-          rate_type,
-          base_rate,
-          currency,
-          multiplier,
-          tags,
-          is_active
-        )
-      `)
+    const { data: rate, error } = await supabaseAdmin
+      .from('rates')
+      .insert(rateData)
+      .select()
       .single()
 
     if (error) {
-      console.error('Error creating rate rule:', error)
+      console.error('Error creating rate:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ data: rateRule, error: null })
+    return NextResponse.json({ data: rate, error: null })
   } catch (error) {
-    console.error('Rate rule creation error:', error)
+    console.error('Rate creation error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

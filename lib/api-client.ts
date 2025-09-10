@@ -8,9 +8,16 @@ async function apiRequest<T>(
   options: RequestInit = {},
   timeout: number = 10000
 ): Promise<{ data: T | null; error: string | null }> {
+  let controller: AbortController | null = null
+  let timeoutId: NodeJS.Timeout | null = null
+  
   try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout)
+    controller = new AbortController()
+    timeoutId = setTimeout(() => {
+      if (controller && !controller.signal.aborted) {
+        controller.abort()
+      }
+    }, timeout)
 
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
@@ -21,7 +28,11 @@ async function apiRequest<T>(
       ...options,
     })
 
-    clearTimeout(timeoutId)
+    // Clear timeout if request completes successfully
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
 
     if (!response.ok) {
       const result = await response.json().catch(() => ({ error: 'Request failed' }))
@@ -33,8 +44,13 @@ async function apiRequest<T>(
   } catch (error) {
     console.error('API Request Error:', error)
     
+    // Clean up timeout
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+    
     if (error instanceof Error && error.name === 'AbortError') {
-      return { data: null, error: 'Request timeout' }
+      return { data: null, error: 'Request timeout - please try again' }
     }
     
     return { 
@@ -205,6 +221,42 @@ export const rulesAPI = {
     return apiRequest('/rules/test', {
       method: 'POST',
       body: JSON.stringify({ test: true }),
+    })
+  },
+}
+
+// Rates API operations
+export const ratesAPI = {
+  // Get all rates
+  async getAll() {
+    return apiRequest('/rates')
+  },
+
+  // Get rate by ID
+  async getById(id: string) {
+    return apiRequest(`/rates/${id}`)
+  },
+
+  // Create new rate
+  async create(rateData: any) {
+    return apiRequest('/rates', {
+      method: 'POST',
+      body: JSON.stringify(rateData),
+    })
+  },
+
+  // Update rate
+  async update(id: string, updates: any) {
+    return apiRequest(`/rates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  },
+
+  // Delete rate
+  async delete(id: string) {
+    return apiRequest(`/rates/${id}`, {
+      method: 'DELETE',
     })
   },
 }

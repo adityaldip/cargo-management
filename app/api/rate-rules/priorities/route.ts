@@ -27,54 +27,50 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    // Two-phase update strategy to avoid unique constraint violations
-    // Phase 1: Set temporary negative priorities
-    const tempUpdates = ruleUpdates.map((update, index) => ({
-      id: update.id,
-      priority: -(index + 1000) // Use negative numbers to avoid conflicts
-    }))
-
-    for (const update of tempUpdates) {
-      const { error } = await supabaseAdmin
-        .from('rate_rules')
-        .update({ 
-          priority: update.priority,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', update.id)
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
+    if (ruleUpdates.length === 0) {
+      return NextResponse.json(
+        { error: 'No rule updates provided' },
+        { status: 400 }
+      )
     }
 
-    // Phase 2: Set final priorities
+    // Validate each update has required fields
     for (const update of ruleUpdates) {
-      const { error } = await supabaseAdmin
-        .from('rate_rules')
-        .update({ 
-          priority: update.priority,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', update.id)
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+      if (!update.id || typeof update.priority !== 'number') {
+        return NextResponse.json(
+          { error: 'Each rule update must have id and priority fields' },
+          { status: 400 }
+        )
       }
     }
 
-    // Fetch updated rules
+    // Use Supabase RPC for atomic transaction
+    const { data, error } = await supabaseAdmin.rpc('update_rate_rule_priorities', {
+      rule_updates: ruleUpdates.map(update => ({
+        id: update.id,
+        priority: update.priority
+      }))
+    })
+
+    if (error) {
+      console.error('Database transaction error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Fetch updated rules to return
     const { data: updatedRules, error: fetchError } = await supabaseAdmin
       .from('rate_rules')
       .select('*')
       .order('priority', { ascending: true })
 
     if (fetchError) {
+      console.error('Error fetching updated rules:', fetchError)
       return NextResponse.json({ error: fetchError.message }, { status: 500 })
     }
 
     return NextResponse.json({ data: updatedRules, error: null })
   } catch (error) {
+    console.error('Rate rule priorities update error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

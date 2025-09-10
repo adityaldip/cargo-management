@@ -79,20 +79,22 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
   // Fetch customers from Supabase
   const fetchCustomers = async () => {
     try {
+      console.log('🔍 Fetching customers from Supabase...')
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
-        .select('id, name')
+        .select('id, name, code')
         .eq('is_active', true)
         .order('name')
 
       if (customersError) {
-        console.error('Error fetching customers:', customersError)
+        console.error('❌ Error fetching customers:', customersError)
         return
       }
 
+      console.log('✅ Successfully fetched customers:', customersData?.length || 0)
       setCustomers(customersData || [])
     } catch (err) {
-      console.error('Error fetching customers:', err)
+      console.error('❌ Error in fetchCustomers:', err)
     }
   }
 
@@ -207,23 +209,67 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         // Get unique customer IDs from the cargo data
         const customerIds = [...new Set(cargo.map((record: any) => record.assigned_customer).filter(Boolean))]
         
+        console.log('🔍 Customer IDs to lookup:', customerIds)
+        
         if (customerIds.length > 0) {
-          const { data: customersData, error: customersError } = await supabase
-            .from('customers')
-            .select('id, name, code')
-            .in('id', customerIds)
-          
-          if (customersError) {
-            console.error('Error fetching customers:', customersError)
-          } else {
+          try {
+            // First, try to fetch by ID (UUID format)
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+            const uuidIds = customerIds.filter(id => uuidPattern.test(id))
+            const nameIds = customerIds.filter(id => !uuidPattern.test(id))
+            
+            console.log('🔍 UUID IDs:', uuidIds)
+            console.log('🔍 Name IDs:', nameIds)
+            
+            let customersData: any[] = []
+            
+            // Fetch customers by UUID
+            if (uuidIds.length > 0) {
+              const { data: uuidCustomers, error: uuidError } = await supabase
+                .from('customers')
+                .select('id, name, code')
+                .in('id', uuidIds)
+              
+              if (uuidError) {
+                console.error('Error fetching customers by UUID:', uuidError)
+              } else {
+                customersData.push(...(uuidCustomers || []))
+                console.log('✅ Found customers by UUID:', uuidCustomers?.length || 0)
+              }
+            }
+            
+            // Fetch customers by name (fallback)
+            if (nameIds.length > 0) {
+              const { data: nameCustomers, error: nameError } = await supabase
+                .from('customers')
+                .select('id, name, code')
+                .in('name', nameIds)
+              
+              if (nameError) {
+                console.error('Error fetching customers by name:', nameError)
+              } else {
+                customersData.push(...(nameCustomers || []))
+                console.log('✅ Found customers by name:', nameCustomers?.length || 0)
+              }
+            }
+            
+            console.log('📊 Total customers found:', customersData.length)
+            
             // Merge customer data with cargo data
             enrichedCargo = cargo.map((record: any) => {
-              const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+              const customer = customersData.find((c: any) => 
+                c.id === record.assigned_customer || c.name === record.assigned_customer
+              )
               return {
                 ...record,
                 customers: customer || null
               }
             })
+            
+          } catch (customerFetchError) {
+            console.error('Error in customer fetch operation:', customerFetchError)
+            // Continue with original data if customer fetch fails
+            enrichedCargo = cargo
           }
         }
       }
@@ -383,23 +429,67 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         // Get unique customer IDs from the cargo data
         const customerIds = [...new Set(allData.map((record: any) => record.assigned_customer).filter(Boolean))]
         
+        console.log('🔍 Export - Customer IDs to lookup:', customerIds)
+        
         if (customerIds.length > 0) {
-          const { data: customersData, error: customersError } = await supabase
-            .from('customers')
-            .select('id, name, code')
-            .in('id', customerIds)
-          
-          if (customersError) {
-            console.error('Error fetching customers:', customersError)
-          } else {
+          try {
+            // First, try to fetch by ID (UUID format)
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+            const uuidIds = customerIds.filter(id => uuidPattern.test(id))
+            const nameIds = customerIds.filter(id => !uuidPattern.test(id))
+            
+            console.log('🔍 Export - UUID IDs:', uuidIds)
+            console.log('🔍 Export - Name IDs:', nameIds)
+            
+            let customersData: any[] = []
+            
+            // Fetch customers by UUID
+            if (uuidIds.length > 0) {
+              const { data: uuidCustomers, error: uuidError } = await supabase
+                .from('customers')
+                .select('id, name, code')
+                .in('id', uuidIds)
+              
+              if (uuidError) {
+                console.error('Error fetching customers by UUID for export:', uuidError)
+              } else {
+                customersData.push(...(uuidCustomers || []))
+                console.log('✅ Export - Found customers by UUID:', uuidCustomers?.length || 0)
+              }
+            }
+            
+            // Fetch customers by name (fallback)
+            if (nameIds.length > 0) {
+              const { data: nameCustomers, error: nameError } = await supabase
+                .from('customers')
+                .select('id, name, code')
+                .in('name', nameIds)
+              
+              if (nameError) {
+                console.error('Error fetching customers by name for export:', nameError)
+              } else {
+                customersData.push(...(nameCustomers || []))
+                console.log('✅ Export - Found customers by name:', nameCustomers?.length || 0)
+              }
+            }
+            
+            console.log('📊 Export - Total customers found:', customersData.length)
+            
             // Merge customer data with cargo data
             enrichedData = allData.map((record: any) => {
-              const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+              const customer = customersData.find((c: any) => 
+                c.id === record.assigned_customer || c.name === record.assigned_customer
+              )
               return {
                 ...record,
                 customers: customer || null
               }
             })
+            
+          } catch (customerFetchError) {
+            console.error('Error in customer fetch operation for export:', customerFetchError)
+            // Continue with original data if customer fetch fails
+            enrichedData = allData
           }
         }
       }
@@ -479,7 +569,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         record.mail_class || '',
         record.total_kg || '0.0',
         record.invoice || '',
-        record.customers?.name || record.assigned_customer || '',
+        record.customers?.name || (record.assigned_customer ? `Customer: ${record.assigned_customer}` : ''),
         record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : ''
       ]
       csv += row.map(field => `"${field}"`).join(",") + "\n"
@@ -715,7 +805,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                       <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
                       <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
-                        {record.customers?.name || record.assigned_customer || 'Unassigned'}
+                        {record.customers?.name || (record.assigned_customer ? `Customer: ${record.assigned_customer}` : 'Unassigned')}
                       </TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
                         {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
@@ -840,7 +930,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                           {row.total_kg || "0.0"}
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate">
-                          {row.customers?.name || row.assigned_customer || 'Unassigned'}
+                          {row.customers?.name || (row.assigned_customer ? `Customer: ${row.assigned_customer}` : 'Unassigned')}
                         </TableCell>
                         <TableCell>
                           {row.assigned_at ? new Date(row.assigned_at).toLocaleDateString() : "N/A"}

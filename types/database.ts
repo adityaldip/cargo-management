@@ -129,15 +129,56 @@ export interface Database {
           updated_at?: string
         }
       }
+      rates: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          rate_type: string
+          base_rate: number
+          currency: string
+          multiplier: number
+          tags: string[]
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          rate_type?: string
+          base_rate?: number
+          currency?: string
+          multiplier?: number
+          tags?: string[]
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          rate_type?: string
+          base_rate?: number
+          currency?: string
+          multiplier?: number
+          tags?: string[]
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       rate_rules: {
         Row: {
           id: string
           name: string
-          description: string
+          description: string | null
           is_active: boolean
           priority: number
           conditions: Json
-          actions: Json
+          rate_id: string
           match_count: number
           last_run: string | null
           created_at: string
@@ -146,11 +187,11 @@ export interface Database {
         Insert: {
           id?: string
           name: string
-          description: string
+          description?: string | null
           is_active?: boolean
           priority: number
           conditions: Json
-          actions: Json
+          rate_id: string
           match_count?: number
           last_run?: string | null
           created_at?: string
@@ -159,11 +200,11 @@ export interface Database {
         Update: {
           id?: string
           name?: string
-          description?: string
+          description?: string | null
           is_active?: boolean
           priority?: number
           conditions?: Json
-          actions?: Json
+          rate_id?: string
           match_count?: number
           last_run?: string | null
           created_at?: string
@@ -188,6 +229,7 @@ export interface Database {
           invoice: string
           customer_name_number: string | null
           assigned_customer: string | null
+          assigned_at: string | null
           assigned_rate: number | null
           rate_currency: string | null
           processed_at: string | null
@@ -211,6 +253,7 @@ export interface Database {
           invoice: string
           customer_name_number?: string | null
           assigned_customer?: string | null
+          assigned_at?: string | null
           assigned_rate?: number | null
           rate_currency?: string | null
           processed_at?: string | null

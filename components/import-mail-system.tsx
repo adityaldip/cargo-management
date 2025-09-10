@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, FileText, Loader2, AlertTriangle, CheckCircle, Settings, Eye, EyeOff } from "lucide-react"
+import { Upload, FileText, Loader2, AlertTriangle, Settings, Eye, EyeOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { processFile, getExcelColumns, getExcelSampleData, processFileWithMappings, type ColumnMappingRule } from "@/lib/file-processor"
 import { useDataStore } from "@/store/data-store"
@@ -13,6 +13,7 @@ import { useWorkflowStore } from "@/store/workflow-store"
 import { useColumnMappingStore } from "@/store/column-mapping-store"
 import { useToast } from "@/hooks/use-toast"
 import type { ProcessedData } from "@/types/cargo-data"
+import type { ImportMailSystemProps, ImportStep, ProgressStats } from "@/types/import-components"
 import { ColumnMapping } from "./column-mapping"
 import { IgnoreTrackingRules } from "./ignore-tracking-rules"
 import { IgnoredDataTable } from "./ignored-data-table"
@@ -20,10 +21,6 @@ import type { IgnoreRule } from "@/lib/ignore-rules-utils"
 import { FileStorage } from "@/lib/file-storage"
 import { StorageMonitor } from "./ui/storage-monitor"
 
-interface ImportMailSystemProps {
-  onDataProcessed: (data: ProcessedData | null) => void
-  onContinue?: () => void
-}
 
 
 export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSystemProps) {
@@ -46,7 +43,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   const [showColumnMapping, setShowColumnMapping] = useState(false)
   const [excelColumns, setExcelColumns] = useState<string[]>([])
   const [sampleData, setSampleData] = useState<Record<string, string[]>>({})
-  const [activeStep, setActiveStep] = useState<"upload" | "map" | "ignore" | "ignored">("upload")
+  const [activeStep, setActiveStep] = useState<ImportStep>("upload")
   const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[]>([])
   const [showIgnoreRules, setShowIgnoreRules] = useState(false)
   const [isMappingComplete, setIsMappingComplete] = useState(false)
@@ -54,7 +51,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   const [progressMessage, setProgressMessage] = useState("")
   const [isFileProcessing, setIsFileProcessing] = useState(false)
   const [showProgressBar, setShowProgressBar] = useState(false)
-  const [progressStats, setProgressStats] = useState({
+  const [progressStats, setProgressStats] = useState<ProgressStats>({
     currentRow: 0,
     totalRows: 0,
     processedRows: 0
@@ -119,25 +116,21 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
   // Toast for notifications
   const { toast } = useToast()
   
-  // Save upload session data
-  const saveUploadSessionData = () => {
-    const sessionData = {
-      fileName: uploadedFile?.name || null,
-      processedData,
-      excelColumns,
-      sampleData,
-      activeStep,
-      ignoreRules,
-      timestamp: Date.now()
-    }
-    saveUploadSession("mail-system", sessionData)
-  }
   
   // Save session data whenever relevant state changes
   React.useEffect(() => {
     if (uploadedFile || processedData || excelColumns.length > 0) {
       try {
-        saveUploadSessionData()
+        const sessionData = {
+          fileName: uploadedFile?.name || null,
+          processedData,
+          excelColumns,
+          sampleData,
+          activeStep,
+          ignoreRules,
+          timestamp: Date.now()
+        }
+        saveUploadSession("mail-system", sessionData)
       } catch (error) {
         if (error instanceof Error && error.message.includes('quota')) {
           toast({

@@ -27,7 +27,7 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
             }
           >
             <Settings className="h-4 w-4 mr-2" />
-            Set Up Rates
+            Set Up Rules
           </Button>
           <Button
             variant={activeTab === "configure" ? "default" : "ghost"}
@@ -39,7 +39,7 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
-            Configure Rates
+            Configure Rules
           </Button>
           <Button
             variant={activeTab === "execute" ? "default" : "ghost"}
@@ -51,7 +51,7 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
-            Execute Rates
+            Execute Rules
           </Button>
         </div>
       </div>

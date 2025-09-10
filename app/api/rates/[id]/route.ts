@@ -14,14 +14,14 @@ const supabaseAdmin = createClient<Database>(
   }
 )
 
-// GET - Fetch rate rule by ID
+// GET - Fetch rate by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { data: rateRule, error } = await supabaseAdmin
-      .from('rate_rules')
+    const { data: rate, error } = await supabaseAdmin
+      .from('rates')
       .select('*')
       .eq('id', params.id)
       .single()
@@ -30,7 +30,7 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ data: rateRule, error: null })
+    return NextResponse.json({ data: rate, error: null })
   } catch (error) {
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -39,7 +39,7 @@ export async function GET(
   }
 }
 
-// PUT - Update rate rule
+// PUT - Update rate
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -50,21 +50,21 @@ export async function PUT(
     // Validate ID parameter
     if (!params.id) {
       return NextResponse.json(
-        { error: 'Rate rule ID is required' },
+        { error: 'Rate ID is required' },
         { status: 400 }
       )
     }
 
-    // Check if rule exists
-    const { data: existingRule, error: fetchError } = await supabaseAdmin
-      .from('rate_rules')
+    // Check if rate exists
+    const { data: existingRate, error: fetchError } = await supabaseAdmin
+      .from('rates')
       .select('id')
       .eq('id', params.id)
       .single()
 
-    if (fetchError || !existingRule) {
+    if (fetchError || !existingRate) {
       return NextResponse.json(
-        { error: 'Rate rule not found' },
+        { error: 'Rate not found' },
         { status: 404 }
       )
     }
@@ -75,21 +75,21 @@ export async function PUT(
       updated_at: new Date().toISOString()
     }
 
-    const { data: rateRule, error } = await supabaseAdmin
-      .from('rate_rules')
+    const { data: rate, error } = await supabaseAdmin
+      .from('rates')
       .update(updateData)
       .eq('id', params.id)
       .select()
       .single()
 
     if (error) {
-      console.error('Error updating rate rule:', error)
+      console.error('Error updating rate:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ data: rateRule, error: null })
+    return NextResponse.json({ data: rate, error: null })
   } catch (error) {
-    console.error('Rate rule update error:', error)
+    console.error('Rate update error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -97,7 +97,7 @@ export async function PUT(
   }
 }
 
-// DELETE - Delete rate rule
+// DELETE - Delete rate
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -106,38 +106,38 @@ export async function DELETE(
     // Validate ID parameter
     if (!params.id) {
       return NextResponse.json(
-        { error: 'Rate rule ID is required' },
+        { error: 'Rate ID is required' },
         { status: 400 }
       )
     }
 
-    // Check if rule exists
-    const { data: existingRule, error: fetchError } = await supabaseAdmin
-      .from('rate_rules')
+    // Check if rate exists
+    const { data: existingRate, error: fetchError } = await supabaseAdmin
+      .from('rates')
       .select('id')
       .eq('id', params.id)
       .single()
 
-    if (fetchError || !existingRule) {
+    if (fetchError || !existingRate) {
       return NextResponse.json(
-        { error: 'Rate rule not found' },
+        { error: 'Rate not found' },
         { status: 404 }
       )
     }
 
     const { error } = await supabaseAdmin
-      .from('rate_rules')
+      .from('rates')
       .delete()
       .eq('id', params.id)
 
     if (error) {
-      console.error('Error deleting rate rule:', error)
+      console.error('Error deleting rate:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ data: null, error: null })
   } catch (error) {
-    console.error('Rate rule deletion error:', error)
+    console.error('Rate deletion error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

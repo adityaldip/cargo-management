@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { rateRulesAPI } from '@/lib/api-client'
-import { RateRule } from './types'
+import { RateRule } from '@/store/rate-rules-store'
 import { useRateRulesStore } from '@/store/rate-rules-store'
 
 export function useRateRulesData() {
@@ -32,23 +32,24 @@ export function useRateRulesData() {
       }
 
       if (rateRulesData) {
-        // Transform database data to match our component types
-        const transformedRules: RateRule[] = rateRulesData.map((rule: any) => ({
-          id: rule.id,
-          name: rule.name,
-          description: rule.description || '',
-          isActive: rule.is_active,
-          priority: rule.priority,
-          conditions: rule.conditions || [],
-          actions: rule.actions || {
-            rateType: 'fixed',
-            baseRate: 0,
-            currency: 'EUR',
-            tags: []
-          },
-          matchCount: rule.match_count || 0,
-          lastRun: rule.last_run
-        }))
+        // Transform database data to match our store types
+        const transformedRules: RateRule[] = rateRulesData.map((rule: any) => {
+          // Extract rate information from the joined rates table
+          const rate = rule.rates || {}
+          
+          return {
+            id: rule.id,
+            name: rule.name || 'Unnamed Rule',
+            description: rule.description || '',
+            isActive: rule.is_active !== undefined ? rule.is_active : true,
+            priority: rule.priority || 1,
+            conditions: rule.conditions || [],
+            rate: rate.base_rate || 0,
+            currency: rate.currency || 'EUR',
+            createdAt: rule.created_at || new Date().toISOString(),
+            updatedAt: rule.updated_at || new Date().toISOString()
+          }
+        })
 
         setRateRules(transformedRules)
       }
@@ -118,10 +119,10 @@ export function useRateRulesData() {
         is_active: ruleData.isActive ?? true,
         priority: ruleData.priority ?? rateRules.length + 1,
         conditions: ruleData.conditions || [],
-        actions: ruleData.actions || {
+        actions: {
           rateType: 'fixed',
-          baseRate: 0,
-          currency: 'EUR',
+          baseRate: ruleData.rate || 0,
+          currency: ruleData.currency || 'EUR',
           tags: []
         },
         match_count: 0
@@ -156,7 +157,18 @@ export function useRateRulesData() {
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive
       if (updates.priority !== undefined) dbUpdates.priority = updates.priority
       if (updates.conditions !== undefined) dbUpdates.conditions = updates.conditions
-      if (updates.actions !== undefined) dbUpdates.actions = updates.actions
+      if (updates.rate !== undefined || updates.currency !== undefined) {
+        // Get existing rule to preserve other action properties
+        const existingRule = rateRules.find(r => r.id === ruleId)
+        // Get existing actions from the rule (this would need to be fetched from API)
+        // For now, create a basic actions structure
+        dbUpdates.actions = {
+          rateType: 'fixed',
+          baseRate: updates.rate !== undefined ? updates.rate : (existingRule?.rate || 0),
+          currency: updates.currency !== undefined ? updates.currency : (existingRule?.currency || 'EUR'),
+          tags: []
+        }
+      }
 
       const { data, error } = await rateRulesAPI.update(ruleId, dbUpdates)
       

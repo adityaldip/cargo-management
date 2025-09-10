@@ -30,7 +30,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { RateRule } from "./types"
+import { RateRule } from "@/store/rate-rules-store"
 import { SAMPLE_RATE_RULES } from "./sample-data"
 import { useRateRulesData } from "./hooks"
 import { CreateRateRuleModal } from "./CreateRateRuleModal"
@@ -107,8 +107,7 @@ export function ConfigureRates() {
     // First apply search filter
     const matchesSearch = !searchTerm || (
       rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.actions.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      (rule.description && rule.description.toLowerCase().includes(searchTerm.toLowerCase()))
     )
     
     if (!matchesSearch) return false
@@ -604,8 +603,7 @@ export function ConfigureRates() {
                                   <div className="flex items-center justify-between w-full">
                                     <span>{rateRule.name}</span>
                                     <span className="ml-2 text-xs text-gray-500">
-                                      {rateRule.actions.currency} {rateRule.actions.baseRate.toFixed(2)}
-                                      {rateRule.actions.rateType === "per_kg" && "/kg"}
+                                      {rateRule.currency || 'EUR'} {(rateRule.rate || 0).toFixed(2)}
                                     </span>
                                   </div>
                                 </SelectItem>

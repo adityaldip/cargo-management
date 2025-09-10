@@ -4,12 +4,26 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { AlertTriangle, Settings } from "lucide-react"
+import { AlertTriangle, Loader2, Plus } from "lucide-react"
 import { GripVertical } from "lucide-react"
-import { RateRule } from "./types"
 import { useRateRulesData } from "./hooks"
+import { RateRule } from "@/store/rate-rules-store"
+import { ratesAPI } from "@/lib/api-client"
+
+interface Rate {
+  id: string
+  name: string
+  description?: string
+  rate_type: string
+  base_rate: number
+  currency: string
+  multiplier: number
+  tags: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
 
 export function SetupRates() {
   const {
@@ -25,6 +39,10 @@ export function SetupRates() {
   
   const [localRules, setLocalRules] = useState<RateRule[]>([])
   const [draggedRule, setDraggedRule] = useState<string | null>(null)
+  const [isReordering, setIsReordering] = useState(false)
+  
+  // Rate management state
+  const [isCreateRateModalOpen, setIsCreateRateModalOpen] = useState(false)
 
   // Sync local rules when database rules change
   useEffect(() => {
@@ -33,7 +51,28 @@ export function SetupRates() {
     }
   }, [rateRules])
 
+
   const displayRules = localRules.length > 0 ? localRules : rateRules
+
+  const handleCreateRate = async (rateData: Partial<Rate>) => {
+    try {
+      setError(null)
+      const { data, error } = await ratesAPI.create(rateData)
+      
+      if (error) {
+        setError(error)
+        return { success: false, error }
+      }
+
+      // Refresh rate rules to show the new rate
+      await refetch()
+      return { success: true, data }
+    } catch (err) {
+      const errorMsg = `Failed to create rate: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      return { success: false, error: errorMsg }
+    }
+  }
 
   const toggleRuleActive = async (ruleId: string) => {
     const rule = displayRules.find(r => r.id === ruleId)
@@ -59,32 +98,41 @@ export function SetupRates() {
   const handleRuleDrop = async (e: React.DragEvent, targetRuleId: string) => {
     e.preventDefault()
     
-    if (!draggedRule || draggedRule === targetRuleId) return
+    if (!draggedRule || draggedRule === targetRuleId || isReordering) return
 
-    const draggedIndex = displayRules.findIndex(r => r.id === draggedRule)
-    const targetIndex = displayRules.findIndex(r => r.id === targetRuleId)
+    setIsReordering(true)
     
-    const newRules = [...displayRules]
-    const [draggedItem] = newRules.splice(draggedIndex, 1)
-    newRules.splice(targetIndex, 0, draggedItem)
-    
-    // Update priorities based on new positions
-    const updatedRules = newRules.map((rule, index) => ({
-      ...rule,
-      priority: index + 1
-    }))
-    
-    // Update local state optimistically
-    setLocalRules(updatedRules)
-    
-    // Update database
-    const success = await updateRateRulePriorities(updatedRules)
-    if (!success) {
-      // Revert on failure
+    try {
+      const draggedIndex = displayRules.findIndex(r => r.id === draggedRule)
+      const targetIndex = displayRules.findIndex(r => r.id === targetRuleId)
+      
+      const newRules = [...displayRules]
+      const [draggedItem] = newRules.splice(draggedIndex, 1)
+      newRules.splice(targetIndex, 0, draggedItem)
+      
+      // Update priorities based on new positions
+      const updatedRules = newRules.map((rule, index) => ({
+        ...rule,
+        priority: index + 1
+      }))
+      
+      // Update local state optimistically
+      setLocalRules(updatedRules)
+      
+      // Update database
+      const success = await updateRateRulePriorities(updatedRules)
+      if (!success) {
+        // Revert on failure
+        setLocalRules(displayRules)
+      }
+    } catch (error) {
+      console.error('Error reordering rules:', error)
+      // Revert on error
       setLocalRules(displayRules)
+    } finally {
+      setIsReordering(false)
+      setDraggedRule(null)
     }
-    
-    setDraggedRule(null)
   }
 
   // Show loading state
@@ -139,26 +187,44 @@ export function SetupRates() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-black">Set Up Rates</CardTitle>
+              <CardTitle className="text-black flex items-center gap-2">
+                Set Up Rates
+                {isReordering && (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                )}
+              </CardTitle>
               <p className="text-sm text-gray-600">
                 Manage rate rules priority order and status
+                {isReordering && (
+                  <span className="ml-2 text-blue-600 font-medium">Reordering...</span>
+                )}
               </p>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={refetch}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? "Refreshing..." : "Refresh"}
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsCreateRateModalOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Rate
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={refetch}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? "Refreshing..." : "Refresh"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {/* Rate Rules List */}
             <div className="space-y-1">
-              {displayRules.map((rule, index) => (
+              {displayRules.filter(rule => rule && rule.id).map((rule, index) => (
                 <div 
                   key={rule.id} 
                   draggable
@@ -167,7 +233,7 @@ export function SetupRates() {
                   onDrop={(e) => handleRuleDrop(e, rule.id)}
                   className={`flex items-center gap-3 p-3 border border-gray-200 rounded-lg transition-all cursor-pointer hover:bg-gray-50 ${
                     draggedRule === rule.id ? 'opacity-50' : ''
-                  }`}
+                  } ${isReordering ? 'pointer-events-none opacity-75' : ''}`}
                 >
                   {/* Drag Handle */}
                   <div className="cursor-grab hover:cursor-grabbing">
@@ -201,8 +267,7 @@ export function SetupRates() {
                   {/* Rate Info */}
                   <div className="text-right min-w-20">
                     <p className="text-xs font-medium text-black">
-                      {rule.actions.currency} {rule.actions.baseRate.toFixed(2)}
-                      {rule.actions.rateType === "per_kg" && "/kg"}
+                      {rule.currency || 'EUR'} {(rule.rate || 0).toFixed(2)}
                     </p>
                   </div>
 
@@ -212,6 +277,9 @@ export function SetupRates() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Create Rate Modal would go here */}
+      {/* You can create a separate CreateRateModal component */}
     </div>
   )
 }
