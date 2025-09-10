@@ -4,12 +4,12 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AlertTriangle, Loader2, Plus } from "lucide-react"
-import { GripVertical } from "lucide-react"
-import { useRateRulesData } from "./hooks"
-import { RateRule } from "@/store/rate-rules-store"
-import { ratesAPI } from "@/lib/api-client"
+import { useRatesData } from "./hooks"
 
 interface Rate {
   id: string
@@ -27,113 +27,80 @@ interface Rate {
 
 export function SetupRates() {
   const {
-    rateRules,
+    rates,
     loading,
     error,
     isRefreshing,
     setError,
     refetch,
-    updateRateRule,
-    updateRateRulePriorities
-  } = useRateRulesData()
+    updateRate,
+    createRate
+  } = useRatesData()
   
-  const [localRules, setLocalRules] = useState<RateRule[]>([])
-  const [draggedRule, setDraggedRule] = useState<string | null>(null)
-  const [isReordering, setIsReordering] = useState(false)
   
   // Rate management state
   const [isCreateRateModalOpen, setIsCreateRateModalOpen] = useState(false)
+  const [isCreatingRate, setIsCreatingRate] = useState(false)
+  const [newRateData, setNewRateData] = useState({
+    name: '',
+    description: '',
+    rate_type: 'fixed',
+    base_rate: 0,
+    currency: 'EUR',
+    multiplier: 1.0,
+    tags: [] as string[],
+    is_active: true
+  })
 
-  // Sync local rules when database rules change
-  useEffect(() => {
-    if (rateRules.length > 0) {
-      setLocalRules(rateRules)
+
+  const handleCreateRate = async () => {
+    if (!newRateData.name.trim()) {
+      setError('Rate name is required')
+      return
     }
-  }, [rateRules])
 
-
-  const displayRules = localRules.length > 0 ? localRules : rateRules
-
-  const handleCreateRate = async (rateData: Partial<Rate>) => {
     try {
+      setIsCreatingRate(true)
       setError(null)
-      const { data, error } = await ratesAPI.create(rateData)
       
-      if (error) {
-        setError(error)
-        return { success: false, error }
+      const result = await createRate(newRateData)
+      
+      if (!result.success) {
+        setError(result.error || 'Failed to create rate')
+        return
       }
 
-      // Refresh rate rules to show the new rate
-      await refetch()
-      return { success: true, data }
+      // Reset form and close modal
+      setNewRateData({
+        name: '',
+        description: '',
+        rate_type: 'fixed',
+        base_rate: 0,
+        currency: 'EUR',
+        multiplier: 1.0,
+        tags: [],
+        is_active: true
+      })
+      setIsCreateRateModalOpen(false)
     } catch (err) {
       const errorMsg = `Failed to create rate: ${err instanceof Error ? err.message : 'Unknown error'}`
       setError(errorMsg)
-      return { success: false, error: errorMsg }
-    }
-  }
-
-  const toggleRuleActive = async (ruleId: string) => {
-    const rule = displayRules.find(r => r.id === ruleId)
-    if (rule) {
-      await updateRateRule(ruleId, { isActive: !rule.isActive })
-    }
-  }
-
-  const updateRuleName = async (ruleId: string, name: string) => {
-    await updateRateRule(ruleId, { name })
-  }
-
-  const handleRuleDragStart = (e: React.DragEvent, ruleId: string) => {
-    setDraggedRule(ruleId)
-    e.dataTransfer.effectAllowed = "move"
-  }
-
-  const handleRuleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-  }
-
-  const handleRuleDrop = async (e: React.DragEvent, targetRuleId: string) => {
-    e.preventDefault()
-    
-    if (!draggedRule || draggedRule === targetRuleId || isReordering) return
-
-    setIsReordering(true)
-    
-    try {
-      const draggedIndex = displayRules.findIndex(r => r.id === draggedRule)
-      const targetIndex = displayRules.findIndex(r => r.id === targetRuleId)
-      
-      const newRules = [...displayRules]
-      const [draggedItem] = newRules.splice(draggedIndex, 1)
-      newRules.splice(targetIndex, 0, draggedItem)
-      
-      // Update priorities based on new positions
-      const updatedRules = newRules.map((rule, index) => ({
-        ...rule,
-        priority: index + 1
-      }))
-      
-      // Update local state optimistically
-      setLocalRules(updatedRules)
-      
-      // Update database
-      const success = await updateRateRulePriorities(updatedRules)
-      if (!success) {
-        // Revert on failure
-        setLocalRules(displayRules)
-      }
-    } catch (error) {
-      console.error('Error reordering rules:', error)
-      // Revert on error
-      setLocalRules(displayRules)
     } finally {
-      setIsReordering(false)
-      setDraggedRule(null)
+      setIsCreatingRate(false)
     }
   }
+
+  const toggleRateActive = async (rateId: string) => {
+    const rate = rates.find(r => r.id === rateId)
+    if (rate) {
+      await updateRate(rateId, { is_active: !rate.is_active })
+    }
+  }
+
+  const updateRateName = async (rateId: string, name: string) => {
+    await updateRate(rateId, { name })
+  }
+
 
   // Show loading state
   if (loading) {
@@ -141,9 +108,9 @@ export function SetupRates() {
       <div className="max-w-2xl mx-auto">
         <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-black">Set Up Rates</CardTitle>
+            <CardTitle className="text-black">Manage Rates</CardTitle>
             <p className="text-sm text-gray-600">
-              Configure rate fields and their display order
+              Create and manage rate configurations
             </p>
           </CardHeader>
           <CardContent>
@@ -187,17 +154,11 @@ export function SetupRates() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-black flex items-center gap-2">
-                Set Up Rates
-                {isReordering && (
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                )}
+              <CardTitle className="text-black">
+                Manage Rates
               </CardTitle>
               <p className="text-sm text-gray-600">
-                Manage rate rules priority order and status
-                {isReordering && (
-                  <span className="ml-2 text-blue-600 font-medium">Reordering...</span>
-                )}
+                Create and manage rate configurations
               </p>
             </div>
             <div className="flex gap-2">
@@ -222,52 +183,41 @@ export function SetupRates() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* Rate Rules List */}
+            {/* Rates List */}
             <div className="space-y-1">
-              {displayRules.filter(rule => rule && rule.id).map((rule, index) => (
+              {rates.filter(rate => rate && rate.id).map((rate, index) => (
                 <div 
-                  key={rule.id} 
-                  draggable
-                  onDragStart={(e) => handleRuleDragStart(e, rule.id)}
-                  onDragOver={handleRuleDragOver}
-                  onDrop={(e) => handleRuleDrop(e, rule.id)}
-                  className={`flex items-center gap-3 p-3 border border-gray-200 rounded-lg transition-all cursor-pointer hover:bg-gray-50 ${
-                    draggedRule === rule.id ? 'opacity-50' : ''
-                  } ${isReordering ? 'pointer-events-none opacity-75' : ''}`}
+                  key={rate.id} 
+                  className="flex items-center gap-2 p-2 border border-gray-200 rounded-md transition-all hover:bg-gray-50"
                 >
-                  {/* Drag Handle */}
-                  <div className="cursor-grab hover:cursor-grabbing">
-                    <GripVertical className="h-5 w-5 text-gray-400" />
-                  </div>
-
-                  {/* Priority Badge */}
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-sm font-semibold">
-                    {rule.priority}
-                  </div>
+                  {/* Rate Type Badge */}
+                  {/* <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
+                    {rate.rate_type?.charAt(0).toUpperCase() || 'F'}
+                  </div> */}
 
                   {/* Active Switch */}
                   <div className="flex items-center">
                     <Switch
-                      checked={rule.isActive}
-                      onCheckedChange={() => toggleRuleActive(rule.id)}
+                      checked={rate.is_active}
+                      onCheckedChange={() => toggleRateActive(rate.id)}
                       className="scale-75"
                     />
                   </div>
 
-                  {/* Rule Name Input */}
+                  {/* Rate Name Input */}
                   <div className="flex-1">
                     <Input
-                      value={rule.name}
-                      onChange={(e) => updateRuleName(rule.id, e.target.value)}
-                      className="text-sm"
-                      placeholder="Rule name"
+                      value={rate.name}
+                      onChange={(e) => updateRateName(rate.id, e.target.value)}
+                      className="text-sm h-8"
+                      placeholder="Rate name"
                     />
                   </div>
 
                   {/* Rate Info */}
-                  <div className="text-right min-w-20">
+                  <div className="text-right min-w-16">
                     <p className="text-xs font-medium text-black">
-                      {rule.currency || 'EUR'} {(rule.rate || 0).toFixed(2)}
+                      {rate.currency || 'EUR'} {(rate.base_rate || 0).toFixed(2)}
                     </p>
                   </div>
 
@@ -278,8 +228,133 @@ export function SetupRates() {
         </CardContent>
       </Card>
 
-      {/* Create Rate Modal would go here */}
-      {/* You can create a separate CreateRateModal component */}
+      {/* Create Rate Modal */}
+      <Dialog open={isCreateRateModalOpen} onOpenChange={setIsCreateRateModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Rate</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="rate-name">Rate Name *</Label>
+              <Input
+                id="rate-name"
+                value={newRateData.name}
+                onChange={(e) => setNewRateData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter rate name"
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="rate-description">Description</Label>
+              <Input
+                id="rate-description"
+                value={newRateData.description}
+                onChange={(e) => setNewRateData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Enter description (optional)"
+                className="mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="rate-type">Rate Type</Label>
+                <Select 
+                  value={newRateData.rate_type} 
+                  onValueChange={(value) => setNewRateData(prev => ({ ...prev, rate_type: value }))}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixed">Fixed</SelectItem>
+                    <SelectItem value="per_kg">Per KG</SelectItem>
+                    <SelectItem value="per_item">Per Item</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="currency">Currency</Label>
+                <Select 
+                  value={newRateData.currency} 
+                  onValueChange={(value) => setNewRateData(prev => ({ ...prev, currency: value }))}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="GBP">GBP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="base-rate">Base Rate</Label>
+                <Input
+                  id="base-rate"
+                  type="number"
+                  step="0.01"
+                  value={newRateData.base_rate}
+                  onChange={(e) => setNewRateData(prev => ({ ...prev, base_rate: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0.00"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="multiplier">Multiplier</Label>
+                <Input
+                  id="multiplier"
+                  type="number"
+                  step="0.01"
+                  value={newRateData.multiplier}
+                  onChange={(e) => setNewRateData(prev => ({ ...prev, multiplier: parseFloat(e.target.value) || 1.0 }))}
+                  placeholder="1.00"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="is-active"
+                checked={newRateData.is_active}
+                onCheckedChange={(checked) => setNewRateData(prev => ({ ...prev, is_active: checked }))}
+              />
+              <Label htmlFor="is-active">Active</Label>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setIsCreateRateModalOpen(false)}
+                disabled={isCreatingRate}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateRate}
+                disabled={isCreatingRate || !newRateData.name.trim()}
+              >
+                {isCreatingRate ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Rate'
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

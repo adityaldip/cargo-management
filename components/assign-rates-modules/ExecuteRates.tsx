@@ -43,7 +43,11 @@ export function ExecuteRates() {
   const calculateTotalRevenue = () => {
     return rules.reduce((total, rule) => {
       if (!rule.isActive) return total
-      return total + (rule.matchCount * rule.actions.baseRate * (rule.actions.multiplier || 1))
+      // Use the transformed rate data from the store
+      const baseRate = rule.rate || 0
+      const multiplier = rule.multiplier || 1
+      const matchCount = rule.matchCount || 0
+      return total + (matchCount * baseRate * multiplier)
     }, 0)
   }
 

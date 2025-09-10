@@ -12,6 +12,8 @@ export interface RateRule {
   rate: number
   currency: string
   isActive: boolean
+  matchCount?: number
+  multiplier?: number
   createdAt: string
   updatedAt: string
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { rateRulesAPI } from '@/lib/api-client'
+import { rateRulesAPI, ratesAPI } from '@/lib/api-client'
 import { RateRule } from '@/store/rate-rules-store'
 import { useRateRulesStore } from '@/store/rate-rules-store'
 
@@ -31,7 +31,7 @@ export function useRateRulesData() {
         return
       }
 
-      if (rateRulesData) {
+      if (rateRulesData && Array.isArray(rateRulesData)) {
         // Transform database data to match our store types
         const transformedRules: RateRule[] = rateRulesData.map((rule: any) => {
           // Extract rate information from the joined rates table
@@ -46,6 +46,8 @@ export function useRateRulesData() {
             conditions: rule.conditions || [],
             rate: rate.base_rate || 0,
             currency: rate.currency || 'EUR',
+            matchCount: rule.match_count || 0,
+            multiplier: rate.multiplier || 1,
             createdAt: rule.created_at || new Date().toISOString(),
             updatedAt: rule.updated_at || new Date().toISOString()
           }
@@ -76,9 +78,10 @@ export function useRateRulesData() {
       }
 
       // Update local state optimistically
-      setRateRules(prev => prev.map(r => 
+      const currentRules = rateRules.map((r: RateRule) => 
         r.id === ruleId ? { ...r, isActive: !r.isActive } : r
-      ))
+      )
+      setRateRules(currentRules)
 
       return { success: true, data }
     } catch (err) {
@@ -98,7 +101,8 @@ export function useRateRulesData() {
       }
 
       // Update local state
-      setRateRules(prev => prev.filter(r => r.id !== ruleId))
+      const currentRules = rateRules.filter((r: RateRule) => r.id !== ruleId)
+      setRateRules(currentRules)
       
       return { success: true }
     } catch (err) {
@@ -178,9 +182,10 @@ export function useRateRulesData() {
       }
 
       // Update local state
-      setRateRules(prev => prev.map(r => 
+      const currentRules = rateRules.map((r: RateRule) => 
         r.id === ruleId ? { ...r, ...updates } : r
-      ))
+      )
+      setRateRules(currentRules)
       
       return { success: true, data }
     } catch (err) {
@@ -228,6 +233,127 @@ export function useRateRulesData() {
     createRateRule,
     updateRateRule,
     updateRateRulePriorities
+  }
+}
+
+// Hook for fetching rates data (from rates table)
+export function useRatesData() {
+  const [rates, setRates] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const fetchRates = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setIsRefreshing(true)
+      } else {
+        setLoading(true)
+      }
+      setError(null)
+
+      const { data: ratesData, error: fetchError } = await ratesAPI.getAll()
+
+      if (fetchError) {
+        setError(fetchError)
+        return
+      }
+
+      if (Array.isArray(ratesData)) {
+        setRates(ratesData)
+      } else {
+        setRates([])
+      }
+    } catch (err) {
+      const errorMsg = `Failed to fetch rates: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+    } finally {
+      setLoading(false)
+      setIsRefreshing(false)
+    }
+  }
+
+  const refetch = () => fetchRates(true)
+
+  const updateRate = async (id: string, updates: any) => {
+    try {
+      setError(null)
+      const { data, error } = await ratesAPI.update(id, updates)
+      
+      if (error) {
+        setError(error)
+        return false
+      }
+
+      // Update local state
+      setRates(prev => prev.map(rate => 
+        rate.id === id ? { ...rate, ...updates } : rate
+      ))
+      return true
+    } catch (err) {
+      const errorMsg = `Failed to update rate: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      return false
+    }
+  }
+
+  const deleteRate = async (id: string) => {
+    try {
+      setError(null)
+      const { error } = await ratesAPI.delete(id)
+      
+      if (error) {
+        setError(error)
+        return false
+      }
+
+      // Update local state
+      setRates(prev => prev.filter(rate => rate.id !== id))
+      return true
+    } catch (err) {
+      const errorMsg = `Failed to delete rate: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      return false
+    }
+  }
+
+  const createRate = async (rateData: any) => {
+    try {
+      setError(null)
+      const { data, error } = await ratesAPI.create(rateData)
+      
+      if (error) {
+        setError(error)
+        return { success: false, error }
+      }
+
+      // Add to local state
+      if (data) {
+        setRates(prev => [...prev, data])
+      }
+      return { success: true, data }
+    } catch (err) {
+      const errorMsg = `Failed to create rate: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      return { success: false, error: errorMsg }
+    }
+  }
+
+  // Fetch rates on mount
+  useEffect(() => {
+    fetchRates()
+  }, [])
+
+  return {
+    rates,
+    loading,
+    error,
+    isRefreshing,
+    setError,
+    refetch,
+    updateRate,
+    deleteRate,
+    createRate
   }
 }
 
