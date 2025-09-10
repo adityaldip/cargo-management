@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertTriangle, RefreshCw, Download, Filter, Loader2, Trash2 } from "lucide-react"
+import { AlertTriangle, RefreshCw, Download, Filter, Loader2, Trash2, X } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { cargoDataOperations } from "@/lib/supabase-operations"
 import type { CargoData } from "@/types/cargo-data"
 import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
@@ -17,8 +18,9 @@ import { usePageFilters } from "@/store/filter-store"
 import { useWorkflowStore } from "@/store/workflow-store"
 import { useDataStore } from "@/store/data-store"
 import { useColumnConfigStore, type ColumnConfig } from "@/store/column-config-store"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { SweetAlert } from "@/components/ui/sweet-alert"
 import { Pagination } from "@/components/ui/pagination"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 
 interface DatabasePreviewProps {
@@ -28,7 +30,7 @@ interface DatabasePreviewProps {
 
 export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   // Workflow store
-  const { setIsClearingData, shouldStopProcess, setShouldStopProcess, isExporting: globalIsExporting, setIsExporting: setGlobalIsExporting } = useWorkflowStore()
+  const { setIsClearingData, shouldStopProcess, setShouldStopProcess, isExporting: globalIsExporting, setIsExporting: setGlobalIsExporting, isBulkDeleting: globalIsBulkDeleting, setIsBulkDeleting: setGlobalIsBulkDeleting } = useWorkflowStore()
   
   // Data store
   const { clearAllData } = useDataStore()
@@ -54,6 +56,21 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const [isClearingData, setIsClearingDataLocal] = useState(false)
   const [dataCleared, setDataCleared] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
+  
+  // Single row deletion state
+  const [deletingRowId, setDeletingRowId] = useState<string | null>(null)
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false)
+  const [rowToDelete, setRowToDelete] = useState<CargoData | null>(null)
+  
+  // Clear data alert state
+  const [showClearAlert, setShowClearAlert] = useState(false)
+  
+  // Multiple selection state
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [showBulkDeleteAlert, setShowBulkDeleteAlert] = useState(false)
+  
+  // Check if any process is running that should disable UI
+  const isAnyProcessRunning = isClearingData || globalIsExporting || globalIsBulkDeleting
   
   // Progress bar state
   const [progress, setProgress] = useState(0)
@@ -329,6 +346,10 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         setHasPrevPage(false)
         
         // Show success toast with only database count
+        console.log('🔍 Clear data result:', result)
+        console.log('🔍 supabaseDeletedCount:', result.supabaseDeletedCount)
+        console.log('🔍 totalRecords before clear:', totalRecords)
+        
         toast({
           title: "Data cleared successfully! ✅",
           description: `${result.supabaseDeletedCount || 0} records deleted from database`,
@@ -366,6 +387,155 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const handleStopProcess = () => {
     setIsStopping(true)
     setShouldStopProcess(true)
+  }
+
+  // Handle single row deletion
+  const handleDeleteRow = (record: CargoData) => {
+    setRowToDelete(record)
+    setShowDeleteAlert(true)
+  }
+
+  const confirmDeleteRow = async () => {
+    if (!rowToDelete) return
+
+    setDeletingRowId(rowToDelete.id)
+
+    try {
+      const result = await cargoDataOperations.delete(rowToDelete.id)
+      
+      if (result.error) {
+        toast({
+          title: "Delete Failed ❌",
+          description: `Failed to delete record: ${result.error}`,
+          variant: "destructive",
+          duration: 5000,
+        })
+      } else {
+        toast({
+          title: "Record Deleted Successfully! ✅",
+          description: `Record ${rowToDelete.recordId || rowToDelete.id} has been deleted`,
+          duration: 3000,
+        })
+        
+        // Refresh data to show updated state
+        await loadRealData(currentPage)
+        await loadStats()
+      }
+    } catch (error) {
+      console.error('Error deleting record:', error)
+      toast({
+        title: "Delete Failed ❌",
+        description: `An error occurred while deleting the record: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+        duration: 5000,
+      })
+    } finally {
+      setDeletingRowId(null)
+      setRowToDelete(null)
+    }
+  }
+
+  const cancelDeleteRow = () => {
+    setRowToDelete(null)
+  }
+
+  // Handle clear data alert
+  const handleClearDataClick = () => {
+    setShowClearAlert(true)
+  }
+
+  const confirmClearData = async () => {
+    await handleClearData()
+  }
+
+  const cancelClearData = () => {
+    // Do nothing, just close
+  }
+
+  // Handle multiple selection
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(currentRecords.map(record => record.id))
+      setSelectedRows(allIds)
+    } else {
+      setSelectedRows(new Set())
+    }
+  }
+
+  const handleSelectRow = (recordId: string, checked: boolean) => {
+    const newSelected = new Set(selectedRows)
+    if (checked) {
+      newSelected.add(recordId)
+    } else {
+      newSelected.delete(recordId)
+    }
+    setSelectedRows(newSelected)
+  }
+
+  const handleBulkDelete = () => {
+    if (selectedRows.size === 0) return
+    setShowBulkDeleteAlert(true)
+  }
+
+  const confirmBulkDelete = async () => {
+    if (selectedRows.size === 0) return
+
+    setGlobalIsBulkDeleting(true)
+    const selectedIds = Array.from(selectedRows)
+    let successCount = 0
+    let errorCount = 0
+
+    try {
+      // Delete records one by one
+      for (const id of selectedIds) {
+        try {
+          const result = await cargoDataOperations.delete(id)
+          if (result.error) {
+            errorCount++
+          } else {
+            successCount++
+          }
+        } catch (error) {
+          errorCount++
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: "Bulk Delete Completed! ✅",
+          description: `Successfully deleted ${successCount} record${successCount !== 1 ? 's' : ''}${errorCount > 0 ? `. ${errorCount} failed.` : ''}`,
+          duration: 5000,
+        })
+        
+        // Refresh data and clear selection
+        await loadRealData(currentPage)
+        await loadStats()
+        setSelectedRows(new Set())
+      }
+
+      if (errorCount > 0 && successCount === 0) {
+        toast({
+          title: "Bulk Delete Failed ❌",
+          description: `Failed to delete ${errorCount} record${errorCount !== 1 ? 's' : ''}`,
+          variant: "destructive",
+          duration: 5000,
+        })
+      }
+    } catch (error) {
+      console.error('Error during bulk delete:', error)
+      toast({
+        title: "Bulk Delete Failed ❌",
+        description: `An error occurred during bulk deletion: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+        duration: 5000,
+      })
+    } finally {
+      setGlobalIsBulkDeleting(false)
+    }
+  }
+
+  const cancelBulkDelete = () => {
+    // Do nothing, just close
   }
 
   // Export all data functionality - use global state instead of local
@@ -539,7 +709,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsFilterOpen(!isFilterOpen)}
-                disabled={isClearingData || globalIsExporting}
+                disabled={isAnyProcessRunning}
                 className={hasActiveFilters ? "border-blue-300 bg-blue-50 text-blue-700" : ""}
               >
                 <Filter className="w-4 h-4 mr-2" />
@@ -571,7 +741,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 await loadRealData(currentPage)
                 await loadStats()
               }}
-              disabled={isLoadingData || isClearingData || globalIsExporting}
+              disabled={isLoadingData || isAnyProcessRunning}
             >
               {isLoadingData ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -580,45 +750,41 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
               )}
               Refresh Data
             </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isClearingData || globalIsExporting}
-                  className="text-red-600 border-red-300 hover:bg-red-50"
-                >
-                  {isClearingData ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4 mr-2" />
-                  )}
-                  Clear Data
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirm Clear Data</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to clear all data? This action will delete {totalRecords.toLocaleString()} records from the database and cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction 
-                    onClick={handleClearData}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    Yes, Clear All Data!
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearDataClick}
+              disabled={isAnyProcessRunning}
+              className="text-red-600 border-red-300 hover:bg-red-50"
+            >
+              {isClearingData ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Clear Data
+            </Button>
+            {selectedRows.size > 0 && (
+              <Button
+                onClick={handleBulkDelete}
+                variant="outline"
+                size="sm"
+                disabled={isAnyProcessRunning}
+                className="text-red-600 border-red-300 hover:bg-red-50"
+              >
+                {globalIsBulkDeleting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 mr-2" />
+                )}
+                Delete Selected ({selectedRows.size})
+              </Button>
+            )}
             <Button
               onClick={handleExportData}
               className="bg-black text-white"
               size="sm"
-              disabled={totalRecords === 0 || isClearingData || globalIsExporting}
+              disabled={totalRecords === 0 || isAnyProcessRunning}
             >
               {globalIsExporting ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -640,7 +806,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                   variant="ghost"
                   size="sm"
                   onClick={handleClearFilters}
-                  disabled={isClearingData || globalIsExporting}
+                  disabled={isAnyProcessRunning}
                   className="h-6 text-xs text-gray-500 hover:text-gray-700"
                 >
                   Clear filters
@@ -689,6 +855,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
           </div>
         </div>
       )}
+
 
       {/* Clear Data Progress Bar Section */}
       {isClearingData && (
@@ -748,6 +915,15 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
             <Table className="border border-collapse border-radius-lg">
               <TableHeader>
                 <TableRow>
+                  <TableHead className="border text-center" style={{ padding: "2px" }}>
+                      <Checkbox
+                        checked={selectedRows.size > 0 && selectedRows.size === currentRecords.length}
+                        onCheckedChange={handleSelectAll}
+                        disabled={isAnyProcessRunning}
+                        className="h-4 w-4 border-2 border-gray-300 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 mx-auto block"
+                      />
+                  </TableHead>
+                  <TableHead className="border text-center w-16">Actions</TableHead>
                   {visibleColumns.map((column) => (
                     <TableHead 
                       key={column.key}
@@ -762,7 +938,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 {currentRecords.length === 0 ? (
                   <TableRow>
                     <TableCell 
-                      colSpan={visibleColumns.length} 
+                      colSpan={visibleColumns.length + 2} 
                       className="border text-center py-8 text-gray-500"
                     >
                       No data available
@@ -771,6 +947,38 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 ) : (
                   currentRecords.map((record, index) => (
                     <TableRow key={`row-${startIndex + index}-${record.id || 'no-id'}`}>
+                      <TableCell className="border text-center" style={{ padding: "2px" }}>
+                        <Checkbox
+                          checked={selectedRows.has(record.id)}
+                          onCheckedChange={(checked) => handleSelectRow(record.id, checked as boolean)}
+                          disabled={isAnyProcessRunning}
+                          className="h-4 w-4 border-2 border-gray-300 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 mx-auto block"
+                        />
+                      </TableCell>
+                      <TableCell className="border text-center">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteRow(record)}
+                                disabled={deletingRowId === record.id || isAnyProcessRunning}
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                              >
+                                {deletingRowId === record.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Delete this record</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
                       {visibleColumns.map((column) => (
                         <TableCell 
                           key={`cell-${startIndex + index}-${column.key}`}
@@ -797,7 +1005,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
           endIndex={endIndex}
           onPageChange={handlePageChange}
           onRecordsPerPageChange={handleRecordsPerPageChange}
-          disabled={isLoadingData || isClearingData || globalIsExporting}
+          disabled={isLoadingData || isAnyProcessRunning}
           hasPrevPage={paginationHasPrevPage}
           hasNextPage={paginationHasNextPage}
           recordsPerPageOptions={[25, 50, 100, 200]}
@@ -805,6 +1013,51 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
       </CardContent>
 
     </Card>
+
+    {/* Delete Confirmation SweetAlert */}
+    <SweetAlert
+      isVisible={showDeleteAlert}
+      title="Delete Record"
+      text={rowToDelete ? 
+        `Are you sure you want to delete this record?\n\nRecord ID: ${rowToDelete.recordId || rowToDelete.id}\nOrigin: ${rowToDelete.origOE}\nDestination: ${rowToDelete.destOE}\nWeight: ${rowToDelete.totalKg} kg\n\nThis action cannot be undone.` 
+        : "Are you sure you want to delete this record? This action cannot be undone."
+      }
+      type="warning"
+      showCancelButton={true}
+      confirmButtonText="Delete Record"
+      cancelButtonText="Cancel"
+      onConfirm={confirmDeleteRow}
+      onCancel={cancelDeleteRow}
+      onClose={() => setShowDeleteAlert(false)}
+    />
+
+    {/* Clear Data Confirmation SweetAlert */}
+    <SweetAlert
+      isVisible={showClearAlert}
+      title="Clear All Data"
+      text={`Are you sure you want to clear all data? This action will delete ${totalRecords.toLocaleString()} records from the database and cannot be undone.`}
+      type="warning"
+      showCancelButton={true}
+      confirmButtonText="Yes, Clear All Data!"
+      cancelButtonText="Cancel"
+      onConfirm={confirmClearData}
+      onCancel={cancelClearData}
+      onClose={() => setShowClearAlert(false)}
+    />
+
+    {/* Bulk Delete Confirmation SweetAlert */}
+    <SweetAlert
+      isVisible={showBulkDeleteAlert}
+      title="Delete Selected Records"
+      text={`Are you sure you want to delete ${selectedRows.size} selected record${selectedRows.size !== 1 ? 's' : ''}? This action cannot be undone.`}
+      type="warning"
+      showCancelButton={true}
+      confirmButtonText="Delete Selected"
+      cancelButtonText="Cancel"
+      onConfirm={confirmBulkDelete}
+      onCancel={cancelBulkDelete}
+      onClose={() => setShowBulkDeleteAlert(false)}
+    />
     </>
   )
 }

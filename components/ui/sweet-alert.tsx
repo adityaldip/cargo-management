@@ -92,7 +92,7 @@ export function SweetAlert({
 
   return (
     <div 
-      className="fixed inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/25 flex items-center justify-center z-50"
       onClick={handleBackdropClick}
     >
       <div 

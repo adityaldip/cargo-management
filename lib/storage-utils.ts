@@ -409,6 +409,14 @@ export async function clearSupabaseData(
     // Step 1: Get all IDs for batch deletion (more efficient than getting full records)
     onProgress?.(0, "Fetching record IDs from database...", 0, 3)
     
+    // First, let's check the total count in the database
+    try {
+      const countResult = await cargoDataOperations.getStats("")
+      console.log(`🔍 Database total count:`, countResult)
+    } catch (error) {
+      console.log(`🔍 Could not get database count:`, error)
+    }
+    
     let allIds: string[] = []
     let currentPage = 1
     let hasMoreData = true
@@ -421,6 +429,10 @@ export async function clearSupabaseData(
       }
       
       const result = await cargoDataOperations.getAllIds(currentPage, fetchBatchSize)
+      
+      console.log(`🔍 getAllIds page ${currentPage}:`, result)
+      console.log(`🔍 getAllIds page ${currentPage} data length:`, result.data?.length)
+      console.log(`🔍 getAllIds page ${currentPage} fetchBatchSize:`, fetchBatchSize)
       
       if (result.error) {
         console.error('Error fetching cargo data IDs:', result.error)
@@ -439,13 +451,15 @@ export async function clearSupabaseData(
         hasMoreData = false
       }
       
-      // Stop if we've reached the end
-      if (result.data && Array.isArray(result.data) && result.data.length < fetchBatchSize) {
+      // Stop if we've reached the end (no more data returned)
+      if (!result.data || !Array.isArray(result.data) || result.data.length === 0) {
         hasMoreData = false
       }
     }
     
     console.log(`Found ${allIds.length} records to delete using batch deletion`)
+    console.log(`🔍 Debug: allIds sample:`, allIds.slice(0, 5))
+    console.log(`🔍 Debug: total pages fetched:`, currentPage - 1)
     
     if (allIds.length === 0) {
       onProgress?.(100, "No data to delete", 2, 3)

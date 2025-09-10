@@ -21,9 +21,10 @@ interface WorkflowNavigationProps {
   isProcessing?: boolean
   isClearingData?: boolean
   isExporting?: boolean
+  isBulkDeleting?: boolean
 }
 
-export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false }: WorkflowNavigationProps) {
+export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false, isBulkDeleting = false }: WorkflowNavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
   
@@ -45,8 +46,8 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
   ]
 
   const handleStepChange = (stepId: WorkflowStep) => {
-    // Don't allow navigation when processing, clearing data, or exporting
-    if (isProcessing || isClearingData || isExporting) return
+    // Don't allow navigation when processing, clearing data, exporting, or bulk deleting
+    if (isProcessing || isClearingData || isExporting || isBulkDeleting) return
     
     onStepChange(stepId)
     setIsMobileMenuOpen(false) // Close mobile menu when step is selected
@@ -119,7 +120,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                       <div
                         onClick={() => handleStepChange(step.id as WorkflowStep)}
                         className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
-                          isProcessing || isClearingData || isExporting
+                          isProcessing || isClearingData || isExporting || isBulkDeleting
                             ? "cursor-not-allowed opacity-50 text-gray-400" 
                             : isActive 
                               ? "bg-black text-white cursor-pointer" 

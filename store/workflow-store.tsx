@@ -23,6 +23,8 @@ interface WorkflowStore {
   setShouldStopProcess: (shouldStop: boolean) => void
   isExporting: boolean
   setIsExporting: (exporting: boolean) => void
+  isBulkDeleting: boolean
+  setIsBulkDeleting: (bulkDeleting: boolean) => void
 }
 
 const WorkflowContext = createContext<WorkflowStore | undefined>(undefined)
@@ -41,6 +43,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   const [isClearingData, setIsClearingDataState] = useState(false)
   const [shouldStopProcess, setShouldStopProcessState] = useState(false)
   const [isExporting, setIsExportingState] = useState(false)
+  const [isBulkDeleting, setIsBulkDeletingState] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
 
   const setActiveStep = (step: WorkflowStep) => {
@@ -72,6 +75,8 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     setShouldStopProcess: setShouldStopProcessState,
     isExporting,
     setIsExporting: setIsExportingState,
+    isBulkDeleting,
+    setIsBulkDeleting: setIsBulkDeletingState,
   }
 
   return (

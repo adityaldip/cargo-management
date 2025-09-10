@@ -90,7 +90,7 @@ export function RulesConfiguration() {
   const [isSaving, setIsSaving] = useState(false)
   const [isReordering, setIsReordering] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [customers, setCustomers] = useState<{id: string, name: string, code: string}[]>([])
+  const [customers, setCustomers] = useState<{id: string, name: string, code: string, codes: {id: string, code: string, is_active: boolean}[]}[]>([])
   const [loadingCustomers, setLoadingCustomers] = useState(false)
   const [openCustomerSelect, setOpenCustomerSelect] = useState(false)
   const [openFieldSelects, setOpenFieldSelects] = useState<Record<number, boolean>>({})
@@ -124,7 +124,7 @@ export function RulesConfiguration() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  // Load customers from Supabase with caching
+  // Load customers from Supabase with their active codes
   useEffect(() => {
     const loadCustomers = async () => {
       // Check if we already have customers loaded
@@ -134,18 +134,46 @@ export function RulesConfiguration() {
 
       setLoadingCustomers(true)
       try {
-        const { data, error } = await supabase
+        // First get all active customers
+        const { data: customersData, error: customersError } = await supabase
           .from('customers')
           .select('id, name, code')
           .eq('is_active', true)
           .order('name')
         
-        if (error) {
-          console.error('Error loading customers:', error)
+        if (customersError) {
+          console.error('Error loading customers:', customersError)
           return
         }
+
+        if (!customersData || customersData.length === 0) {
+          setCustomers([])
+          return
+        }
+
+        // Get customer IDs for fetching codes
+        const customerIds = customersData.map((c: any) => c.id)
         
-        setCustomers(data || [])
+        // Get all active codes for these customers
+        const { data: codesData, error: codesError } = await supabase
+          .from('customer_codes')
+          .select('id, customer_id, code, is_active')
+          .in('customer_id', customerIds)
+          .eq('is_active', true)
+          .order('code')
+        
+        if (codesError) {
+          console.error('Error loading customer codes:', codesError)
+          return
+        }
+
+        // Combine customers with their codes
+        const customersWithCodes = customersData.map((customer: any) => ({
+          ...customer,
+          codes: (codesData || []).filter((code: any) => code.customer_id === customer.id)
+        }))
+        
+        setCustomers(customersWithCodes)
       } catch (err) {
         console.error('Error loading customers:', err)
       } finally {
@@ -787,7 +815,17 @@ export function RulesConfiguration() {
                                 >
                                   <span className="truncate">
                                     {editingRuleAssignTo
-                                      ? memoizedCustomers.find((customer) => customer.id === editingRuleAssignTo)?.name
+                                      ? (() => {
+                                          const selectedCustomer = memoizedCustomers.find((customer) => customer.id === editingRuleAssignTo)
+                                          if (selectedCustomer) {
+                                            const activeCodes = selectedCustomer.codes.filter(code => code.is_active)
+                                            if (activeCodes.length > 0) {
+                                              return `${selectedCustomer.name} (${activeCodes.map(c => c.code).join(', ')})`
+                                            }
+                                            return selectedCustomer.name
+                                          }
+                                          return "Select customer..."
+                                        })()
                                       : loadingCustomers 
                                         ? "Loading customers..." 
                                         : "Select customer..."}
@@ -802,28 +840,33 @@ export function RulesConfiguration() {
                                     {loadingCustomers ? "Loading..." : "No customer found."}
                                   </CommandEmpty>
                                   <CommandGroup className="max-h-48 overflow-auto">
-                                    {memoizedCustomers.map((customer) => (
-                                      <CommandItem
-                                        key={customer.id}
-                                        value={`${customer.name} ${customer.code}`}
-                                        onSelect={() => {
-                                          setEditingRuleAssignTo(customer.id)
-                                          setOpenCustomerSelect(false)
-                                        }}
-                                        className="text-xs"
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-3 w-3",
-                                            editingRuleAssignTo === customer.id ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        <div className="flex flex-col">
-                                          <span className="font-medium">{customer.name}</span>
-                                          <span className="text-gray-500">({customer.code})</span>
-                                        </div>
-                                      </CommandItem>
-                                    ))}
+                                    {memoizedCustomers.map((customer) => {
+                                      const activeCodes = customer.codes.filter(code => code.is_active)
+                                      return (
+                                        <CommandItem
+                                          key={customer.id}
+                                          value={`${customer.name} ${activeCodes.map(c => c.code).join(' ')}`}
+                                          onSelect={() => {
+                                            setEditingRuleAssignTo(customer.id)
+                                            setOpenCustomerSelect(false)
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-3 w-3",
+                                              editingRuleAssignTo === customer.id ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          <div className="flex flex-col">
+                                            <span className="font-medium">{customer.name}</span>
+                                            <span className="text-gray-500">
+                                              ({activeCodes.length > 0 ? activeCodes.map(c => c.code).join(', ') : 'No active codes'})
+                                            </span>
+                                          </div>
+                                        </CommandItem>
+                                      )
+                                    })}
                                   </CommandGroup>
                                 </Command>
                               </PopoverContent>

@@ -26,7 +26,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   const { clearAllData } = useDataStore()
   
   // Workflow store
-  const { isClearingData, isExporting } = useWorkflowStore()
+  const { isClearingData, isExporting, isBulkDeleting } = useWorkflowStore()
   
   // Toast for notifications
   const { toast } = useToast()
@@ -43,12 +43,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         console.log(`- Local storage: ${result.localCleared ? 'cleared' : 'failed'}`)
         console.log(`- Supabase: ${result.supabaseDeletedCount || 0} records deleted`)
         
-        // Show success toast with only database count
-        toast({
-          title: "Data cleared successfully! ✅",
-          description: `${result.supabaseDeletedCount || 0} records deleted from database`,
-          duration: 5000,
-        })
+        // Toast is handled by database-preview component
       } else if (result.cancelled) {
         console.log('❌ Clear data process was cancelled')
         toast({
@@ -133,7 +128,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           <Button 
             className="bg-black hover:bg-gray-800 text-white"
             onClick={onContinue}
-            disabled={isClearingData || isExporting}
+            disabled={isClearingData || isExporting || isBulkDeleting}
           >
             Continue to Assign Customers
           </Button>

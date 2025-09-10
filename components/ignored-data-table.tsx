@@ -100,6 +100,7 @@ interface IgnoredDataTableProps {
 
 
 export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onContinue, dataSource = "mail-system", onSavingStateChange }: IgnoredDataTableProps) {
+  const { isBulkDeleting } = useWorkflowStore()
   const { saveMergedDataToSupabase, clearUploadSession } = useDataStore()
   const [ignoredData, setIgnoredData] = useState<any[]>([])
   const [filteredData, setFilteredData] = useState<any[]>([])
@@ -661,7 +662,7 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
                 <Button 
                   className="bg-black hover:bg-gray-800 text-white"
                   onClick={handleContinueToReview}
-                  disabled={isSavingToSupabase || !originalData}
+                  disabled={isSavingToSupabase || !originalData || isBulkDeleting}
                   data-continue-button
                 >
                   {isSavingToSupabase ? (
@@ -741,7 +742,7 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
                         >
                           {column.key === 'inb_flight_no' ? (
                             <div className="flex items-center gap-2">
-                              <Badge variant="destructive" className="text-xs">
+                              <Badge variant="destructive" className="text-xs text-white">
                                 Ignored
                               </Badge>
                               <span className="font-medium">{formatCellValue(record, column.key)}</span>
