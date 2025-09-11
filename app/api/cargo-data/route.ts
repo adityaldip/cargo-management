@@ -13,11 +13,13 @@ export async function GET(request: NextRequest) {
     const customer = searchParams.get('customer')
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
+    const filters = searchParams.get('filters')
+    const filterLogic = searchParams.get('filterLogic')
     
     // Calculate offset for pagination
     const offset = (page - 1) * limit
     
-    // Build query
+    // Build query with joins to rates table
     let query = supabaseAdmin
       .from('cargo_data')
       .select(`
@@ -32,7 +34,7 @@ export async function GET(request: NextRequest) {
         )
       `)
     
-    // Apply filters
+    // Apply legacy filters
     if (customer) {
       query = query.eq('assigned_customer', customer)
     }
@@ -45,6 +47,61 @@ export async function GET(request: NextRequest) {
       query = query.lte('created_at', dateTo)
     }
     
+    // Apply new filter conditions
+    if (filters) {
+      try {
+        const filterConditions = JSON.parse(filters)
+        console.log('🔍 Applying filters:', filterConditions)
+        
+        filterConditions.forEach((condition: any) => {
+          const { field, operator, value } = condition
+          
+          // Map frontend field names to database column names
+          const dbField = field === 'assigned_customer' ? 'assigned_customer' :
+                         field === 'assigned_rate' ? 'assigned_rate' :
+                         field === 'total_kg' ? 'total_kg' :
+                         field === 'inb_flight_date' ? 'inb_flight_date' :
+                         field === 'outb_flight_date' ? 'outb_flight_date' :
+                         field === 'rec_id' ? 'rec_id' :
+                         field === 'orig_oe' ? 'orig_oe' :
+                         field === 'dest_oe' ? 'dest_oe' :
+                         field === 'mail_cat' ? 'mail_cat' :
+                         field === 'mail_class' ? 'mail_class' :
+                         field === 'invoice' ? 'invoice' :
+                         field
+          
+          switch (operator) {
+            case 'equals':
+              query = query.eq(dbField, value)
+              break
+            case 'contains':
+              query = query.ilike(dbField, `%${value}%`)
+              break
+            case 'starts_with':
+              query = query.ilike(dbField, `${value}%`)
+              break
+            case 'ends_with':
+              query = query.ilike(dbField, `%${value}`)
+              break
+            case 'greater_than':
+              query = query.gt(dbField, parseFloat(value))
+              break
+            case 'less_than':
+              query = query.lt(dbField, parseFloat(value))
+              break
+            case 'not_empty':
+              query = query.not(dbField, 'is', null).neq(dbField, '')
+              break
+            case 'is_empty':
+              query = query.or(`${dbField}.is.null,${dbField}.eq.`)
+              break
+          }
+        })
+      } catch (error) {
+        console.error('Error parsing filters:', error)
+      }
+    }
+    
     // Apply sorting
     query = query.order(sortBy, { ascending: sortOrder === 'asc' })
     
@@ -53,6 +110,7 @@ export async function GET(request: NextRequest) {
       .from('cargo_data')
       .select('*', { count: 'exact', head: true })
     
+    // Apply legacy filters to count query
     if (customer) {
       countQuery = countQuery.eq('assigned_customer', customer)
     }
@@ -61,6 +119,60 @@ export async function GET(request: NextRequest) {
     }
     if (dateTo) {
       countQuery = countQuery.lte('created_at', dateTo)
+    }
+    
+    // Apply new filter conditions to count query
+    if (filters) {
+      try {
+        const filterConditions = JSON.parse(filters)
+        
+        filterConditions.forEach((condition: any) => {
+          const { field, operator, value } = condition
+          
+          // Map frontend field names to database column names
+          const dbField = field === 'assigned_customer' ? 'assigned_customer' :
+                         field === 'assigned_rate' ? 'assigned_rate' :
+                         field === 'total_kg' ? 'total_kg' :
+                         field === 'inb_flight_date' ? 'inb_flight_date' :
+                         field === 'outb_flight_date' ? 'outb_flight_date' :
+                         field === 'rec_id' ? 'rec_id' :
+                         field === 'orig_oe' ? 'orig_oe' :
+                         field === 'dest_oe' ? 'dest_oe' :
+                         field === 'mail_cat' ? 'mail_cat' :
+                         field === 'mail_class' ? 'mail_class' :
+                         field === 'invoice' ? 'invoice' :
+                         field
+          
+          switch (operator) {
+            case 'equals':
+              countQuery = countQuery.eq(dbField, value)
+              break
+            case 'contains':
+              countQuery = countQuery.ilike(dbField, `%${value}%`)
+              break
+            case 'starts_with':
+              countQuery = countQuery.ilike(dbField, `${value}%`)
+              break
+            case 'ends_with':
+              countQuery = countQuery.ilike(dbField, `%${value}`)
+              break
+            case 'greater_than':
+              countQuery = countQuery.gt(dbField, parseFloat(value))
+              break
+            case 'less_than':
+              countQuery = countQuery.lt(dbField, parseFloat(value))
+              break
+            case 'not_empty':
+              countQuery = countQuery.not(dbField, 'is', null).neq(dbField, '')
+              break
+            case 'is_empty':
+              countQuery = countQuery.or(`${dbField}.is.null,${dbField}.eq.`)
+              break
+          }
+        })
+      } catch (error) {
+        console.error('Error parsing filters for count query:', error)
+      }
     }
     
     const { count } = await countQuery
@@ -78,13 +190,77 @@ export async function GET(request: NextRequest) {
       )
     }
     
+    // Fetch customer data separately and merge
+    let enrichedData: any[] = data || []
+    if (enrichedData.length > 0) {
+      // Get unique customer codes from the cargo data
+      const customerCodes = [...new Set(enrichedData.map((item: any) => item.assigned_customer).filter(Boolean))]
+      
+      console.log('🔍 Customer codes found in cargo data:', customerCodes)
+      
+      if (customerCodes.length > 0) {
+        // The assigned_customer field contains customer IDs (UUIDs), not codes
+        // So we need to match by customer ID
+        const { data: customersById, error: customerError } = await supabaseAdmin
+          .from('customers')
+          .select('id, name, code')
+          .in('id', customerCodes)
+        
+        console.log('🔍 Customer query by ID result:', { customersById, customerError })
+        
+        let customerMap = new Map()
+        
+        if (!customerError && customersById && customersById.length > 0) {
+          // Create a map for quick lookup by ID
+          customerMap = new Map(customersById.map((c: any) => [c.id, c.name]))
+          console.log('🔍 Customer map by ID created:', Object.fromEntries(customerMap))
+        } else {
+          console.log('❌ No customers found by ID, trying by code as fallback...')
+          
+          // If no matches by ID, try to match by code as fallback
+          const { data: customersByCode, error: codeError } = await supabaseAdmin
+            .from('customers')
+            .select('id, name, code')
+            .in('code', customerCodes)
+          
+          console.log('🔍 Customer query by code result:', { customersByCode, codeError })
+          
+          if (!codeError && customersByCode && customersByCode.length > 0) {
+            // Create a map for quick lookup by code
+            customerMap = new Map(customersByCode.map((c: any) => [c.code, c.name]))
+            console.log('🔍 Customer map by code created:', Object.fromEntries(customerMap))
+          }
+        }
+        
+        // Enrich the data with customer names
+        enrichedData = enrichedData.map((item: any) => {
+          let customerName = item.assigned_customer // Default fallback
+          
+          // Try to find customer name using the map
+          if (customerMap.has(item.assigned_customer)) {
+            customerName = customerMap.get(item.assigned_customer)
+          }
+          
+          console.log(`🔍 Mapping customer: ${item.assigned_customer} -> ${customerName}`)
+          return {
+            ...item,
+            customer_name: customerName
+          }
+        })
+      } else {
+        console.log('❌ No customer codes found in cargo data')
+      }
+    }
+    
     return NextResponse.json({
-      data: data || [],
+      data: enrichedData,
       pagination: {
         page,
         limit,
         total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit)
+        totalPages: Math.ceil((count || 0) / limit),
+        hasNextPage: page < Math.ceil((count || 0) / limit),
+        hasPrevPage: page > 1
       }
     })
     

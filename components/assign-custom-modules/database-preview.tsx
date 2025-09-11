@@ -108,7 +108,12 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   }))
 
   // Load real data from database with server-side pagination
-  const loadRealData = async (page: number = currentPage, limit: number = recordsPerPage) => {
+  const loadRealData = async (
+    page: number = currentPage, 
+    limit: number = recordsPerPage,
+    overrideFilters?: FilterCondition[],
+    overrideLogic?: "AND" | "OR"
+  ) => {
     setIsLoadingData(true)
     setRealData([])
     setDataSource("")
@@ -119,11 +124,12 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     }
     
     try {
-      // Prepare filters for API
-      const filters = hasActiveFilters ? filterConditions : []
+      // Use override filters if provided, otherwise use current filter state
+      const filters = overrideFilters || (hasActiveFilters ? filterConditions : [])
+      const logic = overrideLogic || filterLogic
       const filterParams = filters.length > 0 ? {
         filters: JSON.stringify(filters),
-        filterLogic
+        filterLogic: logic
       } : {}
       
       const result = await cargoDataOperations.getPaginated({
@@ -137,28 +143,35 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
       
       
       if (result.data && Array.isArray(result.data)) {
-        const convertedData = result.data.map((record: any) => ({
-          id: record.id,
-          origOE: record.orig_oe || '',
-          destOE: record.dest_oe || '',
-          inbFlightNo: record.inb_flight_no || '',
-          outbFlightNo: record.outb_flight_no || '',
-          mailCat: record.mail_cat || '',
-          mailClass: record.mail_class || '',
-          totalKg: record.total_kg || 0,
-          invoiceExtend: record.invoice || '',
-          customer: record.customers?.name || record.assigned_customer || '',
-          date: record.inb_flight_date || '',
-          sector: record.orig_oe && record.dest_oe ? `${record.orig_oe}-${record.dest_oe}` : '',
-          euromail: record.mail_cat || '',
-          combined: record.rec_id || '',
-          totalEur: record.assigned_rate || 0,
-          vatEur: 0,
-          recordId: record.rec_id || '',
-          desNo: record.des_no || '',
-          recNumb: record.rec_numb || '',
-          outbDate: record.outb_flight_date || ''
-        }))
+        console.log('🔍 Raw API data received:', result.data.slice(0, 2)) // Log first 2 records for debugging
+        
+        const convertedData = result.data.map((record: any) => {
+          const customerValue = record.customer_name || record.assigned_customer || record.customer_name_number || ''
+          console.log(`🔍 Frontend customer mapping: assigned_customer=${record.assigned_customer}, customer_name=${record.customer_name}, final=${customerValue}`)
+          
+          return {
+            id: record.id,
+            origOE: record.orig_oe || '',
+            destOE: record.dest_oe || '',
+            inbFlightNo: record.inb_flight_no || '',
+            outbFlightNo: record.outb_flight_no || '',
+            mailCat: record.mail_cat || '',
+            mailClass: record.mail_class || '',
+            totalKg: record.total_kg || 0,
+            invoiceExtend: record.invoice || '',
+            customer: customerValue,
+            date: record.inb_flight_date || '',
+            sector: record.orig_oe && record.dest_oe ? `${record.orig_oe}-${record.dest_oe}` : '',
+            euromail: record.mail_cat || '',
+            combined: record.rec_id || '',
+            totalEur: record.assigned_rate || record.rate_value || 0,
+            vatEur: 0,
+            recordId: record.rec_id || '',
+            desNo: record.des_no || '',
+            recNumb: record.rec_numb || '',
+            outbDate: record.outb_flight_date || ''
+          }
+        })
         
         // For server-side pagination, store the data directly
         setRealData(convertedData)
@@ -264,10 +277,12 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
       return ''
     }
     
+    // Format numeric values
     if (key === 'total_kg' || key === 'assigned_rate') {
       return typeof value === 'number' ? value.toFixed(1) : String(value)
     }
     
+    // Format date values
     if (key === 'inb_flight_date' || key === 'outb_flight_date' || key === 'processed_at' || key === 'created_at' || key === 'updated_at') {
       if (typeof value === 'string' && value.includes('T')) {
         return new Date(value).toLocaleDateString()
@@ -278,9 +293,9 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   }
 
   // Handle page change
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = async (newPage: number) => {
     setCurrentPage(newPage)
-    loadRealData(newPage) // Load new page from server
+    await loadRealData(newPage) // Load new page from server
   }
 
   // Handle records per page change
@@ -291,20 +306,20 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     await loadStats()
   }
 
-  const handleClearFilters = () => {
+  const handleClearFilters = async () => {
     clearFilters()
     setCurrentPage(1)
     // Reload data without filters
-    loadRealData(1)
-    loadStats()
+    await loadRealData(1)
+    await loadStats()
   }
 
-  const handleApplyFilters = (conditions: FilterCondition[], logic: "AND" | "OR") => {
+  const handleApplyFilters = async (conditions: FilterCondition[], logic: "AND" | "OR") => {
     setFilters(conditions, logic)
     setCurrentPage(1)
-    // Reload data with new filters
-    loadRealData(1)
-    loadStats()
+    // Reload data with new filters - pass filters directly to avoid timing issues
+    await loadRealData(1, recordsPerPage, conditions, logic)
+    await loadStats()
   }
 
   const handleClearData = async () => {
@@ -628,12 +643,12 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         mailClass: record.mail_class || '',
         totalKg: record.total_kg || 0,
         invoiceExtend: record.invoice || '',
-        customer: record.customers?.name || record.assigned_customer || '',
+        customer: record.customer_name || record.assigned_customer || record.customer_name_number || '',
         date: record.inb_flight_date || '',
         sector: record.orig_oe && record.dest_oe ? `${record.orig_oe}-${record.dest_oe}` : '',
         euromail: record.mail_cat || '',
         combined: record.rec_id || '',
-        totalEur: record.assigned_rate || 0,
+        totalEur: record.assigned_rate || record.rate_value || 0,
         vatEur: 0,
         recordId: record.rec_id || '',
         desNo: record.des_no || '',
