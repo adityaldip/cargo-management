@@ -33,6 +33,7 @@ import { CreateRateRuleModal } from "./CreateRateRuleModal"
 import { RateRuleEditor } from "./RateRuleEditor"
 import { SweetAlert } from "@/components/ui/sweet-alert"
 import { useToast } from "@/hooks/use-toast"
+import { rateRulesAPI } from "@/lib/api-client"
 
 export function ConfigureRates() {
   const {
@@ -82,6 +83,11 @@ export function ConfigureRates() {
   const [isSaving, setIsSaving] = useState(false)
   const [openFieldSelects, setOpenFieldSelects] = useState<Record<number, boolean>>({})
   const [openOperatorSelects, setOpenOperatorSelects] = useState<Record<number, boolean>>({})
+  
+  // Execution state
+  const [isExecuting, setIsExecuting] = useState(false)
+  const [executionProgress, setExecutionProgress] = useState(0)
+  const [executionStep, setExecutionStep] = useState("")
   
   // Sweet Alert state
   const [sweetAlert, setSweetAlert] = useState({
@@ -378,6 +384,119 @@ export function ConfigureRates() {
     }
   }
 
+  // Execute rate rules to assign rates to cargo data
+  const handleExecuteRules = async () => {
+    if (!Array.isArray(displayRules) || displayRules.length === 0) {
+      setError("No rate rules available to execute")
+      return
+    }
+
+    const activeRules = displayRules.filter(rule => rule.isActive)
+    console.log('Total rate rules:', displayRules.length)
+    console.log('Active rate rules:', activeRules.length)
+    console.log('Active rate rules details:', activeRules.map(r => ({ id: r.id, name: r.name, isActive: r.isActive })))
+    
+    if (activeRules.length === 0) {
+      setError("No active rate rules found. Please activate at least one rule before executing.")
+      return
+    }
+
+    setIsExecuting(true)
+    setExecutionProgress(0)
+    setExecutionStep("Starting rate rule execution...")
+    setError(null)
+
+    try {
+      // Simulate progress updates with realistic steps
+      const progressInterval = setInterval(() => {
+        setExecutionProgress(prev => {
+          if (prev >= 90) return prev
+          return prev + Math.random() * 15
+        })
+      }, 300)
+
+      // Update step messages
+      const stepInterval = setInterval(() => {
+        setExecutionStep(prev => {
+          const steps = [
+            "Starting rate rule execution...",
+            "Fetching active rate rules...",
+            "Loading cargo data...",
+            "Processing rule conditions...",
+            "Matching cargo records...",
+            "Calculating rates...",
+            "Updating assignments...",
+            "Finalizing results..."
+          ]
+          const currentIndex = steps.indexOf(prev)
+          return steps[Math.min(currentIndex + 1, steps.length - 1)]
+        })
+      }, 800)
+
+      console.log('Calling rateRulesAPI.executeRules()...')
+      const { data, error } = await rateRulesAPI.executeRules()
+      console.log('API Response:', { data, error })
+      
+      clearInterval(progressInterval)
+      clearInterval(stepInterval)
+      setExecutionProgress(100)
+      setExecutionStep("Execution completed!")
+      
+      if (error) {
+        setError(`Failed to execute rate rules: ${error}`)
+        toast({
+          title: "Execution Failed",
+          description: `Failed to execute rate rules: ${error}`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (data && (data as any).success) {
+        // Show success message with results
+        const results = (data as any).results
+        
+        toast({
+          title: "Rate Rules Executed Successfully!",
+          description: `Processed ${results.totalProcessed} records, assigned ${results.totalAssigned} rates`,
+          duration: 5000,
+        })
+
+        // // Show detailed results in a second toast
+        // setTimeout(() => {
+        //   const ruleBreakdown = results.ruleResults.map((r: any) => `${r.ruleName}: ${r.matches} matches`).join(', ')
+        //   toast({
+        //     title: "Rule Breakdown",
+        //     description: ruleBreakdown,
+        //     duration: 8000,
+        //   })
+        // }, 1000)
+        
+        // Refresh rules to get updated match counts
+        await refetch()
+      } else {
+        setError("Failed to execute rate rules: Unknown error")
+        toast({
+          title: "Execution Failed",
+          description: "Failed to execute rate rules: Unknown error",
+          variant: "destructive",
+        })
+      }
+      
+    } catch (err) {
+      setError(`Failed to execute rate rules: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      toast({
+        title: "Execution Failed",
+        description: `Failed to execute rate rules: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsExecuting(false)
+      setExecutionProgress(0)
+      setExecutionStep("")
+    }
+  }
+
   // Show loading state
   if (loading) {
     return (
@@ -445,6 +564,7 @@ export function ConfigureRates() {
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsCreateModalOpen(true)}
+                className="h-9 w-32"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 New Rule
@@ -454,16 +574,69 @@ export function ConfigureRates() {
                 size="sm"
                 onClick={refetch}
                 disabled={isRefreshing}
+                className="h-9 w-32"
               >
                 {isRefreshing ? "Refreshing..." : "Refresh"}
               </Button>
-              <Button className="bg-black hover:bg-gray-800 text-white">
-                <Play className="h-4 w-4 mr-2" />
-                Execute
-              </Button>
+              <div className="relative">
+                <Button 
+                  size="sm"
+                  className="bg-black hover:bg-gray-800 text-white h-9 w-32"
+                  onClick={handleExecuteRules}
+                  disabled={isExecuting}
+                >
+                  {isExecuting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Executing...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4 mr-2" />
+                      Execute
+                    </>
+                  )}
+                </Button>
+                {isExecuting && (
+                  <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                      style={{ width: `${executionProgress}%` }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </CardHeader>
+
+        {/* Execution Progress Bar Section */}
+        {isExecuting && (
+          <div className="px-6 pb-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span className="text-sm font-medium text-gray-900">Executing Rate Rules...</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">{executionProgress.toFixed(0)}%</span>
+                </div>
+              </div>
+              
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-2 overflow-hidden">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${Math.min(100, Math.max(0, executionProgress))}%` }}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between text-xs text-gray-600">
+                <span className="flex-1 truncate">{executionStep}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
       <CardContent>
         {/* Filter Section */}

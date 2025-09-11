@@ -1,15 +1,15 @@
 "use client"
 
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Settings } from "lucide-react"
-import { AssignRatesProps, ViewType } from "@/types/rate-management"
+import { AssignRatesProps } from "@/types/rate-management"
 import { SetupRates } from "./SetupRates"
 import { ConfigureRates } from "./ConfigureRates"
 import { ExecuteRates } from "./ExecuteRates"
+import { useAssignRatesTabStore } from "@/store/assign-rates-tab-store"
 
 export function AssignRates({ data, savedRateConditions, onSaveRateConditions }: AssignRatesProps) {
-  const [activeTab, setActiveTab] = useState<ViewType>("setup")
+  const { activeTab, setActiveTab } = useAssignRatesTabStore()
 
   return (
     <div className="space-y-4 pt-2">
@@ -27,7 +27,7 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
             }
           >
             <Settings className="h-4 w-4 mr-2" />
-            Set Up Rules
+            Set Up Rates
           </Button>
           <Button
             variant={activeTab === "configure" ? "default" : "ghost"}

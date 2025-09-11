@@ -231,6 +231,8 @@ export interface Database {
           assigned_customer: string | null
           assigned_at: string | null
           assigned_rate: number | null
+          rate_id: string | null
+          rate_value: number | null
           rate_currency: string | null
           processed_at: string | null
           created_at: string
@@ -255,6 +257,8 @@ export interface Database {
           assigned_customer?: string | null
           assigned_at?: string | null
           assigned_rate?: number | null
+          rate_id?: string | null
+          rate_value?: number | null
           rate_currency?: string | null
           processed_at?: string | null
           created_at?: string

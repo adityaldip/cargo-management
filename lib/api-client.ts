@@ -311,5 +311,13 @@ export const rateRulesAPI = {
       body: JSON.stringify({ ruleUpdates }),
     })
   },
+
+  // Execute rate rules to assign rates to cargo data
+  async executeRules(ruleIds?: string[], dryRun: boolean = false) {
+    return apiRequest('/rate-rules/execute', {
+      method: 'POST',
+      body: JSON.stringify({ ruleIds, dryRun }),
+    }, 300000) // 5 minutes timeout for rule execution (matches server timeout)
+  },
 }
 

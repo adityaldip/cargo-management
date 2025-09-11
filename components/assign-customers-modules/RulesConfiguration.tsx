@@ -596,15 +596,15 @@ export function RulesConfiguration() {
           duration: 5000,
         })
 
-        // Show detailed results in a second toast
-        setTimeout(() => {
-          const ruleBreakdown = results.ruleResults.map((r: any) => `${r.ruleName}: ${r.matches} matches`).join(', ')
-          toast({
-            title: "Rule Breakdown",
-            description: ruleBreakdown,
-            duration: 8000,
-          })
-        }, 1000)
+        // // Show detailed results in a second toast
+        // setTimeout(() => {
+        //   const ruleBreakdown = results.ruleResults.map((r: any) => `${r.ruleName}: ${r.matches} matches`).join(', ')
+        //   toast({
+        //     title: "Rule Breakdown",
+        //     description: ruleBreakdown,
+        //     duration: 8000,
+        //   })
+        // }, 1000)
         
         // Refresh rules to get updated match counts
         await refetch()
