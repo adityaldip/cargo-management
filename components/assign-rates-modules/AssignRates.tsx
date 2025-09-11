@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Settings } from "lucide-react"
-import { AssignRatesProps, ViewType } from "./types"
+import { AssignRatesProps, ViewType } from "@/types/rate-management"
 import { SetupRates } from "./SetupRates"
 import { ConfigureRates } from "./ConfigureRates"
 import { ExecuteRates } from "./ExecuteRates"

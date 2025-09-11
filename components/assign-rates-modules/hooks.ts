@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { rateRulesAPI, ratesAPI } from '@/lib/api-client'
-import { RateRule } from '@/store/rate-rules-store'
+import { RateRule } from '@/types/rate-management'
 import { useRateRulesStore } from '@/store/rate-rules-store'
+import { toast } from '@/hooks/use-toast'
 
 export function useRateRulesData() {
   const { rateRules, setRateRules } = useRateRulesStore()
@@ -48,6 +49,9 @@ export function useRateRulesData() {
             currency: rate.currency || 'EUR',
             matchCount: rule.match_count || 0,
             multiplier: rate.multiplier || 1,
+            rateId: rule.rate_id || rule.actions?.assignRate || '',
+            rate_id: rule.rate_id,
+            actions: rule.actions || {},
             createdAt: rule.created_at || new Date().toISOString(),
             updatedAt: rule.updated_at || new Date().toISOString()
           }
@@ -123,12 +127,8 @@ export function useRateRulesData() {
         is_active: ruleData.isActive ?? true,
         priority: ruleData.priority ?? rateRules.length + 1,
         conditions: ruleData.conditions || [],
-        actions: {
-          rateType: 'fixed',
-          baseRate: ruleData.rate || 0,
-          currency: ruleData.currency || 'EUR',
-          tags: []
-        },
+        rate_id: ruleData.rate_id,
+        actions: { assignRate: ruleData.rate_id }, // Actions for what to do when rule matches
         match_count: 0
       }
 
@@ -136,16 +136,32 @@ export function useRateRulesData() {
       
       if (error) {
         setError(error)
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        })
         return { success: false, error }
       }
 
       // Refresh data after creation
       await refetch()
       
+      toast({
+        title: "Success",
+        description: "Rate rule created successfully",
+        variant: "default"
+      })
+      
       return { success: true, data }
     } catch (err) {
       const errorMsg = `Failed to create rate rule: ${err instanceof Error ? err.message : 'Unknown error'}`
       setError(errorMsg)
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive"
+      })
       return { success: false, error: errorMsg }
     }
   }
@@ -161,23 +177,23 @@ export function useRateRulesData() {
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive
       if (updates.priority !== undefined) dbUpdates.priority = updates.priority
       if (updates.conditions !== undefined) dbUpdates.conditions = updates.conditions
-      if (updates.rate !== undefined || updates.currency !== undefined) {
-        // Get existing rule to preserve other action properties
-        const existingRule = rateRules.find(r => r.id === ruleId)
-        // Get existing actions from the rule (this would need to be fetched from API)
-        // For now, create a basic actions structure
-        dbUpdates.actions = {
-          rateType: 'fixed',
-          baseRate: updates.rate !== undefined ? updates.rate : (existingRule?.rate || 0),
-          currency: updates.currency !== undefined ? updates.currency : (existingRule?.currency || 'EUR'),
-          tags: []
-        }
+      if (updates.rate_id !== undefined) {
+        dbUpdates.rate_id = updates.rate_id
+        // Also update actions to maintain consistency
+        dbUpdates.actions = { assignRate: updates.rate_id }
       }
 
+      console.log('Updating rate rule:', ruleId, 'with data:', dbUpdates)
       const { data, error } = await rateRulesAPI.update(ruleId, dbUpdates)
+      console.log('API response:', { data, error })
       
       if (error) {
         setError(error)
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        })
         return { success: false, error }
       }
 
@@ -187,10 +203,21 @@ export function useRateRulesData() {
       )
       setRateRules(currentRules)
       
+      toast({
+        title: "Success",
+        description: "Rate rule updated successfully",
+        variant: "default"
+      })
+      
       return { success: true, data }
     } catch (err) {
       const errorMsg = `Failed to update rate rule: ${err instanceof Error ? err.message : 'Unknown error'}`
       setError(errorMsg)
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive"
+      })
       return { success: false, error: errorMsg }
     }
   }
@@ -206,13 +233,29 @@ export function useRateRulesData() {
       
       if (error) {
         setError('Failed to update rate rule priorities')
+        toast({
+          title: "Error",
+          description: "Failed to update rate rule priorities",
+          variant: "destructive"
+        })
         return false
       }
 
       setRateRules(updatedRules)
+      toast({
+        title: "Success",
+        description: "Rate rule priorities updated successfully",
+        variant: "default"
+      })
       return true
     } catch (err) {
-      setError(`Failed to update rate rule priorities: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const errorMsg = `Failed to update rate rule priorities: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive"
+      })
       return false
     }
   }

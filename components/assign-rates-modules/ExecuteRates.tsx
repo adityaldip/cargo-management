@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Play, Download, ChevronLeft, ChevronRight, Filter } from "lucide-react"
 import { WarningBanner } from "@/components/ui/status-banner"
-import { RateRule } from "./types"
+import { RateRule } from "@/types/rate-management"
 import { useRateRulesData } from "./hooks"
 import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
 import { usePageFilters } from "@/store/filter-store"

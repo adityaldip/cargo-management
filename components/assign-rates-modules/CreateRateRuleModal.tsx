@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Trash2 } from "lucide-react"
-import { RateRule } from "./types"
+import { RateRule, RateRuleCondition } from "@/types/rate-management"
+import { useRatesData } from "./hooks"
 
 interface CreateRateRuleModalProps {
   isOpen: boolean
@@ -16,55 +17,52 @@ interface CreateRateRuleModalProps {
   onSave: (ruleData: Partial<RateRule>) => Promise<{ success: boolean; error?: string }>
 }
 
-interface RuleCondition {
-  field: string
-  operator: string
-  value: string
-  value2?: string
-}
-
-interface RuleAction {
-  rateType: string
-  baseRate: number
-  multiplier?: number
-  currency: string
-  tags: string[]
-}
 
 export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleModalProps) {
+  const { rates } = useRatesData()
+  
+  // Available field options from cargo_data columns (matching RulesConfiguration)
+  const cargoDataFields = [
+    { key: 'inb_flight_date', label: 'Inb. Flight Date' },
+    { key: 'outb_flight_date', label: 'Outb. Flight Date' },
+    { key: 'rec_id', label: 'Rec. ID' },
+    { key: 'des_no', label: 'Des. No.' },
+    { key: 'rec_numb', label: 'Rec. Number' },
+    { key: 'orig_oe', label: 'Orig. OE' },
+    { key: 'dest_oe', label: 'Dest. OE' },
+    { key: 'inb_flight_no', label: 'Inb. Flight No.' },
+    { key: 'outb_flight_no', label: 'Outb. Flight No.' },
+    { key: 'mail_cat', label: 'Mail Category' },
+    { key: 'mail_class', label: 'Mail Class' },
+    { key: 'total_kg', label: 'Total Weight (kg)' },
+    { key: 'invoice', label: 'Invoice' },
+    { key: 'assigned_customer', label: 'Customer' },
+    { key: 'assigned_rate', label: 'Rate' }
+  ]
+  
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    isActive: true
+    isActive: true,
+    selectedRateId: ""
   })
   
-  const [conditions, setConditions] = useState<RuleCondition[]>([
-    { field: "route", operator: "contains", value: "" }
+  const [conditions, setConditions] = useState<RateRuleCondition[]>([
+    { field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }
   ])
   
-  const [actions, setActions] = useState<RuleAction>({
-    rateType: "per_kg",
-    baseRate: 0,
-    multiplier: 1,
-    currency: "EUR",
-    tags: []
-  })
-  
-  const [tagInput, setTagInput] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleClose = () => {
-    setFormData({ name: "", description: "", isActive: true })
-    setConditions([{ field: "route", operator: "contains", value: "" }])
-    setActions({ rateType: "per_kg", baseRate: 0, multiplier: 1, currency: "EUR", tags: [] })
-    setTagInput("")
+    setFormData({ name: "", description: "", isActive: true, selectedRateId: "" })
+    setConditions([{ field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }])
     setError(null)
     onClose()
   }
 
   const addCondition = () => {
-    setConditions(prev => [...prev, { field: "route", operator: "contains", value: "" }])
+    setConditions(prev => [...prev, { field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }])
   }
 
   const removeCondition = (index: number) => {
@@ -73,20 +71,10 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
     }
   }
 
-  const updateCondition = (index: number, updates: Partial<RuleCondition>) => {
+  const updateCondition = (index: number, updates: Partial<RateRuleCondition>) => {
     setConditions(prev => prev.map((cond, i) => i === index ? { ...cond, ...updates } : cond))
   }
 
-  const addTag = () => {
-    if (tagInput.trim() && !actions.tags.includes(tagInput.trim())) {
-      setActions(prev => ({ ...prev, tags: [...prev.tags, tagInput.trim()] }))
-      setTagInput("")
-    }
-  }
-
-  const removeTag = (tagToRemove: string) => {
-    setActions(prev => ({ ...prev, tags: prev.tags.filter(tag => tag !== tagToRemove) }))
-  }
 
   const handleSave = async () => {
     // Validation
@@ -100,8 +88,8 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
       return
     }
 
-    if (!actions.baseRate || actions.baseRate <= 0) {
-      setError("Base rate must be greater than 0")
+    if (!formData.selectedRateId) {
+      setError("Please select a rate")
       return
     }
 
@@ -109,12 +97,16 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
     setError(null)
 
     try {
+      const selectedRate = rates.find(rate => rate.id === formData.selectedRateId)
+      
       const ruleData = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         isActive: formData.isActive,
         conditions: conditions.filter(c => c.value.trim()),
-        actions: actions
+        rate: selectedRate?.base_rate || 0,
+        currency: selectedRate?.currency || 'EUR',
+        rate_id: formData.selectedRateId
       }
 
       const result = await onSave(ruleData)
@@ -133,12 +125,12 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Rate Rule</DialogTitle>
+          <DialogTitle className="text-lg">Create New Rate Rule</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-6 py-4">
+        <div className="space-y-4 py-3">
           {/* Error Display */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -147,66 +139,64 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
           )}
 
           {/* Basic Information */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Rule Name *</Label>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="name" className="text-sm">Rule Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Enter rule name"
-                className="w-full"
+                className="w-full h-8 text-sm"
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="description" className="text-sm">Description</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Enter rule description"
-                className="w-full"
+                className="w-full text-sm"
                 rows={2}
               />
             </div>
           </div>
 
           {/* Conditions */}
-          <div className="space-y-4">
-            <Label className="text-base font-medium">Conditions</Label>
-            <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Conditions</Label>
+            <div className="border border-gray-200 rounded-lg p-3 space-y-2">
               {conditions.map((condition, index) => (
-                <div key={index} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 group">
+                <div key={index} className="flex items-center gap-2 p-1.5 rounded-md hover:bg-gray-50 group">
                   {index === 0 ? (
-                    <span className="text-sm font-medium text-gray-700 min-w-12">Where</span>
+                    <span className="text-xs font-medium text-gray-700 min-w-10">Where</span>
                   ) : (
-                    <span className="text-sm font-medium text-gray-700 min-w-12">And</span>
+                    <span className="text-xs font-medium text-gray-700 min-w-10">And</span>
                   )}
 
                   <Select 
                     value={condition.field}
                     onValueChange={(value) => updateCondition(index, { field: value, value: "" })}
                   >
-                    <SelectTrigger className="h-8 min-w-32 max-w-48 text-xs">
+                    <SelectTrigger className="h-7 min-w-28 max-w-40 text-xs">
                       <SelectValue placeholder="Property" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="route">Route</SelectItem>
-                      <SelectItem value="weight">Weight (kg)</SelectItem>
-                      <SelectItem value="mail_category">Mail Category</SelectItem>
-                      <SelectItem value="mail_class">Mail Class</SelectItem>
-                      <SelectItem value="customer">Customer</SelectItem>
-                      <SelectItem value="flight_number">Flight Number</SelectItem>
-                      <SelectItem value="distance">Distance (km)</SelectItem>
+                      {cargoDataFields.map((field) => (
+                        <SelectItem key={field.key} value={field.key}>
+                          {field.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
 
                   <Select 
                     value={condition.operator}
-                    onValueChange={(value) => updateCondition(index, { operator: value })}
+                    onValueChange={(value) => updateCondition(index, { operator: value as RateRuleCondition['operator'] })}
                   >
-                    <SelectTrigger className="h-8 min-w-24 max-w-32 text-xs">
+                    <SelectTrigger className="h-7 min-w-20 max-w-28 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -224,7 +214,7 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
                     value={condition.value}
                     onChange={(e) => updateCondition(index, { value: e.target.value })}
                     placeholder="Value"
-                    className="h-8 text-xs flex-1"
+                    className="h-7 text-xs flex-1"
                   />
 
                   {condition.operator === "between" && (
@@ -232,7 +222,7 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
                       value={condition.value2 || ""}
                       onChange={(e) => updateCondition(index, { value2: e.target.value })}
                       placeholder="To"
-                      className="h-8 text-xs w-20"
+                      className="h-7 text-xs w-16"
                     />
                   )}
 
@@ -242,7 +232,7 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
                         variant="ghost"
                         size="sm"
                         onClick={() => removeCondition(index)}
-                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                        className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -255,133 +245,67 @@ export function CreateRateRuleModal({ isOpen, onClose, onSave }: CreateRateRuleM
                 variant="ghost"
                 size="sm"
                 onClick={addCondition}
-                className="h-8 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                className="h-7 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
               >
-                <Plus className="h-3 w-3 mr-2" />
+                <Plus className="h-3 w-3 mr-1" />
                 Add condition
               </Button>
             </div>
           </div>
 
-          {/* Rate Configuration */}
-          <div className="space-y-4">
-            <Label className="text-base font-medium">Rate Configuration</Label>
-            <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="baseRate">Base Rate *</Label>
-                  <Input
-                    id="baseRate"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={actions.baseRate}
-                    onChange={(e) => setActions(prev => ({ ...prev, baseRate: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Select value={actions.currency} onValueChange={(value) => setActions(prev => ({ ...prev, currency: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="rateType">Rate Type</Label>
-                  <Select value={actions.rateType} onValueChange={(value) => setActions(prev => ({ ...prev, rateType: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">Fixed Rate</SelectItem>
-                      <SelectItem value="per_kg">Per Kilogram</SelectItem>
-                      <SelectItem value="distance_based">Distance Based</SelectItem>
-                      <SelectItem value="zone_based">Zone Based</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {(actions.rateType === "per_kg" || actions.rateType === "distance_based" || actions.rateType === "zone_based") && (
-                <div className="space-y-2">
-                  <Label htmlFor="multiplier">Multiplier</Label>
-                  <Input
-                    id="multiplier"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={actions.multiplier}
-                    onChange={(e) => setActions(prev => ({ ...prev, multiplier: parseFloat(e.target.value) || 1 }))}
-                    placeholder="1.00"
-                    className="max-w-32"
-                  />
-                </div>
-              )}
-
-              {/* Tags */}
-              <div className="space-y-2">
-                <Label>Tags</Label>
-                <div className="flex gap-2 mb-2">
-                  <Input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    placeholder="Enter tag"
-                    className="flex-1"
-                    onKeyPress={(e) => e.key === 'Enter' && addTag()}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addTag}
-                  >
-                    Add
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {actions.tags.map((tag, index) => (
-                    <div key={index} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-md text-sm flex items-center gap-1">
-                      {tag}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeTag(tag)}
-                        className="h-4 w-4 p-0 hover:bg-red-100"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+          {/* Rate Selection */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Rate Selection</Label>
+            <div className="border border-gray-200 rounded-lg p-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="rateSelect" className="text-sm">Select Rate *</Label>
+                <Select 
+                  value={formData.selectedRateId} 
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, selectedRateId: value }))}
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="Choose a rate from the rates table" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {rates.map((rate) => (
+                      <SelectItem key={rate.id} value={rate.id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{rate.name || rate.description || `Rate ${rate.id}`}</span>
+                          <span className="ml-2 text-xs text-gray-500">
+                            {rate.currency || 'EUR'} {(rate.base_rate || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.selectedRateId && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    Selected rate details will be applied to this rule
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
         
-        <DialogFooter>
+        <DialogFooter className="pt-3">
           <Button 
             variant="outline" 
             onClick={handleClose}
             disabled={isCreating}
+            className="h-8 text-sm"
           >
             Cancel
           </Button>
           <Button 
             onClick={handleSave}
-            disabled={isCreating || !formData.name.trim()}
+            disabled={isCreating || !formData.name.trim() || !formData.selectedRateId}
+            className="h-8 text-sm"
           >
             {isCreating ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
                 Creating...
               </>
             ) : (

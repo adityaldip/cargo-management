@@ -10,20 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AlertTriangle, Loader2, Plus, Edit, Trash2 } from "lucide-react"
 import { useRatesData } from "./hooks"
-
-interface Rate {
-  id: string
-  name: string
-  description?: string
-  rate_type: string
-  base_rate: number
-  currency: string
-  multiplier: number
-  tags: string[]
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+import { Rate } from "@/types/rate-management"
 
 export function SetupRates() {
   const {

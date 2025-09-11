@@ -23,17 +23,16 @@ import {
   Package,
   DollarSign,
   Plane,
-  Settings,
-  ChevronDown
+  Settings
 } from "lucide-react"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { RateRule } from "@/store/rate-rules-store"
+import { RateRule } from "@/types/rate-management"
 import { SAMPLE_RATE_RULES } from "./sample-data"
-import { useRateRulesData } from "./hooks"
+import { useRateRulesData, useRatesData } from "./hooks"
 import { CreateRateRuleModal } from "./CreateRateRuleModal"
+import { RateRuleEditor } from "./RateRuleEditor"
+import { SweetAlert } from "@/components/ui/sweet-alert"
+import { useToast } from "@/hooks/use-toast"
 
 export function ConfigureRates() {
   const {
@@ -49,6 +48,8 @@ export function ConfigureRates() {
     updateRateRule,
     updateRateRulePriorities
   } = useRateRulesData()
+  
+  const { rates } = useRatesData()
   
   const [localRules, setLocalRules] = useState<RateRule[]>([])
 
@@ -77,8 +78,23 @@ export function ConfigureRates() {
     value: string
   }[]>([])
   const [editingRuleLogic, setEditingRuleLogic] = useState<"AND" | "OR">("AND")
+  const [editingRuleRateId, setEditingRuleRateId] = useState<string>("")
+  const [isSaving, setIsSaving] = useState(false)
   const [openFieldSelects, setOpenFieldSelects] = useState<Record<number, boolean>>({})
   const [openOperatorSelects, setOpenOperatorSelects] = useState<Record<number, boolean>>({})
+  
+  // Sweet Alert state
+  const [sweetAlert, setSweetAlert] = useState({
+    isVisible: false,
+    title: "",
+    text: "",
+    type: "warning" as "warning" | "error" | "success" | "info",
+    onConfirm: () => {},
+    ruleToDelete: null as RateRule | null
+  })
+  
+  // Toast hook
+  const { toast } = useToast()
   
   // Available field options from cargo_data columns (matching RulesConfiguration.tsx)
   const cargoDataFields = [
@@ -149,13 +165,55 @@ export function ConfigureRates() {
   })
 
   const handleToggleRule = async (ruleId: string) => {
-    await toggleRateRule(ruleId)
+    const result = await toggleRateRule(ruleId)
+    if (result.success) {
+      toast({
+        title: "Success",
+        description: "Rate rule status updated successfully",
+        variant: "default"
+      })
+    } else {
+      toast({
+        title: "Error",
+        description: result.error || "Failed to update rate rule status",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleDeleteRule = (rule: RateRule) => {
+    setSweetAlert({
+      isVisible: true,
+      title: "Delete Rate Rule",
+      text: `Are you sure you want to delete "${rule.name}"? This action cannot be undone.`,
+      type: "warning",
+      onConfirm: () => confirmDeleteRule(rule.id),
+      ruleToDelete: rule
+    })
+  }
+
+  const confirmDeleteRule = async (ruleId: string) => {
+    const result = await deleteRateRule(ruleId)
+    if (result.success) {
+      toast({
+        title: "Success",
+        description: "Rate rule deleted successfully",
+        variant: "default"
+      })
+    } else {
+      toast({
+        title: "Error",
+        description: result.error || "Failed to delete rate rule",
+        variant: "destructive"
+      })
+    }
   }
 
   const handleEditRule = (rule: RateRule) => {
     if (expandedRule === rule.id) {
       setExpandedRule(null)
       setEditingRuleConditions([])
+      setEditingRuleRateId("")
     } else {
       setExpandedRule(rule.id)
       // Initialize editing state with current rule conditions
@@ -166,6 +224,14 @@ export function ConfigureRates() {
       }))
       setEditingRuleConditions(initialConditions.length > 0 ? initialConditions : [{ field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }])
       setEditingRuleLogic("AND")
+      // Initialize rate ID from the rule's rateId field, rate_id field, or actions
+      const rateId = rule.rateId || rule.rate_id || rule.actions?.assignRate || ""
+      console.log('Rule data:', rule)
+      console.log('Rule.rateId:', rule.rateId)
+      console.log('Rule.actions:', rule.actions)
+      console.log('Rule.actions?.assignRate:', rule.actions?.assignRate)
+      console.log('Extracted rateId:', rateId)
+      setEditingRuleRateId(rateId)
     }
   }
 
@@ -191,7 +257,7 @@ export function ConfigureRates() {
     const [draggedItem] = newRules.splice(draggedIndex, 1)
     newRules.splice(targetIndex, 0, draggedItem)
     
-    // Update priorities based on new order
+    // Update priorities based on new order (sequential like customer rules)
     const updatedRules = newRules.map((rule, index) => ({
       ...rule,
       priority: index + 1
@@ -212,8 +278,8 @@ export function ConfigureRates() {
 
   const getStatusIcon = (rule: RateRule) => {
     if (!rule.isActive) return <Pause className="h-4 w-4 text-gray-400" />
-    if (rule.matchCount > 100) return <CheckCircle className="h-4 w-4 text-green-500" />
-    if (rule.matchCount > 50) return <Play className="h-4 w-4 text-blue-500" />
+    if ((rule.matchCount ?? 0) > 100) return <CheckCircle className="h-4 w-4 text-green-500" />
+    if ((rule.matchCount ?? 0) > 50) return <Play className="h-4 w-4 text-blue-500" />
     return <Clock className="h-4 w-4 text-yellow-500" />
   }
 
@@ -257,6 +323,59 @@ export function ConfigureRates() {
 
   const updateEditingRuleCondition = (index: number, updates: Partial<typeof editingRuleConditions[0]>) => {
     setEditingRuleConditions(prev => prev.map((cond, i) => i === index ? { ...cond, ...updates } : cond))
+  }
+
+  // Save changes to rate rule
+  const handleSaveChanges = async () => {
+    if (!Array.isArray(displayRules)) return
+    const currentRule = displayRules.find(r => r.id === expandedRule)
+    if (!currentRule) return
+
+    setIsSaving(true)
+    setError(null)
+
+    try {
+      // Prepare update data
+      const updateData = {
+        conditions: editingRuleConditions.filter(cond => cond.value.trim()),
+        rate_id: editingRuleRateId
+      }
+
+      console.log('Saving rate rule with data:', updateData)
+      const result = await updateRateRule(currentRule.id, updateData)
+      console.log('Save result:', result)
+      
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Rate rule updated successfully",
+          variant: "default"
+        })
+        // Close editor
+        setExpandedRule(null)
+        setEditingRuleConditions([])
+        setEditingRuleRateId("")
+      } else {
+        const errorMsg = result.error || "Failed to save rule"
+        setError(errorMsg)
+        toast({
+          title: "Error",
+          description: errorMsg,
+          variant: "destructive"
+        })
+      }
+    } catch (err) {
+      console.error('Save error:', err)
+      const errorMsg = `Failed to save rule: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive"
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Show loading state
@@ -412,14 +531,9 @@ export function ConfigureRates() {
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation()
-                    if (confirm(`Are you sure you want to delete "${rule.name}"? This action cannot be undone.`)) {
-                      const result = await deleteRateRule(rule.id)
-                      if (!result.success) {
-                        alert(`Failed to delete rule: ${result.error}`)
-                      }
-                    }
+                    handleDeleteRule(rule)
                   }}
                   className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
                 >
@@ -429,219 +543,26 @@ export function ConfigureRates() {
 
               {/* Expanded Edit Section */}
               {expandedRule === rule.id && (
-                <div className="border-t bg-gray-50 p-4">
-                  <div className="space-y-4">
-                    {/* Notion-Style Filter Section */}
-                    <div className="border border-gray-200 rounded-lg bg-white shadow-sm">
-                      {/* Add Condition Button - Moved to top */}
-                      <div className="px-4 pt-4 pb-2 border-b border-gray-100">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={addEditingRuleCondition}
-                          className="h-8 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                        >
-                          <Plus className="h-3 w-3 mr-2" />
-                          Add condition
-                        </Button>
-                      </div>
-                      
-                      {/* Filter Conditions */}
-                      <div className="p-4 space-y-2">
-                        {editingRuleConditions.map((condition, index) => (
-                          <div key={index} className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group">
-                            {index === 0 ? (
-                              <span className="text-xs font-medium text-gray-700 w-18">Where</span>
-                            ) : (
-                              <Select 
-                                value={editingRuleLogic}
-                                onValueChange={(value) => setEditingRuleLogic(value as "AND" | "OR")}
-                              >
-                                <SelectTrigger className="h-7 w-18 text-xs border-gray-200">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="AND">And</SelectItem>
-                                  <SelectItem value="OR">Or</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
-
-                            <Popover 
-                              open={openFieldSelects[index]} 
-                              onOpenChange={(open) => setOpenFieldSelects(prev => ({ ...prev, [index]: open }))}
-                            >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  aria-expanded={openFieldSelects[index]}
-                                  className="h-7 w-32 text-xs border-gray-200 justify-between font-normal"
-                                >
-                                  <span className="truncate">
-                                    {condition.field
-                                      ? cargoDataFields.find((field) => field.key === condition.field)?.label
-                                      : "Field..."}
-                                  </span>
-                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-48 p-0">
-                                <Command>
-                                  <CommandInput placeholder="Search field..." className="h-8 text-xs" />
-                                  <CommandEmpty>No field found.</CommandEmpty>
-                                  <CommandGroup className="max-h-48 overflow-auto">
-                                    {cargoDataFields.map((field) => (
-                                      <CommandItem
-                                        key={field.key}
-                                        value={field.label}
-                                        onSelect={() => {
-                                          updateEditingRuleCondition(index, { field: field.key, value: "" })
-                                          setOpenFieldSelects(prev => ({ ...prev, [index]: false }))
-                                        }}
-                                        className="text-xs"
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-3 w-3",
-                                            condition.field === field.key ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        {field.label}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </Command>
-                              </PopoverContent>
-                            </Popover>
-
-                            <Popover 
-                              open={openOperatorSelects[index]} 
-                              onOpenChange={(open) => setOpenOperatorSelects(prev => ({ ...prev, [index]: open }))}
-                            >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  aria-expanded={openOperatorSelects[index]}
-                                  className="h-7 w-28 text-xs border-gray-200 justify-between font-normal"
-                                >
-                                  <span className="truncate">
-                                    {condition.operator === "equals" && "Is"}
-                                    {condition.operator === "contains" && "Contains"}
-                                    {condition.operator === "starts_with" && "Starts"}
-                                    {condition.operator === "ends_with" && "Ends"}
-                                    {!condition.operator && "Operator..."}
-                                  </span>
-                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-32 p-0">
-                                <Command>
-                                  <CommandInput placeholder="Search..." className="h-8 text-xs" />
-                                  <CommandEmpty>No operator found.</CommandEmpty>
-                                  <CommandGroup>
-                                    {[
-                                      { value: "equals", label: "Is" },
-                                      { value: "contains", label: "Contains" },
-                                      { value: "starts_with", label: "Starts" },
-                                      { value: "ends_with", label: "Ends" }
-                                    ].map((operator) => (
-                                      <CommandItem
-                                        key={operator.value}
-                                        value={operator.label}
-                                        onSelect={() => {
-                                          updateEditingRuleCondition(index, { operator: operator.value })
-                                          setOpenOperatorSelects(prev => ({ ...prev, [index]: false }))
-                                        }}
-                                        className="text-xs"
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-3 w-3",
-                                            condition.operator === operator.value ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        {operator.label}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </Command>
-                              </PopoverContent>
-                            </Popover>
-
-                            <Input
-                              value={condition.value}
-                              onChange={(e) => updateEditingRuleCondition(index, { value: e.target.value })}
-                              placeholder="Enter value..."
-                              className="h-7 text-xs border-gray-200 flex-1 min-w-20"
-                            />
-
-                            {editingRuleConditions.length > 1 && index > 0 && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeEditingRuleCondition(index)}
-                                className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-
-                        {/* Rate Assignment Row */}
-                        <div className="flex flex-wrap items-center gap-1 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
-                          <span className="text-xs font-medium text-gray-700 min-w-8">Rate</span>
-                          <Select defaultValue={rule.id}>
-                            <SelectTrigger className="h-7 text-xs border-gray-200 flex-1 min-w-48 max-w-72">
-                              <SelectValue placeholder="Select rate rule" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-60">
-                              {displayRules.map((rateRule) => (
-                                <SelectItem key={rateRule.id} value={rateRule.id}>
-                                  <div className="flex items-center justify-between w-full">
-                                    <span>{rateRule.name}</span>
-                                    <span className="ml-2 text-xs text-gray-500">
-                                      {rateRule.currency || 'EUR'} {(rateRule.rate || 0).toFixed(2)}
-                                    </span>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex justify-end gap-2 pt-2 border-t">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setExpandedRule(null)}
-                        className="h-7 text-xs"
-                      >
-                        Cancel
-                      </Button>
-                                              <Button 
-                          size="sm"
-                          onClick={async () => {
-                            // Save the rule with current editing conditions
-                            const updatedRule = {
-                              conditions: editingRuleConditions,
-                              // You can add more fields here as needed
-                            }
-                            await updateRateRule(rule.id, updatedRule)
-                            setExpandedRule(null)
-                          }}
-                          className="bg-black hover:bg-gray-800 text-white h-7 text-xs"
-                        >
-                          Save Changes
-                        </Button>
-                    </div>
-                  </div>
-                </div>
+                <RateRuleEditor
+                  rule={rule}
+                  rates={rates}
+                  isSaving={isSaving}
+                  editingRuleConditions={editingRuleConditions}
+                  editingRuleLogic={editingRuleLogic}
+                  editingRuleRateId={editingRuleRateId}
+                  openFieldSelects={openFieldSelects}
+                  openOperatorSelects={openOperatorSelects}
+                  onUpdateConditions={setEditingRuleConditions}
+                  onUpdateLogic={setEditingRuleLogic}
+                  onUpdateRateId={setEditingRuleRateId}
+                  onUpdateFieldSelect={(index, open) => setOpenFieldSelects(prev => ({ ...prev, [index]: open }))}
+                  onUpdateOperatorSelect={(index, open) => setOpenOperatorSelects(prev => ({ ...prev, [index]: open }))}
+                  onAddCondition={addEditingRuleCondition}
+                  onRemoveCondition={removeEditingRuleCondition}
+                  onUpdateCondition={updateEditingRuleCondition}
+                  onSave={handleSaveChanges}
+                  onCancel={() => setExpandedRule(null)}
+                />
               )}
             </div>
           ))}
@@ -662,6 +583,18 @@ export function ConfigureRates() {
       isOpen={isCreateModalOpen}
       onClose={() => setIsCreateModalOpen(false)}
       onSave={createRateRule}
+    />
+
+    {/* Sweet Alert for Delete Confirmation */}
+    <SweetAlert
+      isVisible={sweetAlert.isVisible}
+      title={sweetAlert.title}
+      text={sweetAlert.text}
+      type={sweetAlert.type}
+      confirmButtonText="Yes, Delete!"
+      cancelButtonText="Cancel"
+      onConfirm={sweetAlert.onConfirm}
+      onClose={() => setSweetAlert(prev => ({ ...prev, isVisible: false }))}
     />
     </>
   )

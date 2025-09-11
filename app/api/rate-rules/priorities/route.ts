@@ -44,17 +44,43 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // Use Supabase RPC for atomic transaction
-    const { data, error } = await supabaseAdmin.rpc('update_rate_rule_priorities', {
-      rule_updates: ruleUpdates.map(update => ({
-        id: update.id,
-        priority: update.priority
-      }))
-    })
+    // Two-phase update to avoid unique constraint violations
+    // Phase 1: Set temporary negative priorities
+    const tempUpdatePromises = ruleUpdates.map((rule, index) => 
+      supabaseAdmin
+        .from('rate_rules')
+        .update({ priority: -(index + 1000) })
+        .eq('id', rule.id)
+    )
+    
+    const tempResults = await Promise.all(tempUpdatePromises)
+    const hasTempErrors = tempResults.some(result => result.error)
+    
+    if (hasTempErrors) {
+      console.error('Failed to update rate rule priorities (temp phase):', tempResults)
+      return NextResponse.json(
+        { error: 'Failed to update rate rule priorities (temp phase)' },
+        { status: 500 }
+      )
+    }
 
-    if (error) {
-      console.error('Database transaction error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    // Phase 2: Set final priorities
+    const finalUpdatePromises = ruleUpdates.map(rule => 
+      supabaseAdmin
+        .from('rate_rules')
+        .update({ priority: rule.priority })
+        .eq('id', rule.id)
+    )
+    
+    const finalResults = await Promise.all(finalUpdatePromises)
+    const hasFinalErrors = finalResults.some(result => result.error)
+    
+    if (hasFinalErrors) {
+      console.error('Failed to update rate rule priorities (final phase):', finalResults)
+      return NextResponse.json(
+        { error: 'Failed to update rate rule priorities (final phase)' },
+        { status: 500 }
+      )
     }
 
     // Fetch updated rules to return

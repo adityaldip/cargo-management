@@ -1,4 +1,4 @@
-import { RateRule, RateConfig } from './types'
+import { RateRule, RateConfig } from '@/types/rate-management'
 
 // Sample airBaltic rate automation rules
 export const SAMPLE_RATE_RULES: RateRule[] = [
@@ -13,15 +13,12 @@ export const SAMPLE_RATE_RULES: RateRule[] = [
       { field: "weight", operator: "less_than", value: "25" },
       { field: "mail_category", operator: "equals", value: "A" }
     ],
-    actions: {
-      rateType: "per_kg",
-      baseRate: 4.50,
-      multiplier: 1.0,
-      currency: "EUR",
-      tags: ["EU", "Standard", "Light"]
-    },
+    rate: 4.50,
+    currency: "EUR",
+    multiplier: 1.0,
     matchCount: 234,
-    lastRun: "2025-01-28T12:00:00Z"
+    createdAt: "2025-01-28T12:00:00Z",
+    updatedAt: "2025-01-28T12:00:00Z"
   },
   {
     id: "2", 
@@ -34,15 +31,12 @@ export const SAMPLE_RATE_RULES: RateRule[] = [
       { field: "mail_category", operator: "equals", value: "A" },
       { field: "weight", operator: "greater_than", value: "10" }
     ],
-    actions: {
-      rateType: "per_kg",
-      baseRate: 6.75,
-      multiplier: 1.25,
-      currency: "EUR",
-      tags: ["Nordic", "Premium", "Express"]
-    },
+    rate: 6.75,
+    currency: "EUR",
+    multiplier: 1.25,
     matchCount: 89,
-    lastRun: "2025-01-28T09:15:00Z"
+    createdAt: "2025-01-28T09:15:00Z",
+    updatedAt: "2025-01-28T09:15:00Z"
   },
   {
     id: "3",
@@ -52,84 +46,79 @@ export const SAMPLE_RATE_RULES: RateRule[] = [
     priority: 3,
     conditions: [
       { field: "weight", operator: "greater_than", value: "50" },
-      { field: "mail_category", operator: "equals", value: "B" }
+      { field: "mail_category", operator: "equals", value: "A" }
     ],
-    actions: {
-      rateType: "per_kg",
-      baseRate: 3.25,
-      multiplier: 0.85,
-      currency: "EUR",
-      tags: ["Heavy", "Discount", "Bulk"]
-    },
+    rate: 3.20,
+    currency: "EUR",
+    multiplier: 0.85,
     matchCount: 45,
-    lastRun: "2025-01-28T10:30:00Z"
+    createdAt: "2025-01-28T14:30:00Z",
+    updatedAt: "2025-01-28T14:30:00Z"
   },
   {
     id: "4",
-    name: "Intercontinental Fixed Rate",
-    description: "Fixed rate structure for intercontinental routes",
+    name: "Express Priority Zone",
+    description: "Express rates for priority destinations",
     isActive: true,
     priority: 4,
     conditions: [
-      { field: "route", operator: "contains", value: "USNYC,USLAX,CAYVR,JPNRT" },
-      { field: "mail_category", operator: "equals", value: "A" }
+      { field: "route", operator: "contains", value: "GBLHR,USNYC,CAYVR" },
+      { field: "mail_class", operator: "equals", value: "Express" }
     ],
-    actions: {
-      rateType: "fixed",
-      baseRate: 125.00,
-      currency: "EUR",
-      tags: ["Intercontinental", "Fixed", "Long-haul"]
-    },
-    matchCount: 34,
-    lastRun: "2025-01-28T11:45:00Z"
+    rate: 25.00,
+    currency: "EUR",
+    multiplier: 1.0,
+    matchCount: 156,
+    createdAt: "2025-01-28T11:45:00Z",
+    updatedAt: "2025-01-28T11:45:00Z"
   },
   {
     id: "5",
-    name: "Distance-Based Calculation",
-    description: "Calculate rates based on flight distance for efficiency",
+    name: "Regional Economy",
+    description: "Economy rates for regional Baltic destinations",
     isActive: true,
     priority: 5,
     conditions: [
-      { field: "distance", operator: "between", value: "500", value2: "2000" },
-      { field: "mail_category", operator: "equals", value: "A" }
+      { field: "route", operator: "contains", value: "LVRIX,LTVIE,EEALL" },
+      { field: "weight", operator: "less_than", value: "15" },
+      { field: "mail_category", operator: "equals", value: "B" }
     ],
-    actions: {
-      rateType: "distance_based",
-      baseRate: 0.08,
-      multiplier: 1.0,
-      currency: "EUR",
-      tags: ["Distance", "Efficiency", "Calculated"]
-    },
-    matchCount: 156,
-    lastRun: "2025-01-28T08:20:00Z"
+    rate: 2.80,
+    currency: "EUR",
+    multiplier: 0.9,
+    matchCount: 312,
+    createdAt: "2025-01-28T16:20:00Z",
+    updatedAt: "2025-01-28T16:20:00Z"
   },
   {
     id: "6",
-    name: "Zone-Based Regional",
-    description: "Zone-based pricing for regional European routes",
-    isActive: true,
+    name: "Business Class Premium",
+    description: "Premium rates for business class mail",
+    isActive: false,
     priority: 6,
     conditions: [
-      { field: "route", operator: "contains", value: "DEBER,FRANK,NLAMR,BEGRU" },
+      { field: "mail_class", operator: "equals", value: "Business" },
       { field: "weight", operator: "between", value: "5", value2: "30" }
     ],
-    actions: {
-      rateType: "zone_based",
-      baseRate: 35.00,
-      multiplier: 1.15,
-      currency: "EUR",
-      tags: ["Zone", "Regional", "Europe"]
-    },
+    rate: 8.50,
+    currency: "EUR",
+    multiplier: 1.5,
     matchCount: 67,
-    lastRun: "2025-01-28T07:30:00Z"
+    createdAt: "2025-01-27T10:00:00Z",
+    updatedAt: "2025-01-27T10:00:00Z"
   }
 ]
 
-export const DEFAULT_RATE_CONFIGS: RateConfig[] = [
-  { key: 'eu_zone_standard', label: 'EU Zone Standard Rate', visible: true, order: 1 },
-  { key: 'nordic_express_premium', label: 'Nordic Express Premium', visible: true, order: 2 },
-  { key: 'heavy_cargo_discount', label: 'Heavy Cargo Discount', visible: true, order: 3 },
-  { key: 'intercontinental_fixed', label: 'Intercontinental Fixed Rate', visible: true, order: 4 },
-  { key: 'distance_based_calculation', label: 'Distance-Based Calculation', visible: true, order: 5 },
-  { key: 'zone_based_regional', label: 'Zone-Based Regional', visible: true, order: 6 },
+// Sample rate configuration for column management
+export const SAMPLE_RATE_CONFIGS: RateConfig[] = [
+  { key: "name", label: "Rule Name", visible: true, order: 1 },
+  { key: "description", label: "Description", visible: true, order: 2 },
+  { key: "conditions", label: "Conditions", visible: true, order: 3 },
+  { key: "rate", label: "Rate", visible: true, order: 4 },
+  { key: "currency", label: "Currency", visible: true, order: 5 },
+  { key: "isActive", label: "Status", visible: true, order: 6 },
+  { key: "matchCount", label: "Matches", visible: true, order: 7 },
+  { key: "priority", label: "Priority", visible: false, order: 8 },
+  { key: "createdAt", label: "Created", visible: false, order: 9 },
+  { key: "updatedAt", label: "Updated", visible: false, order: 10 }
 ]

@@ -2,29 +2,10 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { RateRule, RateRuleCondition } from '@/types/rate-management'
 
-export interface RateRule {
-  id: string
-  name: string
-  description?: string
-  priority: number
-  conditions: RateRuleCondition[]
-  rate: number
-  currency: string
-  isActive: boolean
-  matchCount?: number
-  multiplier?: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface RateRuleCondition {
-  id: string
-  field: string
-  operator: 'equals' | 'contains' | 'starts_with' | 'ends_with' | 'regex' | 'greater_than' | 'less_than'
-  value: string
-  logic?: 'AND' | 'OR'
-}
+// Re-export types for backward compatibility
+export type { RateRule, RateRuleCondition }
 
 interface RateRulesState {
   rateRules: RateRule[]
