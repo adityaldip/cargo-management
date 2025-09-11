@@ -165,7 +165,7 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
         mail_class: cargoData.mailClass || '',
         total_kg: cargoData.totalKg || 0,
         invoice: cargoData.invoiceExtend || '',
-        assigned_customer: cargoData.customer || '',
+        assigned_customer: cargoData.customer || null,
         assigned_rate: cargoData.totalEur || 0,
         processed_at: new Date().toISOString(),
         created_at: new Date().toISOString(),

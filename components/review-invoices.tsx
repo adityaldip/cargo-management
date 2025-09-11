@@ -272,9 +272,9 @@ export function ReviewInvoices({ data }: ReviewInvoicesProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedInvoices.map((invoice) => (
+                      {paginatedInvoices.map((invoice, index) => (
                         <TableRow 
-                          key={invoice.id} 
+                          key={invoice.id || `invoice-${index}`} 
                           className={cn(
                             "hover:bg-gray-50 cursor-pointer",
                             selectedInvoice?.id === invoice.id && "bg-blue-50 border-blue-200"

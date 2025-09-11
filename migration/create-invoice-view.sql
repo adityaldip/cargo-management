@@ -1,13 +1,24 @@
 -- Create a view for invoice data to optimize query performance
- -- This view generates invoices directly from cargo_data table
+-- This view generates invoices directly from cargo_data table
 
-CREATE OR REPLACE VIEW invoice_summary_view AS
+-- Drop the existing view first to avoid data type conflicts
+DROP VIEW IF EXISTS invoice_summary_view;
+
+CREATE VIEW invoice_summary_view AS
 SELECT 
-    -- Generate invoice ID from invoice field
-    cd.invoice as invoice_id,
-    cd.invoice as invoice_number,
-    COALESCE(cd.assigned_customer, cd.customer_name_number, 'Unknown') as customer_name,
-    MIN(COALESCE(cd.inb_flight_date, cd.created_at::text)) as invoice_date,
+    -- Generate consistent invoice ID and readable invoice number
+    COALESCE(MAX(cd.invoice), 'INV-' || cd.assigned_customer || '-' || TO_CHAR(MIN(cd.created_at), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS')) as invoice_id,
+    COALESCE(MAX(cd.invoice), 'INV-' || TO_CHAR(MIN(cd.created_at), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS')) as invoice_number,
+    COALESCE(c.name, 'Unknown') as customer_name,
+    -- Handle date field properly - inb_flight_date is VARCHAR, not date
+    MIN(COALESCE(
+        CASE 
+            WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+            THEN cd.inb_flight_date 
+            ELSE NULL 
+        END,
+        cd.created_at::text
+    )) as invoice_date, 
     CASE 
         WHEN COUNT(cd.id) = COUNT(CASE WHEN cd.assigned_customer IS NOT NULL THEN 1 END) 
         THEN 'processed'
@@ -17,21 +28,25 @@ SELECT
     END as status,
     COALESCE(cd.rate_currency, 'EUR') as currency,
     
-    -- Aggregated cargo data
+    -- Aggregated cargo data with proper null handling
     COUNT(cd.id) as total_items,
-    COALESCE(SUM(cd.total_kg), 0) as total_weight,
-    COALESCE(SUM(cd.assigned_rate * cd.total_kg), 0) as total_amount,
+    COALESCE(SUM(COALESCE(cd.total_kg, 0)), 0) as total_weight,
+    COALESCE(SUM(COALESCE(r.base_rate, 0) * COALESCE(cd.total_kg, 0)), 0) as total_amount,
     
     -- Additional useful fields
     MIN(cd.created_at) as first_item_date,
     MAX(cd.created_at) as last_item_date,
-    COUNT(DISTINCT cd.orig_oe || ' -> ' || cd.dest_oe) as unique_routes,
+    COUNT(DISTINCT COALESCE(cd.orig_oe, '') || ' -> ' || COALESCE(cd.dest_oe, '')) as unique_routes,
     COUNT(DISTINCT cd.mail_cat) as unique_mail_categories,
     
-    -- Rate information
-    COALESCE(AVG(cd.assigned_rate), 0) as average_rate,
-    MIN(cd.assigned_rate) as min_rate,
-    MAX(cd.assigned_rate) as max_rate,
+    -- Rate information with null handling
+    COALESCE(AVG(COALESCE(r.base_rate, 0)), 0) as average_rate,
+    MIN(COALESCE(r.base_rate, 0)) as min_rate,
+    MAX(COALESCE(r.base_rate, 0)) as max_rate,
+    
+    -- Rate details
+    r.name as rate_name,
+    r.rate_type as rate_type,
     
     -- Processing status
     CASE 
@@ -43,15 +58,44 @@ SELECT
     END as processing_status
 
 FROM cargo_data cd
-WHERE cd.invoice IS NOT NULL AND cd.invoice != ''
+LEFT JOIN rates r ON cd.rate_id = r.id
+LEFT JOIN customers c ON cd.assigned_customer = c.id
+WHERE cd.assigned_customer IS NOT NULL 
+  AND cd.rate_id IS NOT NULL 
+  AND cd.assigned_customer IS NOT NULL
 GROUP BY 
-    cd.invoice,
     cd.assigned_customer,
     cd.customer_name_number,
-    cd.rate_currency;
+    cd.rate_currency,
+    cd.rate_id,
+    r.name,
+    r.rate_type,
+    r.base_rate,
+    c.name;
 
 -- Note: Indexes cannot be created on views in PostgreSQL
 -- The underlying cargo_data table should have appropriate indexes for performance
+
+-- DIAGNOSTIC QUERIES - Run these to troubleshoot if view is empty:
+
+-- 1. Check if cargo_data table has any data at all:
+-- SELECT COUNT(*) as total_records FROM cargo_data;
+
+-- 2. Check if any records have assigned_customer and rate_id populated:
+-- SELECT COUNT(*) as records_with_assignments FROM cargo_data WHERE assigned_customer IS NOT NULL AND rate_id IS NOT NULL AND assigned_customer != '';
+
+-- 3. Check sample records with assignment data:
+-- SELECT cd.id, cd.invoice, cd.assigned_customer, cd.rate_id, r.name as rate_name, r.base_rate, cd.total_kg, cd.created_at 
+-- FROM cargo_data cd
+-- LEFT JOIN rates r ON cd.rate_id = r.id
+-- WHERE cd.assigned_customer IS NOT NULL AND cd.rate_id IS NOT NULL AND cd.assigned_customer != ''
+-- LIMIT 5;
+
+-- 4. Check for records without assignments (these won't appear in view):
+-- SELECT COUNT(*) as records_without_assignments FROM cargo_data WHERE assigned_customer IS NULL OR rate_id IS NULL OR assigned_customer = '';
+
+-- 5. Test the view directly:
+-- SELECT * FROM invoice_summary_view LIMIT 5;
 
 -- Create a materialized view for even better performance (optional)
 -- Uncomment if you want to use materialized view instead

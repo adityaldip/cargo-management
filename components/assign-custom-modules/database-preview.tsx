@@ -146,7 +146,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         console.log('🔍 Raw API data received:', result.data.slice(0, 2)) // Log first 2 records for debugging
         
         const convertedData = result.data.map((record: any) => {
-          const customerValue = record.customer_name || record.assigned_customer || record.customer_name_number || ''
+          const customerValue = record.customer_name || record.assigned_customer || record.customer_name_number || null
           console.log(`🔍 Frontend customer mapping: assigned_customer=${record.assigned_customer}, customer_name=${record.customer_name}, final=${customerValue}`)
           
           return {
@@ -643,7 +643,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         mailClass: record.mail_class || '',
         totalKg: record.total_kg || 0,
         invoiceExtend: record.invoice || '',
-        customer: record.customer_name || record.assigned_customer || record.customer_name_number || '',
+        customer: record.customer_name || record.assigned_customer || record.customer_name_number || null,
         date: record.inb_flight_date || '',
         sector: record.orig_oe && record.dest_oe ? `${record.orig_oe}-${record.dest_oe}` : '',
         euromail: record.mail_cat || '',

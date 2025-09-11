@@ -102,6 +102,8 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
   const fetchCargoData = async (page: number = currentPage, limit: number = recordsPerPage, isRefresh = false, customFilters?: FilterCondition[], customLogic?: "AND" | "OR") => {
     try {
       console.log(`🔄 fetchCargoData called: page=${page}, limit=${limit}, isRefresh=${isRefresh}`)
+      console.log('🔍 Supabase client initialized for browser')
+      
       if (isRefresh) {
         setRefreshing(true)
       } else {
@@ -117,17 +119,18 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
       console.log('🔍 Using filters:', activeFilters, 'logic:', activeLogic)
 
       // Build base query for assigned customers
+      console.log('🔍 Building base queries for assigned customers...')
       let countQuery = supabase
         .from('cargo_data')
         .select('*', { count: 'exact', head: true })
         .not('assigned_customer', 'is', null)
-        .neq('assigned_customer', '')
 
       let dataQuery = supabase
         .from('cargo_data')
         .select('*')
         .not('assigned_customer', 'is', null)
-        .neq('assigned_customer', '')
+      
+      console.log('✅ Base queries built successfully')
 
       // Apply filters if any
       if (hasFilters && activeFilters.length > 0) {
@@ -136,56 +139,110 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         activeFilters.forEach((condition, index) => {
           const { field, operator, value } = condition
           
+          console.log(`🔍 Applying filter ${index + 1}: ${field} ${operator} "${value}"`)
+          
           if (value && value.trim() !== '') {
-            switch (operator) {
-              case 'equals':
-                countQuery = countQuery.eq(field, value)
-                dataQuery = dataQuery.eq(field, value)
-                break
-              case 'contains':
-                countQuery = countQuery.ilike(field, `%${value}%`)
-                dataQuery = dataQuery.ilike(field, `%${value}%`)
-                break
-              case 'starts_with':
-                countQuery = countQuery.ilike(field, `${value}%`)
-                dataQuery = dataQuery.ilike(field, `${value}%`)
-                break
-              case 'ends_with':
-                countQuery = countQuery.ilike(field, `%${value}`)
-                dataQuery = dataQuery.ilike(field, `%${value}`)
-                break
-              case 'greater_than':
-                const numValue = parseFloat(value)
-                if (!isNaN(numValue)) {
-                  countQuery = countQuery.gt(field, numValue)
-                  dataQuery = dataQuery.gt(field, numValue)
-                }
-                break
-              case 'less_than':
-                const numValue2 = parseFloat(value)
-                if (!isNaN(numValue2)) {
-                  countQuery = countQuery.lt(field, numValue2)
-                  dataQuery = dataQuery.lt(field, numValue2)
-                }
-                break
-              case 'not_empty':
-                countQuery = countQuery.not(field, 'is', null).neq(field, '')
-                dataQuery = dataQuery.not(field, 'is', null).neq(field, '')
-                break
-              case 'is_empty':
-                countQuery = countQuery.or(`${field}.is.null,${field}.eq.`)
-                dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
-                break
+            try {
+              switch (operator) {
+                case 'equals':
+                  countQuery = countQuery.eq(field, value)
+                  dataQuery = dataQuery.eq(field, value)
+                  break
+                case 'contains':
+                  countQuery = countQuery.ilike(field, `%${value}%`)
+                  dataQuery = dataQuery.ilike(field, `%${value}%`)
+                  break
+                case 'starts_with':
+                  countQuery = countQuery.ilike(field, `${value}%`)
+                  dataQuery = dataQuery.ilike(field, `${value}%`)
+                  break
+                case 'ends_with':
+                  countQuery = countQuery.ilike(field, `%${value}`)
+                  dataQuery = dataQuery.ilike(field, `%${value}`)
+                  break
+                case 'greater_than':
+                  const numValue = parseFloat(value)
+                  if (!isNaN(numValue)) {
+                    countQuery = countQuery.gt(field, numValue)
+                    dataQuery = dataQuery.gt(field, numValue)
+                  }
+                  break
+                case 'less_than':
+                  const numValue2 = parseFloat(value)
+                  if (!isNaN(numValue2)) {
+                    countQuery = countQuery.lt(field, numValue2)
+                    dataQuery = dataQuery.lt(field, numValue2)
+                  }
+                  break
+                case 'not_empty':
+                  countQuery = countQuery.not(field, 'is', null).neq(field, '')
+                  dataQuery = dataQuery.not(field, 'is', null).neq(field, '')
+                  break
+                case 'is_empty':
+                  countQuery = countQuery.or(`${field}.is.null,${field}.eq.`)
+                  dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
+                  break
+              }
+              console.log(`✅ Filter ${index + 1} applied successfully`)
+            } catch (filterError) {
+              console.error(`❌ Error applying filter ${index + 1}:`, filterError)
+              throw new Error(`Failed to apply filter: ${field} ${operator} "${value}". Error: ${filterError instanceof Error ? filterError.message : 'Unknown error'}`)
             }
           }
         })
+        console.log('✅ All filters applied successfully')
       }
 
       // Get total count with filters applied
+      console.log('🔍 Executing count query...')
       const { count: totalCount, error: countError } = await countQuery
 
       if (countError) {
-        throw new Error(`Failed to get count: ${countError.message}`)
+        console.error('❌ Count query error:', countError)
+        console.error('❌ Count query details:', {
+          message: countError.message,
+          details: countError.details,
+          hint: countError.hint,
+          code: countError.code
+        })
+        
+        // Try a simpler count query as fallback
+        console.log('🔄 Attempting fallback count query...')
+        const { count: fallbackCount, error: fallbackError } = await supabase
+          .from('cargo_data')
+          .select('*', { count: 'exact', head: true })
+          .not('assigned_customer', 'is', null)
+        
+        if (fallbackError) {
+          console.error('❌ Fallback count query also failed:', fallbackError)
+          throw new Error(`Failed to get count: ${countError.message}. Fallback also failed: ${fallbackError.message}`)
+        }
+        
+        console.log('✅ Fallback count query succeeded:', fallbackCount)
+        const total = fallbackCount || 0
+        const totalPages = Math.ceil(total / limit)
+        const hasNextPage = page < totalPages
+        const hasPrevPage = page > 1
+
+        // Fetch paginated data with filters applied (but without count)
+        const { data: cargo, error: cargoError } = await dataQuery
+          .order('created_at', { ascending: false })
+          .range((page - 1) * limit, page * limit - 1)
+
+        if (cargoError) {
+          console.error('❌ Data query also failed:', cargoError)
+          throw new Error(`Failed to fetch cargo data: ${cargoError.message}`)
+        }
+
+        // Set the data and pagination info
+        setCargoData(cargo || [])
+        setTotalRecords(total)
+        setTotalPages(totalPages)
+        setHasNextPage(hasNextPage)
+        setHasPrevPage(hasPrevPage)
+        
+        console.log(`✅ fetchCargoData completed with fallback: ${cargo?.length || 0} records, total=${total}, page=${page}`)
+        return
       }
 
       // Calculate pagination
@@ -213,58 +270,28 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         
         if (customerIds.length > 0) {
           try {
-            // First, try to fetch by ID (UUID format)
-            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-            const uuidIds = customerIds.filter(id => uuidPattern.test(id))
-            const nameIds = customerIds.filter(id => !uuidPattern.test(id))
+            // Since assigned_customer is now UUID, fetch customers by ID only
+            console.log('🔍 Customer UUIDs to lookup:', customerIds)
             
-            console.log('🔍 UUID IDs:', uuidIds)
-            console.log('🔍 Name IDs:', nameIds)
+            const { data: customersData, error: customersError } = await supabase
+              .from('customers')
+              .select('id, name, code')
+              .in('id', customerIds)
             
-            let customersData: any[] = []
-            
-            // Fetch customers by UUID
-            if (uuidIds.length > 0) {
-              const { data: uuidCustomers, error: uuidError } = await supabase
-                .from('customers')
-                .select('id, name, code')
-                .in('id', uuidIds)
+            if (customersError) {
+              console.error('Error fetching customers by UUID:', customersError)
+            } else {
+              console.log('✅ Found customers by UUID:', customersData?.length || 0)
               
-              if (uuidError) {
-                console.error('Error fetching customers by UUID:', uuidError)
-              } else {
-                customersData.push(...(uuidCustomers || []))
-                console.log('✅ Found customers by UUID:', uuidCustomers?.length || 0)
-              }
+              // Merge customer data with cargo data
+              enrichedCargo = cargo.map((record: any) => {
+                const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+                return {
+                  ...record,
+                  customers: customer || null
+                }
+              })
             }
-            
-            // Fetch customers by name (fallback)
-            if (nameIds.length > 0) {
-              const { data: nameCustomers, error: nameError } = await supabase
-                .from('customers')
-                .select('id, name, code')
-                .in('name', nameIds)
-              
-              if (nameError) {
-                console.error('Error fetching customers by name:', nameError)
-              } else {
-                customersData.push(...(nameCustomers || []))
-                console.log('✅ Found customers by name:', nameCustomers?.length || 0)
-              }
-            }
-            
-            console.log('📊 Total customers found:', customersData.length)
-            
-            // Merge customer data with cargo data
-            enrichedCargo = cargo.map((record: any) => {
-              const customer = customersData.find((c: any) => 
-                c.id === record.assigned_customer || c.name === record.assigned_customer
-              )
-              return {
-                ...record,
-                customers: customer || null
-              }
-            })
             
           } catch (customerFetchError) {
             console.error('Error in customer fetch operation:', customerFetchError)
@@ -282,8 +309,22 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
       
       console.log(`✅ fetchCargoData completed: ${cargo?.length || 0} records, total=${total}, page=${page}`)
     } catch (err) {
-      console.error('Error fetching cargo data:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch cargo data')
+      console.error('❌ Error fetching cargo data:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch cargo data'
+      console.error('❌ Full error details:', {
+        message: errorMessage,
+        stack: err instanceof Error ? err.stack : undefined,
+        name: err instanceof Error ? err.name : undefined
+      })
+      setError(errorMessage)
+      
+      // Show toast notification for better user feedback
+      toast({
+        title: "Data Loading Failed ❌",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 5000,
+      })
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -360,7 +401,6 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
           .from('cargo_data')
           .select('*')
           .not('assigned_customer', 'is', null)
-          .neq('assigned_customer', '')
         
         // Apply filters if any
         if (hasActiveFilters && filterConditions.length > 0) {
@@ -433,58 +473,28 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         
         if (customerIds.length > 0) {
           try {
-            // First, try to fetch by ID (UUID format)
-            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-            const uuidIds = customerIds.filter(id => uuidPattern.test(id))
-            const nameIds = customerIds.filter(id => !uuidPattern.test(id))
+            // Since assigned_customer is now UUID, fetch customers by ID only
+            console.log('🔍 Export - Customer UUIDs to lookup:', customerIds)
             
-            console.log('🔍 Export - UUID IDs:', uuidIds)
-            console.log('🔍 Export - Name IDs:', nameIds)
+            const { data: customersData, error: customersError } = await supabase
+              .from('customers')
+              .select('id, name, code')
+              .in('id', customerIds)
             
-            let customersData: any[] = []
-            
-            // Fetch customers by UUID
-            if (uuidIds.length > 0) {
-              const { data: uuidCustomers, error: uuidError } = await supabase
-                .from('customers')
-                .select('id, name, code')
-                .in('id', uuidIds)
+            if (customersError) {
+              console.error('Error fetching customers by UUID for export:', customersError)
+            } else {
+              console.log('✅ Export - Found customers by UUID:', customersData?.length || 0)
               
-              if (uuidError) {
-                console.error('Error fetching customers by UUID for export:', uuidError)
-              } else {
-                customersData.push(...(uuidCustomers || []))
-                console.log('✅ Export - Found customers by UUID:', uuidCustomers?.length || 0)
-              }
+              // Merge customer data with cargo data
+              enrichedData = allData.map((record: any) => {
+                const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+                return {
+                  ...record,
+                  customers: customer || null
+                }
+              })
             }
-            
-            // Fetch customers by name (fallback)
-            if (nameIds.length > 0) {
-              const { data: nameCustomers, error: nameError } = await supabase
-                .from('customers')
-                .select('id, name, code')
-                .in('name', nameIds)
-              
-              if (nameError) {
-                console.error('Error fetching customers by name for export:', nameError)
-              } else {
-                customersData.push(...(nameCustomers || []))
-                console.log('✅ Export - Found customers by name:', nameCustomers?.length || 0)
-              }
-            }
-            
-            console.log('📊 Export - Total customers found:', customersData.length)
-            
-            // Merge customer data with cargo data
-            enrichedData = allData.map((record: any) => {
-              const customer = customersData.find((c: any) => 
-                c.id === record.assigned_customer || c.name === record.assigned_customer
-              )
-              return {
-                ...record,
-                customers: customer || null
-              }
-            })
             
           } catch (customerFetchError) {
             console.error('Error in customer fetch operation for export:', customerFetchError)
@@ -569,7 +579,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         record.mail_class || '',
         record.total_kg || '0.0',
         record.invoice || '',
-        record.customers?.name || (record.assigned_customer ? `Customer: ${record.assigned_customer}` : ''),
+        record.customers?.name || (record.assigned_customer ? `Customer ID: ${record.assigned_customer}` : ''),
         record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : ''
       ]
       csv += row.map(field => `"${field}"`).join(",") + "\n"
@@ -635,6 +645,43 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   <RefreshCw className="w-4 h-4 mr-2" />
                 )}
                 Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  console.log('🧪 Testing connection...')
+                  try {
+                    const response = await fetch('/api/cargo-data/test-connection')
+                    const result = await response.json()
+                    console.log('🧪 Connection test result:', result)
+                    if (result.success) {
+                      toast({
+                        title: "Connection Test Passed ✅",
+                        description: `Total records: ${result.totalRecords}, Assigned: ${result.assignedRecords}`,
+                        duration: 3000,
+                      })
+                    } else {
+                      toast({
+                        title: "Connection Test Failed ❌",
+                        description: result.error,
+                        variant: "destructive",
+                        duration: 5000,
+                      })
+                    }
+                  } catch (error) {
+                    console.error('❌ Connection test failed:', error)
+                    toast({
+                      title: "Connection Test Failed ❌",
+                      description: error instanceof Error ? error.message : 'Unknown error',
+                      variant: "destructive",
+                      duration: 5000,
+                    })
+                  }
+                }}
+                disabled={refreshing}
+              >
+                Test Connection
               </Button>
               <div className="relative">
                 <Button
@@ -805,7 +852,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                       <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
                       <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
-                        {record.customers?.name || (record.assigned_customer ? `Customer: ${record.assigned_customer}` : 'Unassigned')}
+                        {record.customers?.name || (record.assigned_customer ? `Customer ID: ${record.assigned_customer}` : 'Unassigned')}
                       </TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
                         {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
@@ -930,7 +977,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                           {row.total_kg || "0.0"}
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate">
-                          {row.customers?.name || (row.assigned_customer ? `Customer: ${row.assigned_customer}` : 'Unassigned')}
+                          {row.customers?.name || (row.assigned_customer ? `Customer ID: ${row.assigned_customer}` : 'Unassigned')}
                         </TableCell>
                         <TableCell>
                           {row.assigned_at ? new Date(row.assigned_at).toLocaleDateString() : "N/A"}

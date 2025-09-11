@@ -15,67 +15,44 @@ export async function GET(request: NextRequest) {
     // Calculate offset for pagination
     const offset = (page - 1) * limit
     
-    // Build query to get cargo data grouped by customer for invoice generation
+    // Use the optimized invoice_summary_view for much faster performance
     let query = supabaseAdmin
-      .from('cargo_data')
-      .select(`
-        id,
-        rec_id,
-        assigned_customer,
-        assigned_rate,
-        rate_value,
-        rate_currency,
-        total_kg,
-        created_at,
-        orig_oe,
-        dest_oe,
-        mail_cat,
-        mail_class,
-        invoice,
-        customer_name_number,
-        rates (
-          id,
-          name,
-          description,
-          rate_type,
-          base_rate,
-          currency,
-          multiplier
-        )
-      `)
-      .not('assigned_customer', 'is', null)
-      .not('rate_id', 'is', null)
+      .from('invoice_summary_view')
+      .select('*', { count: 'exact' })
     
     // Apply filters
     if (customer) {
-      query = query.eq('assigned_customer', customer)
+      query = query.ilike('customer_name', `%${customer}%`)
     }
     
     if (dateFrom) {
-      query = query.gte('created_at', dateFrom)
+      query = query.gte('invoice_date', dateFrom)
     }
     
     if (dateTo) {
-      query = query.lte('created_at', dateTo)
+      query = query.lte('invoice_date', dateTo)
     }
     
-    // Order by customer and date
-    query = query.order('assigned_customer').order('created_at', { ascending: false })
+    // Order by invoice date (most recent first)
+    query = query.order('invoice_date', { ascending: false })
     
-    const { data: cargoData, error } = await query
+    // Apply pagination
+    query = query.range(offset, offset + limit - 1)
+    
+    const { data: invoiceSummaries, error, count } = await query
     
     if (error) {
-      console.error('Error fetching cargo data for invoices:', error)
+      console.error('Error fetching invoice summaries:', error)
       return NextResponse.json(
-        { error: `Failed to fetch cargo data for invoices: ${error.message}` },
+        { error: `Failed to fetch invoice summaries: ${error.message}` },
         { status: 500 }
       )
     }
 
-    console.log('Fetched cargo data:', cargoData?.length || 0, 'records')
+    console.log('Fetched invoice summaries:', invoiceSummaries?.length || 0, 'records')
     
-    // If no cargo data, return empty result
-    if (!cargoData || cargoData.length === 0) {
+    // If no invoice summaries, return empty result
+    if (!invoiceSummaries || invoiceSummaries.length === 0) {
       return NextResponse.json({
         data: [],
         pagination: {
@@ -87,144 +64,78 @@ export async function GET(request: NextRequest) {
       })
     }
     
-    // Fetch customer data to resolve customer names
-    const customerIds = [...new Set(cargoData.map((record: any) => record.assigned_customer).filter(Boolean))]
-    let customersData: any[] = []
+    // Get detailed items for each invoice using the detail view
+    const invoiceIds = invoiceSummaries.map((summary: any) => summary.invoice_id)
     
-    if (customerIds.length > 0) {
-      try {
-        const { data: customers, error: customersError } = await supabaseAdmin
-          .from('customers')
-          .select('id, name, code')
-          .in('id', customerIds)
-        
-        if (customersError) {
-          console.error('Error fetching customers:', customersError)
-        } else {
-          customersData = customers || []
-          console.log('✅ Found customers:', customersData.length)
-        }
-      } catch (error) {
-        console.error('Error in customer fetch operation:', error)
-      }
+    const { data: invoiceDetails, error: detailsError } = await supabaseAdmin
+      .from('invoice_detail_view')
+      .select('*')
+      .in('invoice_id', invoiceIds)
+    
+    if (detailsError) {
+      console.error('Error fetching invoice details:', detailsError)
+      // Continue without details - we'll have summary data
     }
     
-    // Group cargo data by customer and generate invoice summaries
-    const invoiceData = cargoData.reduce((acc: Record<string, any>, record: any) => {
-      const customer = record.assigned_customer
-      if (!customer) return acc
-      
-      // Find customer name
-      const customerInfo = customersData.find((c: any) => c.id === customer)
-      const customerName = customerInfo?.name || record.customer_name_number || customer
-      
-      if (!acc[customer]) {
-        acc[customer] = {
-          customer,
-          customerName,
-          totalAmount: 0,
-          totalWeight: 0,
-          totalItems: 0,
-          routes: new Set(),
-          items: [],
-          latestDate: record.created_at,
-          currency: record.rate_currency || 'EUR'
-        }
+    // Group details by invoice_id
+    const detailsByInvoice = (invoiceDetails || []).reduce((acc: Record<string, any[]>, detail: any) => {
+      if (!acc[detail.invoice_id]) {
+        acc[detail.invoice_id] = []
       }
-      
-      // Calculate rate per kg and total amount
-      let ratePerKg = 0
-      let totalAmount = 0
-      
-      if (record.rates) {
-        const rate = record.rates
-        if (rate.rate_type === 'per_kg') {
-          ratePerKg = rate.base_rate || 0
-          totalAmount = (record.total_kg || 0) * ratePerKg
-        } else if (rate.rate_type === 'fixed') {
-          ratePerKg = (rate.base_rate || 0) / (record.total_kg || 1) // Convert fixed rate to per kg
-          totalAmount = rate.base_rate || 0
-        } else if (rate.rate_type === 'multiplier') {
-          ratePerKg = (rate.base_rate || 0) * (rate.multiplier || 1)
-          totalAmount = (record.total_kg || 0) * ratePerKg
-        }
-      } else if (record.rate_value && record.rate_value > 0) {
-        // Use existing rate_value as total amount, calculate rate per kg
-        totalAmount = record.rate_value
-        ratePerKg = (record.total_kg || 0) > 0 ? totalAmount / (record.total_kg || 0) : 0
-      } else {
-        // Fallback: assume per_kg rate with default base rate based on currency
-        const defaultRate = record.rate_currency === 'USD' ? 2.5 : 2.5 // Default rate per kg
-        ratePerKg = defaultRate
-        totalAmount = (record.total_kg || 0) * ratePerKg
-      }
-      
-      // Round to 2 decimal places
-      ratePerKg = Math.round(ratePerKg * 100) / 100
-      totalAmount = Math.round(totalAmount * 100) / 100
-      
-      acc[customer].totalAmount += totalAmount
-      acc[customer].totalWeight += record.total_kg || 0
-      acc[customer].totalItems += 1
-      acc[customer].routes.add(`${record.orig_oe} → ${record.dest_oe}`)
-      
-      // Add detailed item information
-      acc[customer].items.push({
-        id: record.id,
-        recId: record.rec_id,
-        route: `${record.orig_oe} → ${record.dest_oe}`,
-        mailCat: record.mail_cat,
-        mailClass: record.mail_class,
-        weight: record.total_kg,
-        rate: ratePerKg,
-        amount: totalAmount,
-        date: record.created_at,
-        invoice: record.invoice,
-        origOE: record.orig_oe,
-        destOE: record.dest_oe,
-        rateInfo: record.rates
-      })
-      
-      // Update latest date
-      if (new Date(record.created_at) > new Date(acc[customer].latestDate)) {
-        acc[customer].latestDate = record.created_at
-      }
-      
+      acc[detail.invoice_id].push(detail)
       return acc
-    }, {} as Record<string, any>)
+    }, {})
     
-    // Convert to array and format for invoice display
-    const invoices = Object.values(invoiceData).map((invoice: any, index) => {
-      // Verify that the total amount matches the sum of individual items
-      const calculatedTotal = invoice.items.reduce((sum: number, item: any) => sum + item.amount, 0)
-      const finalAmount = Math.abs(invoice.totalAmount - calculatedTotal) < 0.01 ? invoice.totalAmount : calculatedTotal
+    // Format invoices for the frontend
+    const invoices = invoiceSummaries.map((summary: any, index: number) => {
+      const itemsDetails = detailsByInvoice[summary.invoice_id] || []
       
       return {
-        id: `invoice-${index + 1}`,
-        invoiceNumber: `INV-${new Date().getFullYear()}-${String(index + 1).padStart(3, '0')}`,
-        customer: invoice.customerName || invoice.customer, // Use customerName if available
-        date: invoice.latestDate,
-        dueDate: new Date(new Date(invoice.latestDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        amount: finalAmount,
-        status: 'draft' as const,
-        items: invoice.totalItems,
-        totalWeight: invoice.totalWeight,
-        route: Array.from(invoice.routes).join(', '),
-        currency: invoice.currency,
-        itemsDetails: invoice.items
+        id: summary.invoice_id || `invoice-${index}-${Date.now()}`,
+        invoiceNumber: summary.invoice_number,
+        customer: summary.customer_name,
+        date: summary.invoice_date,
+        dueDate: new Date(new Date(summary.invoice_date).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        amount: summary.total_amount,
+        status: summary.status as 'draft' | 'pending' | 'paid' | 'overdue',
+        items: summary.total_items,
+        totalWeight: summary.total_weight,
+        route: `${summary.unique_routes} routes`,
+        currency: summary.currency,
+        itemsDetails: itemsDetails.map((item: any, itemIndex: number) => ({
+          id: item.id || `item-${index}-${itemIndex}-${Date.now()}`,
+          recId: item.recId,
+          route: item.route,
+          mailCat: item.mailCat,
+          mailClass: item.mailClass,
+          weight: item.weight,
+          rate: item.rate,
+          amount: item.amount,
+          date: item.date,
+          invoice: item.invoice,
+          origOE: item.origOE,
+          destOE: item.destOE,
+          rateInfo: {
+            id: item.rate_id,
+            name: item.rate_name,
+            description: item.rate_description,
+            rate_type: item.rate_type,
+            base_rate: item.base_rate,
+            currency: item.rate_currency
+          }
+        }))
       }
     })
     
-    // Apply pagination to invoices
-    const totalPages = Math.ceil(invoices.length / limit)
-    const paginatedInvoices = invoices.slice(offset, offset + limit)
+    // Calculate pagination info
+    const totalPages = Math.ceil((count || 0) / limit)
     
     return NextResponse.json({
-      data: paginatedInvoices,
+      data: invoices,
       pagination: {
         page,
         limit,
-        total: invoices.length,
+        total: count || 0,
         totalPages
       }
     })

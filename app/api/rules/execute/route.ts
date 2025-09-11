@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Skip if already has an assigned customer (since we're processing all data)
-        if ((cargo as any).assigned_customer && (cargo as any).assigned_customer.trim() !== '') {
+        if ((cargo as any).assigned_customer) {
           skippedCount++
           continue
         }
