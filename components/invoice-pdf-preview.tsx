@@ -70,9 +70,9 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
                 </div>
               </div>
               <div className="text-right">
-                <div className="flex justify-between w-48 whitespace-nowrap">
-                  <span className="text-sm text-gray-700 whitespace-nowrap">INVOICE NO:</span>
-                  <span className="text-sm font-semibold whitespace-nowrap">{selectedInvoice.invoiceNumber}</span>
+                <div className="flex justify-end items-center gap-2">
+                  <span className="text-sm text-gray-700">INVOICE NO:</span>
+                  <span className="text-sm font-semibold">{selectedInvoice.invoiceNumber}</span>
                 </div>
               </div>
             </div>

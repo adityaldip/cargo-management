@@ -7,8 +7,8 @@ DROP VIEW IF EXISTS invoice_detail_view;
 CREATE VIEW invoice_detail_view AS
 SELECT 
     -- Invoice identification (for grouping) - must match summary view
-    COALESCE(cd.invoice, 'INV-' || cd.assigned_customer || '-' || TO_CHAR(cd.created_at, 'YYYYMMDD') || '-' || TO_CHAR(cd.created_at, 'HH24MISS')) as invoice_id,
-    COALESCE(cd.invoice, 'INV-' || TO_CHAR(cd.created_at, 'YYYYMMDD') || '-' || TO_CHAR(cd.created_at, 'HH24MISS')) as invoice_number,
+    COALESCE( 'INV-' || cd.assigned_customer::text || '-' || TO_CHAR(cd.created_at, 'YYYYMMDD') || '-' || TO_CHAR(cd.created_at, 'HH24MISS')) as invoice_id,
+    COALESCE( 'INV-' || TO_CHAR(cd.created_at, 'YYYYMMDD') || '-' || TO_CHAR(cd.created_at, 'HH24MISS')) as invoice_number,
     COALESCE(c.name, 'Unknown') as customer_name,
     
     -- Individual cargo item details (matching CargoInvoiceItem interface)
@@ -60,8 +60,7 @@ FROM cargo_data cd
 LEFT JOIN rates r ON cd.rate_id = r.id
 LEFT JOIN customers c ON cd.assigned_customer = c.id
 WHERE cd.assigned_customer IS NOT NULL 
-  AND cd.rate_id IS NOT NULL 
-  AND cd.assigned_customer IS NOT NULL;
+  AND cd.rate_id IS NOT NULL;
 
 -- Note: This view shows individual cargo items, not aggregated data
 -- Use this for detailed invoice line items

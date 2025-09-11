@@ -18,6 +18,12 @@ export interface Invoice {
 }
 
 export const generateInvoicePDF = (invoice: Invoice) => {
+  // Validate invoice data
+  if (!invoice) {
+    console.error('No invoice data provided to generateInvoicePDF')
+    return
+  }
+
   const doc = new jsPDF()
   
   // Set font
@@ -32,7 +38,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
   doc.setFont('helvetica', 'normal')
   doc.text('INVOICE NO:', 160, 17)
   doc.setFont('helvetica', 'bold')
-  doc.text(invoice.invoiceNumber, 180, 17)
+  doc.text(String(invoice.invoiceNumber || 'N/A'), 180, 17)
   
   // Issued to section - moved closer to edge
   doc.setFontSize(9)
@@ -41,7 +47,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
   
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text(invoice.customer, 10, 16)
+  doc.text(String(invoice.customer || 'Unknown Customer'), 10, 16)
   doc.text('123 Business Street', 10, 21)
   doc.text('Business City, BC 12345', 10, 26)
   
@@ -97,7 +103,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
       doc.setFont('helvetica', 'normal')
       doc.text('INVOICE NO:', 160, 17)
       doc.setFont('helvetica', 'bold')
-      doc.text(invoice.invoiceNumber, 180, 17)
+      doc.text(String(invoice.invoiceNumber || 'N/A'), 180, 17)
       
       doc.setFontSize(8)
       doc.setFont('helvetica', 'normal')
@@ -130,11 +136,11 @@ export const generateInvoicePDF = (invoice: Invoice) => {
     let currentY = tableStartY + 5
     
     pageData.forEach(item => {
-      doc.text(item.sector, 10, currentY)
-      doc.text(item.mailCat, 45, currentY)
-      doc.text(`${item.totalKg} kg`, 75, currentY)
-      doc.text(`${invoice.currency || '€'}${item.rate.toFixed(2)}`, 110, currentY)
-      doc.text(`${invoice.currency || '€'}${item.totalEur.toFixed(2)}`, 150, currentY)
+      doc.text(String(item.sector || 'N/A'), 10, currentY)
+      doc.text(String(item.mailCat || 'N/A'), 45, currentY)
+      doc.text(`${Number(item.totalKg || 0).toFixed(1)} kg`, 75, currentY)
+      doc.text(`${invoice.currency || '€'}${Number(item.rate || 0).toFixed(2)}`, 110, currentY)
+      doc.text(`${invoice.currency || '€'}${Number(item.totalEur || 0).toFixed(2)}`, 150, currentY)
       currentY += lineHeight
     })
     
@@ -161,5 +167,5 @@ export const generateInvoicePDF = (invoice: Invoice) => {
   }
   
   // Save the PDF
-  doc.save(`invoice-${invoice.invoiceNumber}.pdf`)
+  doc.save(`invoice-${String(invoice.invoiceNumber || 'unknown')}.pdf`)
 }

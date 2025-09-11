@@ -7,8 +7,8 @@ DROP VIEW IF EXISTS invoice_summary_view;
 CREATE VIEW invoice_summary_view AS
 SELECT 
     -- Generate consistent invoice ID and readable invoice number
-    COALESCE(MAX(cd.invoice), 'INV-' || cd.assigned_customer || '-' || TO_CHAR(MIN(cd.created_at), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS')) as invoice_id,
-    COALESCE(MAX(cd.invoice), 'INV-' || TO_CHAR(MIN(cd.created_at), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS')) as invoice_number,
+    COALESCE('INV-' || MAX(cd.assigned_customer::text) || '-' || TO_CHAR(MIN(cd.created_at), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS')) as invoice_id,
+    COALESCE('INV-' || TO_CHAR(MIN(cd.created_at), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS')) as invoice_number,
     COALESCE(c.name, 'Unknown') as customer_name,
     -- Handle date field properly - inb_flight_date is VARCHAR, not date
     MIN(COALESCE(
@@ -61,8 +61,7 @@ FROM cargo_data cd
 LEFT JOIN rates r ON cd.rate_id = r.id
 LEFT JOIN customers c ON cd.assigned_customer = c.id
 WHERE cd.assigned_customer IS NOT NULL 
-  AND cd.rate_id IS NOT NULL 
-  AND cd.assigned_customer IS NOT NULL
+  AND cd.rate_id IS NOT NULL
 GROUP BY 
     cd.assigned_customer,
     cd.customer_name_number,
@@ -70,7 +69,6 @@ GROUP BY
     cd.rate_id,
     r.name,
     r.rate_type,
-    r.base_rate,
     c.name;
 
 -- Note: Indexes cannot be created on views in PostgreSQL
@@ -82,17 +80,17 @@ GROUP BY
 -- SELECT COUNT(*) as total_records FROM cargo_data;
 
 -- 2. Check if any records have assigned_customer and rate_id populated:
--- SELECT COUNT(*) as records_with_assignments FROM cargo_data WHERE assigned_customer IS NOT NULL AND rate_id IS NOT NULL AND assigned_customer != '';
+-- SELECT COUNT(*) as records_with_assignments FROM cargo_data WHERE assigned_customer IS NOT NULL AND rate_id IS NOT NULL;
 
 -- 3. Check sample records with assignment data:
 -- SELECT cd.id, cd.invoice, cd.assigned_customer, cd.rate_id, r.name as rate_name, r.base_rate, cd.total_kg, cd.created_at 
 -- FROM cargo_data cd
 -- LEFT JOIN rates r ON cd.rate_id = r.id
--- WHERE cd.assigned_customer IS NOT NULL AND cd.rate_id IS NOT NULL AND cd.assigned_customer != ''
+-- WHERE cd.assigned_customer IS NOT NULL AND cd.rate_id IS NOT NULL
 -- LIMIT 5;
 
 -- 4. Check for records without assignments (these won't appear in view):
--- SELECT COUNT(*) as records_without_assignments FROM cargo_data WHERE assigned_customer IS NULL OR rate_id IS NULL OR assigned_customer = '';
+-- SELECT COUNT(*) as records_without_assignments FROM cargo_data WHERE assigned_customer IS NULL OR rate_id IS NULL;
 
 -- 5. Test the view directly:
 -- SELECT * FROM invoice_summary_view LIMIT 5;
