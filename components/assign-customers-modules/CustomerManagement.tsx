@@ -339,7 +339,7 @@ export function CustomerManagement() {
                 disabled={!customerCodeAssignmentEnabled}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Customer Code
+                Add Customer
               </Button>
               <Button 
                 variant="outline" 

@@ -1,179 +1,126 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     
-    // Parse pagination parameters
+    // Get query parameters
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '50')
-    const offset = (page - 1) * limit
-    const isExport = limit > 1000 // Detect export requests by high limit
-    
-    
-    
-    // Parse filter parameters
-    const search = searchParams.get('search') || ''
+    const limit = parseInt(searchParams.get('limit') || '10')
     const sortBy = searchParams.get('sortBy') || 'created_at'
     const sortOrder = searchParams.get('sortOrder') || 'desc'
-    const filtersParam = searchParams.get('filters')
-    const filterLogic = searchParams.get('filterLogic') || 'AND'
+    const customer = searchParams.get('customer')
+    const dateFrom = searchParams.get('dateFrom')
+    const dateTo = searchParams.get('dateTo')
     
-    // Build query for cargo data
-    let query = supabase
+    // Calculate offset for pagination
+    const offset = (page - 1) * limit
+    
+    // Build query
+    let query = supabaseAdmin
       .from('cargo_data')
-      .select('*', { count: 'exact' })
-      .order(sortBy, { ascending: sortOrder === 'asc' })
+      .select(`
+        *,
+        rates (
+          id,
+          name,
+          description,
+          rate_type,
+          base_rate,
+          currency
+        )
+      `)
     
-    // Only apply range for normal pagination, not for exports
-    if (!isExport) {
-      query = query.range(offset, offset + limit - 1)
+    // Apply filters
+    if (customer) {
+      query = query.eq('assigned_customer', customer)
     }
     
-    // Apply search filter if provided
-    if (search) {
-      query = query.or(`rec_id.ilike.%${search}%,orig_oe.ilike.%${search}%,dest_oe.ilike.%${search}%,inb_flight_no.ilike.%${search}%,outb_flight_no.ilike.%${search}%,mail_cat.ilike.%${search}%,mail_class.ilike.%${search}%`)
+    if (dateFrom) {
+      query = query.gte('created_at', dateFrom)
     }
     
-    // Apply advanced filters if provided
-    if (filtersParam) {
-      try {
-        const filters = JSON.parse(filtersParam)
-        if (Array.isArray(filters) && filters.length > 0) {
-          filters.forEach(filter => {
-            const { field, operator, value } = filter
-            
-            switch (operator) {
-              case 'equals':
-                query = query.eq(field, value)
-                break
-              case 'contains':
-                query = query.ilike(field, `%${value}%`)
-                break
-              case 'starts_with':
-                query = query.ilike(field, `${value}%`)
-                break
-              case 'ends_with':
-                query = query.ilike(field, `%${value}`)
-                break
-              case 'greater_than':
-                query = query.gt(field, parseFloat(value))
-                break
-              case 'less_than':
-                query = query.lt(field, parseFloat(value))
-                break
-              case 'not_empty':
-                query = query.not(field, 'is', null)
-                break
-              case 'is_empty':
-                query = query.is(field, null)
-                break
-            }
-          })
-        }
-      } catch (error) {
-        console.error('Error parsing filters:', error)
-      }
+    if (dateTo) {
+      query = query.lte('created_at', dateTo)
     }
     
-    const { data, error, count } = await query
+    // Apply sorting
+    query = query.order(sortBy, { ascending: sortOrder === 'asc' })
+    
+    // Get total count for pagination
+    let countQuery = supabaseAdmin
+      .from('cargo_data')
+      .select('*', { count: 'exact', head: true })
+    
+    if (customer) {
+      countQuery = countQuery.eq('assigned_customer', customer)
+    }
+    if (dateFrom) {
+      countQuery = countQuery.gte('created_at', dateFrom)
+    }
+    if (dateTo) {
+      countQuery = countQuery.lte('created_at', dateTo)
+    }
+    
+    const { count } = await countQuery
+    
+    // Apply pagination
+    query = query.range(offset, offset + limit - 1)
+    
+    const { data, error } = await query
     
     if (error) {
       console.error('Error fetching cargo data:', error)
       return NextResponse.json(
-        { error: 'Failed to fetch cargo data', details: error.message },
+        { error: 'Failed to fetch cargo data' },
         { status: 500 }
       )
     }
-
-    // Fetch customer data to resolve customer names
-    let customersData: any[] = []
-    if (data && data.length > 0) {
-      // Get unique customer IDs from the cargo data
-      const customerIds = [...new Set(data.map(record => record.assigned_customer).filter(Boolean))]
-      
-      if (customerIds.length > 0) {
-        const { data: customers, error: customersError } = await supabase
-          .from('customers')
-          .select('id, name, code')
-          .in('id', customerIds)
-        
-        if (customersError) {
-          console.error('Error fetching customers:', customersError)
-        } else {
-          customersData = customers || []
-        }
-      }
-    }
-
-    // Merge customer data with cargo data
-    const enrichedData = data?.map(record => {
-      const customer = customersData.find(c => c.id === record.assigned_customer)
-      return {
-        ...record,
-        customers: customer || null
-      }
-    }) || []
-    
-    // Calculate pagination info
-    const totalPages = isExport ? 1 : Math.ceil((count || 0) / limit)
-    const hasNextPage = isExport ? false : page < totalPages
-    const hasPrevPage = isExport ? false : page > 1
     
     return NextResponse.json({
-      data: enrichedData,
+      data: data || [],
       pagination: {
         page,
         limit,
         total: count || 0,
-        totalPages,
-        hasNextPage,
-        hasPrevPage,
-        offset
+        totalPages: Math.ceil((count || 0) / limit)
       }
     })
     
   } catch (error) {
     console.error('Error in cargo-data API:', error)
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
 
-// Get total count only (for statistics)
-export async function HEAD(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const search = searchParams.get('search') || ''
+    const body = await request.json()
     
-    let query = supabase
+    const { data, error } = await supabaseAdmin
       .from('cargo_data')
-      .select('id', { count: 'exact', head: true })
-    
-    // Apply search filter if provided
-    if (search) {
-      query = query.or(`rec_id.ilike.%${search}%,orig_oe.ilike.%${search}%,dest_oe.ilike.%${search}%,inb_flight_no.ilike.%${search}%,outb_flight_no.ilike.%${search}%,mail_cat.ilike.%${search}%,mail_class.ilike.%${search}%`)
-    }
-    
-    const { count, error } = await query
+      .insert(body)
+      .select()
+      .single()
     
     if (error) {
-      console.error('Error getting cargo data count:', error)
+      console.error('Error creating cargo data:', error)
       return NextResponse.json(
-        { error: 'Failed to get count', details: error.message },
+        { error: 'Failed to create cargo data' },
         { status: 500 }
       )
     }
     
-    return NextResponse.json({ count: count || 0 })
+    return NextResponse.json({ data }, { status: 201 })
     
   } catch (error) {
-    console.error('Error in cargo-data count API:', error)
+    console.error('Error in cargo-data POST API:', error)
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

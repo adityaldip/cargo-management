@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Getting cargo data...')
-    // Get all cargo data that doesn't have assigned rates (null values only)
+    // Get all cargo data - always process all data
     // Use pagination to handle large datasets (Supabase default limit is 1000)
     let allCargoData: any[] = []
     let page = 0
@@ -79,7 +79,6 @@ export async function POST(request: NextRequest) {
       const { data: cargoData, error: cargoError } = await supabaseAdmin
         .from('cargo_data')
         .select('*')
-        .is('assigned_rate', null)
         .range(page * pageSize, (page + 1) * pageSize - 1)
 
       if (cargoError) {
@@ -164,6 +163,12 @@ export async function POST(request: NextRequest) {
           skippedCount++
           continue
         }
+        
+        // Skip if already has an assigned rate (since we're processing all data)
+        if (cargo.assigned_rate && cargo.assigned_rate !== null) {
+          skippedCount++
+          continue
+        }
 
         // Check if cargo matches rule conditions
         const matches = rule.conditions.some((condition: any) => {
@@ -211,13 +216,11 @@ export async function POST(request: NextRequest) {
             rateValue = (cargo.total_kg || 0) * (rate.base_rate || 0) * (rate.multiplier || 1)
           }
 
-          // Apply currency if specified
-          if (rate.currency) {
-            rateValue = Math.round(rateValue * 100) / 100 // Round to 2 decimal places
-          }
+          // Always round to 2 decimal places for all currencies
+          rateValue = Math.round(rateValue * 100) / 100
 
           // Debug logging for rate calculation
-          console.log(`💰 Rate calculation for ${cargo.rec_id}: type=${rate.rate_type}, base_rate=${rate.base_rate}, total_kg=${cargo.total_kg}, multiplier=${rate.multiplier}, calculated_value=${rateValue}`)
+          console.log(`💰 Rate calculation for ${cargo.rec_id}: type=${rate.rate_type}, base_rate=${rate.base_rate}, currency=${rate.currency}, total_kg=${cargo.total_kg}, multiplier=${rate.multiplier}, calculated_value=${rateValue}`)
 
           ruleResult.matches++
           ruleResult.assignments.push({
@@ -249,7 +252,7 @@ export async function POST(request: NextRequest) {
           const rate = rule?.rates
           
           // Debug logging for update preparation
-          console.log(`📝 Preparing update for ${assignment.recId}: rate_id=${rate?.id}, rate_value=${assignment.rateValue}, currency=${rate?.currency || 'EUR'}`)
+          console.log(`📝 Preparing update for ${assignment.recId}: rate_id=${rate?.id}, rate_value=${assignment.rateValue}, currency=${rate?.currency || 'EUR'}, rate_type=${rate?.rate_type}`)
           
           updates.push({
             id: assignment.cargoId,

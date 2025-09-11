@@ -209,11 +209,12 @@ export const rulesAPI = {
   },
 
   // Execute rules to assign customers
-  async executeRules(ruleIds?: string[], dryRun: boolean = false) {
+  async executeRules(options: { ruleIds?: string[], dryRun?: boolean } = {}) {
+    const { ruleIds, dryRun = false } = options
     return apiRequest('/rules/execute', {
       method: 'POST',
-      body: JSON.stringify({ ruleIds, dryRun }),
-    }, 150000) // 2.5 minutes timeout for rule execution
+      body: JSON.stringify({ ruleIds, dryRun, processAllData: true }),
+    }, 300000) // 5 minutes timeout for rule execution (matches server timeout)
   },
 
   // Test API connection

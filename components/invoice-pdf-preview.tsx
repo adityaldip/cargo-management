@@ -4,9 +4,10 @@ import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { FileText, Download } from "lucide-react"
 import { generateInvoicePDF, type Invoice } from "@/lib/pdf-generator"
+import type { CargoInvoice, CargoInvoiceItem } from "@/types/cargo-data"
 
 interface InvoicePdfPreviewProps {
-  selectedInvoice: Invoice | null
+  selectedInvoice: Invoice | CargoInvoice | null
 }
 
 export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
@@ -15,10 +16,10 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
   }
 
   return (
-    <div className="w-1/2">
-      <Card className="bg-white border-gray-200 shadow-sm h-full pt-0" style={{ paddingBottom: 0 }}>
+    <div className="w-1/2 h-[calc(100vh-2rem)] flex flex-col">
+      <Card className="bg-white border-gray-200 shadow-sm flex-1 pt-0" style={{ paddingBottom: 0 }}>
         <CardContent className="h-full p-0 flex flex-col">          
-          <div className="bg-white border border-gray-200 rounded-lg px-3 pt-2 flex-1 overflow-y-auto">
+          <div className="bg-white border border-gray-200 rounded-lg px-3 pt-2 flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between pb-2">
               <CardTitle className="text-black flex items-center gap-1 text-sm pb-2">
                 <FileText className="h-3 w-3" />
@@ -40,9 +41,23 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
                 <div>
                   <h2 className="text-sm font-bold text-gray-800 mb-1">ISSUED TO:</h2>
                   <div className="text-sm text-gray-700">
-                    <div>{selectedInvoice.customer}</div>
+                    <div className="font-semibold">{selectedInvoice.customer}</div>
                     <div>123 Business Street</div>
                     <div>Business City, BC 12345</div>
+                    {/* {(() => {
+                      const isCargoInvoice = 'itemsDetails' in selectedInvoice && selectedInvoice.itemsDetails
+                      if (isCargoInvoice && selectedInvoice.itemsDetails && selectedInvoice.itemsDetails.length > 0) {
+                        const totalItems = selectedInvoice.itemsDetails.length
+                        const totalWeight = selectedInvoice.itemsDetails.reduce((sum, item) => sum + item.weight, 0)
+                        return (
+                          <div className="mt-1 text-xs text-gray-600">
+                            <div>Total Items: {totalItems}</div>
+                            <div>Total Weight: {totalWeight.toFixed(1)} kg</div>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()} */}
                   </div>
                 </div>
                 <div>
@@ -55,59 +70,97 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
                 </div>
               </div>
               <div className="text-right">
-                <div className="flex justify-between w-40">
-                  <span className="text-sm text-gray-700">INVOICE NO:</span>
-                  <span className="text-sm font-semibold">{selectedInvoice.invoiceNumber}</span>
+                <div className="flex justify-between w-48 whitespace-nowrap">
+                  <span className="text-sm text-gray-700 whitespace-nowrap">INVOICE NO:</span>
+                  <span className="text-sm font-semibold whitespace-nowrap">{selectedInvoice.invoiceNumber}</span>
                 </div>
               </div>
             </div>
 
             {/* Cargo Shipment Details Table */}
-            <div className="mb-2">
-              <div className="border-t border-gray-300 pt-2">
+            <div className="mb-2 flex-1 flex flex-col">
+              <div className="border-t border-gray-300 pt-2 flex-1 flex flex-col">
+                {/* Fixed Header */}
                 <div className="grid grid-cols-5 gap-2 text-sm font-semibold text-gray-800 mb-2">
                   <div>SECTOR</div>
                   <div>MAIL CAT.</div>
                   <div className="text-right">TOTAL KG</div>
                   <div className="text-right">RATE</div>
-                  <div className="text-right">TOTAL EUR</div>
+                  <div className="text-right">TOTAL {selectedInvoice.currency || 'EUR'}</div>
                 </div>
                 
-                {/* Sample cargo data */}
-                <div className="space-y-1">
-                  {[
-                    { sector: 'DUS RIX', mailCat: 'A,B', totalKg: 16.6, rate: 1.0, totalEur: 16.6 },
-                    { sector: 'VNO FRA', mailCat: 'A,B', totalKg: 22.2, rate: 0.85, totalEur: 18.87 },
-                    { sector: 'BUD ATH', mailCat: 'A,B', totalKg: 138.5, rate: 1.0, totalEur: 138.5 },
-                    { sector: 'ATH RIX', mailCat: 'A,B', totalKg: 248.2, rate: 0.85, totalEur: 210.97 },
-                    { sector: 'ATH ARN', mailCat: 'A,B', totalKg: 45.3, rate: 0.9, totalEur: 40.77 },
-                    { sector: 'ATH KEF', mailCat: 'A,B', totalKg: 12.8, rate: 0.85, totalEur: 10.88 },
-                    { sector: 'ATH RMO', mailCat: 'A,B', totalKg: 67.4, rate: 0.9, totalEur: 60.66 },
-                    { sector: 'ATH LJU', mailCat: 'A,B', totalKg: 23.1, rate: 0.8, totalEur: 18.48 },
-                    { sector: 'OSL TLL', mailCat: 'A,B', totalKg: 0.1, rate: 0.9, totalEur: 0.09 },
-                    { sector: 'BUD VNO', mailCat: 'A,B', totalKg: 2490.7, rate: 0.8523908941, totalEur: 2123.05 }
-                  ].map((item, index) => (
-                    <div key={index} className="grid grid-cols-5 gap-2 text-sm text-gray-700 py-0.5">
-                      <div className="font-mono">{item.sector}</div>
-                      <div>{item.mailCat}</div>
-                      <div className="text-right">{item.totalKg}</div>
-                      <div className="text-right">{item.rate}</div>
-                      <div className="text-right font-semibold">€{item.totalEur.toFixed(2)}</div>
-                    </div>
-                  ))}
+                {/* Scrollable cargo data */}
+                <div className="flex-1 overflow-y-auto space-y-1 max-h-96">
+                  {(() => {
+                    // Check if this is a CargoInvoice with real data
+                    const isCargoInvoice = 'itemsDetails' in selectedInvoice && selectedInvoice.itemsDetails
+                    
+                    if (isCargoInvoice && selectedInvoice.itemsDetails && selectedInvoice.itemsDetails.length > 0) {
+                      // Use real cargo data
+                      return selectedInvoice.itemsDetails.map((item: CargoInvoiceItem, index: number) => (
+                        <div key={item.id || index} className="grid grid-cols-5 gap-2 text-sm text-gray-700 py-0.5">
+                          <div className="font-mono">{item.route}</div>
+                          <div>{item.mailCat}</div>
+                          <div className="text-right">{item.weight} kg</div>
+                          <div className="text-right">{selectedInvoice.currency || '€'}{(item.rateInfo?.base_rate || item.rate).toFixed(2)}</div>
+                          <div className="text-right font-semibold">
+                            {selectedInvoice.currency || '€'}{item.amount.toFixed(2)}
+                          </div>
+                        </div>
+                      ))
+                    } else {
+                      // No data available
+                      return (
+                        <div className="text-center py-4 text-gray-500">
+                          No cargo data available
+                        </div>
+                      )
+                    }
+                  })()}
                 </div>
                 
+                {/* Fixed Footer */}
                 <div className="border-t border-gray-300 mt-2 pt-2">
                   <div className="grid grid-cols-5 gap-2 text-sm font-bold text-gray-800">
                     <div>TOTAL</div>
                     <div></div>
-                    <div className="text-right">9952.7</div>
-                    <div className="text-right">0.8511680248</div>
-                    <div className="text-right">€8471.42</div>
+                    <div className="text-right">
+                      {(() => {
+                        const isCargoInvoice = 'itemsDetails' in selectedInvoice && selectedInvoice.itemsDetails
+                        if (isCargoInvoice && selectedInvoice.itemsDetails && selectedInvoice.itemsDetails.length > 0) {
+                          return selectedInvoice.itemsDetails.reduce((sum, item) => sum + item.weight, 0).toFixed(1)
+                        }
+                        return '0.0'
+                      })()}
+                    </div>
+                    <div className="text-right">
+                      {/* {(() => {
+                        const isCargoInvoice = 'itemsDetails' in selectedInvoice && selectedInvoice.itemsDetails
+                        if (isCargoInvoice && selectedInvoice.itemsDetails && selectedInvoice.itemsDetails.length > 0) {
+                          const totalWeight = selectedInvoice.itemsDetails.reduce((sum, item) => sum + item.weight, 0)
+                          const totalAmount = selectedInvoice.itemsDetails.reduce((sum, item) => sum + item.amount, 0)
+                          // Show average rate per kg
+                          const avgRate = totalWeight > 0 ? totalAmount / totalWeight : 0
+                          return `€${avgRate.toFixed(2)}/kg`
+                        }
+                        return '€0.00/kg'
+                      })()} */}
+                    </div>
+                    <div className="text-right">
+                      {(() => {
+                        const isCargoInvoice = 'itemsDetails' in selectedInvoice && selectedInvoice.itemsDetails
+                        if (isCargoInvoice && selectedInvoice.itemsDetails && selectedInvoice.itemsDetails.length > 0) {
+                          const totalAmount = selectedInvoice.itemsDetails.reduce((sum, item) => sum + item.amount, 0)
+                          return `${selectedInvoice.currency || '€'}${totalAmount.toFixed(2)}`
+                        }
+                        return '€0.00'
+                      })()}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
           </div>
         </CardContent>
       </Card>

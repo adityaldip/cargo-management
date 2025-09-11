@@ -54,6 +54,33 @@ export function ConfigureRates() {
   
   const [localRules, setLocalRules] = useState<RateRule[]>([])
 
+  // Load record count
+  const loadRecordCount = async () => {
+    setIsLoadingCount(true)
+    try {
+      const response = await fetch(`/api/rate-rules/count`)
+      const result = await response.json()
+      
+      if (result.success) {
+        setRecordCount({
+          toProcess: result.data.totalRecords,
+          total: result.data.totalRecords
+        })
+      } else {
+        console.error('Failed to load record count:', result.error)
+      }
+    } catch (error) {
+      console.error('Error loading record count:', error)
+    } finally {
+      setIsLoadingCount(false)
+    }
+  }
+
+  // Load record count on component mount
+  useEffect(() => {
+    loadRecordCount()
+  }, [])
+
   // Sync local rules when database rules change
   useEffect(() => {
     if (rules.length > 0) {
@@ -88,6 +115,8 @@ export function ConfigureRates() {
   const [isExecuting, setIsExecuting] = useState(false)
   const [executionProgress, setExecutionProgress] = useState(0)
   const [executionStep, setExecutionStep] = useState("")
+  const [recordCount, setRecordCount] = useState<{toProcess: number, total: number} | null>(null)
+  const [isLoadingCount, setIsLoadingCount] = useState(false)
   
   // Sweet Alert state
   const [sweetAlert, setSweetAlert] = useState({
@@ -407,15 +436,18 @@ export function ConfigureRates() {
     setError(null)
 
     try {
-      // Simulate progress updates with realistic steps
+      // Set initial progress and step
+      setExecutionProgress(10)
+      setExecutionStep("Starting rate rule execution...")
+      
+      // Update progress and step messages during execution
       const progressInterval = setInterval(() => {
         setExecutionProgress(prev => {
-          if (prev >= 90) return prev
-          return prev + Math.random() * 15
+          if (prev >= 85) return prev // Don't go above 85% until API completes
+          return prev + Math.random() * 5
         })
-      }, 300)
+      }, 1000)
 
-      // Update step messages
       const stepInterval = setInterval(() => {
         setExecutionStep(prev => {
           const steps = [
@@ -431,12 +463,13 @@ export function ConfigureRates() {
           const currentIndex = steps.indexOf(prev)
           return steps[Math.min(currentIndex + 1, steps.length - 1)]
         })
-      }, 800)
+      }, 2000)
 
       console.log('Calling rateRulesAPI.executeRules()...')
       const { data, error } = await rateRulesAPI.executeRules()
       console.log('API Response:', { data, error })
       
+      // Clear intervals and set final progress
       clearInterval(progressInterval)
       clearInterval(stepInterval)
       setExecutionProgress(100)
@@ -654,8 +687,22 @@ export function ConfigureRates() {
                 </Button>
               )}
             </div>
-            <div className="text-xs text-gray-500">
-              {filteredRules.length} of {displayRules.length} rules
+            <div className="flex items-center gap-4">
+              <div className="text-xs text-gray-500">
+                {filteredRules.length} of {displayRules.length} rules
+              </div>
+              {/* Record Count Display */}
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                {isLoadingCount ? (
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                ) : recordCount ? (
+                  <>
+                    <span>Total records:</span>
+                    <span className="font-semibold text-blue-600">{recordCount.total.toLocaleString()}</span>
+                    <span className="text-gray-400">(all data will be processed)</span>
+                  </>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

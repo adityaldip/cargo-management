@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
     console.log('Executing rules...')
     const body = await request.json()
-    const { ruleIds, dryRun = false } = body
+    const { ruleIds, dryRun = false, processAllData = true } = body
 
-    // Set a longer timeout for this operation
+    // Set a longer timeout for this operation (increased for large datasets)
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minutes timeout
+    const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minutes timeout
 
     // Get all active rules (or specific rules if ruleIds provided)
     console.log('Fetching rules...')
-    let rulesQuery = supabase
+    let rulesQuery = supabaseAdmin
       .from('customer_rules')
       .select('*')
       .eq('is_active', true)
@@ -40,18 +40,45 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    console.log('getting cargo data...')
-    // Get all cargo data that doesn't have assigned customers (null or empty string)
-    const { data: cargoData, error: cargoError } = await supabase
-      .from('cargo_data')
-      .select('*')
-      .or('assigned_customer.is.null,assigned_customer.eq.')
+    console.log('Getting cargo data...')
+    console.log('Processing mode: ALL DATA')
+    // Get all cargo data - always process all data
+    // Use pagination to handle large datasets (Supabase default limit is 1000)
+    let allCargoData: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
 
-    console.log("total cargo data:", cargoData?.length)    
+    while (hasMore) {
+      const { data: cargoData, error: cargoError } = await supabaseAdmin
+        .from('cargo_data')
+        .select('*')
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+
+      if (cargoError) {
+        console.error('Error fetching cargo data:', cargoError)
+        return NextResponse.json(
+          { error: 'Failed to fetch cargo data', details: cargoError.message },
+          { status: 500 }
+        )
+      }
+
+      if (cargoData && cargoData.length > 0) {
+        allCargoData.push(...cargoData)
+        console.log(`Fetched page ${page + 1}: ${cargoData.length} records (Total so far: ${allCargoData.length})`)
+        page++
+        hasMore = cargoData.length === pageSize // If we got less than pageSize, we're done
+      } else {
+        hasMore = false
+      }
+    }
+
+    const cargoData = allCargoData
+    console.log("Total cargo data fetched:", cargoData.length)    
     
-    console.log("getting customers data...")
+    console.log("Getting customers data...")
     // Also get customers to resolve customer names to IDs
-    const { data: customers, error: customersError } = await supabase
+    const { data: customers, error: customersError } = await supabaseAdmin
       .from('customers')
       .select('id, name')
       .eq('is_active', true)
@@ -64,18 +91,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (cargoError) {
-      console.error('Error fetching cargo data:', cargoError)
-      return NextResponse.json(
-        { error: 'Failed to fetch cargo data', details: cargoError.message },
-        { status: 500 }
-      )
-    }
 
     if (!cargoData || cargoData.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'No unassigned cargo data found',
+        message: 'No cargo data found',
         results: {
           totalProcessed: 0,
           totalAssigned: 0,
@@ -169,6 +189,12 @@ export async function POST(request: NextRequest) {
       for (const cargo of cargoData) {
         // Skip if already assigned by a higher priority rule
         if (assignments.some(a => a.id === (cargo as any).id)) {
+          skippedCount++
+          continue
+        }
+        
+        // Skip if already has an assigned customer (since we're processing all data)
+        if ((cargo as any).assigned_customer && (cargo as any).assigned_customer.trim() !== '') {
           skippedCount++
           continue
         }
@@ -267,7 +293,7 @@ export async function POST(request: NextRequest) {
         
         // Use Promise.all for concurrent updates within each batch
         const updatePromises = batch.map(assignment => 
-          (supabase as any)
+          supabaseAdmin
             .from('cargo_data')
             .update({
               assigned_customer: assignment.assigned_customer,
@@ -297,7 +323,7 @@ export async function POST(request: NextRequest) {
         last_run: new Date().toISOString()
       }))
 
-      const { error: rulesUpdateError } = await supabase
+      const { error: rulesUpdateError } = await supabaseAdmin
         .from('customer_rules')
         .upsert(ruleUpdates as any, { 
           onConflict: 'id',

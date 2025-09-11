@@ -62,6 +62,8 @@ export function ExecuteRates() {
     { key: 'mail_class', label: 'Mail Class', type: 'text' },
     { key: 'total_kg', label: 'Total Weight (kg)', type: 'number' },
     { key: 'invoice', label: 'Invoice', type: 'text' },
+    { key: 'customer_name_number', label: 'Customer Name', type: 'text' },
+    { key: 'assigned_customer', label: 'Customer ID', type: 'text' },
     { key: 'rate_name', label: 'Rate Name', type: 'text' },
     { key: 'rate_value', label: 'Rate Value', type: 'number' },
     { key: 'rate_currency', label: 'Rate Currency', type: 'text' }
@@ -171,76 +173,89 @@ export function ExecuteRates() {
         throw new Error(`Failed to fetch cargo data: ${cargoError.message}`)
       }
 
-      // Fetch rate data to resolve rate names
+      // Fetch rate data and customer data to resolve names
       let enrichedCargo: any[] = cargo || []
       if (cargo && cargo.length > 0) {
-        // Get unique rate IDs from the cargo data
+        // Get unique rate IDs and customer IDs from the cargo data
         const rateIds = [...new Set(cargo.map((record: any) => record.rate_id).filter(Boolean))]
+        const customerIds = [...new Set(cargo.map((record: any) => record.assigned_customer).filter(Boolean))]
         
         console.log('🔍 Rate IDs to lookup:', rateIds)
+        console.log('🔍 Customer IDs to lookup:', customerIds)
         console.log('🔍 Sample cargo records:', cargo.slice(0, 3))
         
-        if (rateIds.length > 0) {
-          try {
-            const { data: ratesData, error: ratesError } = await supabase
-              .from('rates')
-              .select('id, name, description, rate_type, base_rate, currency, multiplier')
-              .in('id', rateIds)
-            
-            if (ratesError) {
-              console.error('Error fetching rates:', ratesError)
-            } else {
-              console.log('✅ Found rates:', ratesData?.length || 0)
-              console.log('📊 Rate data:', ratesData)
-              
-              // Merge rate data with cargo data
-              enrichedCargo = cargo.map((record: any) => {
-                const rate: any = ratesData?.find((r: any) => r.id === record.rate_id)
-                
-                // Calculate rate value if it's 0.00 or null
-                let calculatedRateValue = record.rate_value
-                
-                // Debug: Log all record data
-                console.log(`🔍 Record ${record.rec_id}: rate_value=${record.rate_value}, rate_id=${record.rate_id}, total_kg=${record.total_kg}`)
-                console.log(`🔍 Found rate:`, rate)
-                
-                if ((record.rate_value === 0 || record.rate_value === null || record.rate_value === '0.00' || parseFloat(record.rate_value) === 0) && rate) {
-                  console.log(`💰 Calculating rate for ${record.rec_id}: type=${rate.rate_type}, base_rate=${rate.base_rate}, total_kg=${record.total_kg}`)
-                  
-                  if (rate.rate_type === 'per_kg') {
-                    calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0)
-                  } else if (rate.rate_type === 'fixed') {
-                    calculatedRateValue = rate.base_rate || 0
-                  } else if (rate.rate_type === 'multiplier') {
-                    calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0) * (rate.multiplier || 1)
-                  }
-                  // Round to 2 decimal places
-                  calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
-                  
-                  console.log(`💰 Calculated rate for ${record.rec_id}: calculated=${calculatedRateValue}`)
-                } else if ((record.rate_value === 0 || record.rate_value === null || record.rate_value === '0.00' || parseFloat(record.rate_value) === 0) && !rate) {
-                  console.log(`⚠️ No rate found for ${record.rec_id}, using default calculation`)
-                  // Fallback: assume per_kg rate with default base rate
-                  calculatedRateValue = (record.total_kg || 0) * 2.5 // Default rate of €2.5 per kg
-                  calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
-                  console.log(`💰 Fallback calculation for ${record.rec_id}: ${calculatedRateValue}`)
-                } else {
-                  console.log(`💰 Using existing rate value for ${record.rec_id}: ${calculatedRateValue}`)
-                }
-                
-                return {
-                  ...record,
-                  rates: rate || null,
-                  calculated_rate_value: calculatedRateValue
-                }
-              })
-            }
-          } catch (rateFetchError) {
-            console.error('Error in rate fetch operation:', rateFetchError)
-            // Continue with original data if rate fetch fails
-            enrichedCargo = cargo
-          }
+        // Fetch rates and customers in parallel
+        const [ratesResult, customersResult] = await Promise.allSettled([
+          rateIds.length > 0 ? supabase
+            .from('rates')
+            .select('id, name, description, rate_type, base_rate, currency, multiplier')
+            .in('id', rateIds) : Promise.resolve({ data: [], error: null }),
+          customerIds.length > 0 ? supabase
+            .from('customers')
+            .select('id, name, code')
+            .in('id', customerIds) : Promise.resolve({ data: [], error: null })
+        ])
+        
+        const ratesData = ratesResult.status === 'fulfilled' ? ratesResult.value.data : []
+        const customersData = customersResult.status === 'fulfilled' ? customersResult.value.data : []
+        
+        if (ratesResult.status === 'rejected') {
+          console.error('Error fetching rates:', ratesResult.reason)
+        } else {
+          console.log('✅ Found rates:', ratesData?.length || 0)
         }
+        
+        if (customersResult.status === 'rejected') {
+          console.error('Error fetching customers:', customersResult.reason)
+        } else {
+          console.log('✅ Found customers:', customersData?.length || 0)
+        }
+        
+        // Merge rate and customer data with cargo data
+        enrichedCargo = cargo.map((record: any) => {
+          const rate: any = ratesData?.find((r: any) => r.id === record.rate_id)
+          const customer: any = customersData?.find((c: any) => c.id === record.assigned_customer)
+          
+          // Calculate rate value if it's 0.00 or null
+          let calculatedRateValue = record.rate_value
+          
+          // Debug: Log all record data
+          console.log(`🔍 Record ${record.rec_id}: rate_value=${record.rate_value}, rate_id=${record.rate_id}, total_kg=${record.total_kg}`)
+          console.log(`🔍 Found rate:`, rate)
+          console.log(`🔍 Found customer:`, customer)
+          
+          if ((record.rate_value === 0 || record.rate_value === null || record.rate_value === '0.00' || parseFloat(record.rate_value) === 0) && rate) {
+            console.log(`💰 Calculating rate for ${record.rec_id}: type=${rate.rate_type}, base_rate=${rate.base_rate}, total_kg=${record.total_kg}`)
+            
+            if (rate.rate_type === 'per_kg') {
+              calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0)
+            } else if (rate.rate_type === 'fixed') {
+              calculatedRateValue = rate.base_rate || 0
+            } else if (rate.rate_type === 'multiplier') {
+              calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0) * (rate.multiplier || 1)
+            }
+            // Round to 2 decimal places
+            calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
+            
+            console.log(`💰 Calculated rate for ${record.rec_id}: calculated=${calculatedRateValue}`)
+          } else if ((record.rate_value === 0 || record.rate_value === null || record.rate_value === '0.00' || parseFloat(record.rate_value) === 0) && !rate) {
+            console.log(`⚠️ No rate found for ${record.rec_id}, using default calculation`)
+            // Fallback: assume per_kg rate with default base rate based on currency
+            const defaultRate = record.rate_currency === 'USD' ? 2.5 : 2.5 // Default rate per kg
+            calculatedRateValue = (record.total_kg || 0) * defaultRate
+            calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
+            console.log(`💰 Fallback calculation for ${record.rec_id}: ${calculatedRateValue}`)
+          } else {
+            console.log(`💰 Using existing rate value for ${record.rec_id}: ${calculatedRateValue}`)
+          }
+          
+          return {
+            ...record,
+            rates: rate || null,
+            customers: customer || null,
+            calculated_rate_value: calculatedRateValue
+          }
+        })
       }
 
       setCargoData(enrichedCargo)
@@ -392,57 +407,69 @@ export function ExecuteRates() {
       setExportProgress(100)
       console.log(`✅ All batches completed! Total records fetched: ${allData.length}`)
 
-      // Fetch rate data to resolve rate names for all records
+      // Fetch rate data and customer data to resolve names for all records
       let enrichedData: any[] = allData
       if (allData.length > 0) {
-        // Get unique rate IDs from the cargo data
+        // Get unique rate IDs and customer IDs from the cargo data
         const rateIds = [...new Set(allData.map((record: any) => record.rate_id).filter(Boolean))]
+        const customerIds = [...new Set(allData.map((record: any) => record.assigned_customer).filter(Boolean))]
         
         console.log('🔍 Export - Rate IDs to lookup:', rateIds)
+        console.log('🔍 Export - Customer IDs to lookup:', customerIds)
         
-        if (rateIds.length > 0) {
-          try {
-            const { data: ratesData, error: ratesError } = await supabase
-              .from('rates')
-              .select('id, name, description, rate_type, base_rate, currency, multiplier')
-              .in('id', rateIds)
-            
-            if (ratesError) {
-              console.error('Error fetching rates for export:', ratesError)
-            } else {
-              console.log('✅ Export - Found rates:', ratesData?.length || 0)
-              
-              // Merge rate data with cargo data
-              enrichedData = allData.map((record: any) => {
-                const rate: any = ratesData?.find((r: any) => r.id === record.rate_id)
-                
-                // Calculate rate value if it's 0.00 or null
-                let calculatedRateValue = record.rate_value
-                if ((record.rate_value === 0 || record.rate_value === null) && rate) {
-                  if (rate.rate_type === 'per_kg') {
-                    calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0)
-                  } else if (rate.rate_type === 'fixed') {
-                    calculatedRateValue = rate.base_rate || 0
-                  } else if (rate.rate_type === 'multiplier') {
-                    calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0) * (rate.multiplier || 1)
-                  }
-                  // Round to 2 decimal places
-                  calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
-                }
-                
-                return {
-                  ...record,
-                  rates: rate || null,
-                  calculated_rate_value: calculatedRateValue
-                }
-              })
-            }
-          } catch (rateFetchError) {
-            console.error('Error in rate fetch operation for export:', rateFetchError)
-            // Continue with original data if rate fetch fails
-            enrichedData = allData
-          }
+        // Fetch rates and customers in parallel
+        const [ratesResult, customersResult] = await Promise.allSettled([
+          rateIds.length > 0 ? supabase
+            .from('rates')
+            .select('id, name, description, rate_type, base_rate, currency, multiplier')
+            .in('id', rateIds) : Promise.resolve({ data: [], error: null }),
+          customerIds.length > 0 ? supabase
+            .from('customers')
+            .select('id, name, code')
+            .in('id', customerIds) : Promise.resolve({ data: [], error: null })
+        ])
+        
+        const ratesData = ratesResult.status === 'fulfilled' ? ratesResult.value.data : []
+        const customersData = customersResult.status === 'fulfilled' ? customersResult.value.data : []
+        
+        if (ratesResult.status === 'rejected') {
+          console.error('Error fetching rates for export:', ratesResult.reason)
+        } else {
+          console.log('✅ Export - Found rates:', ratesData?.length || 0)
         }
+        
+        if (customersResult.status === 'rejected') {
+          console.error('Error fetching customers for export:', customersResult.reason)
+        } else {
+          console.log('✅ Export - Found customers:', customersData?.length || 0)
+        }
+        
+        // Merge rate and customer data with cargo data
+        enrichedData = allData.map((record: any) => {
+          const rate: any = ratesData?.find((r: any) => r.id === record.rate_id)
+          const customer: any = customersData?.find((c: any) => c.id === record.assigned_customer)
+          
+          // Calculate rate value if it's 0.00 or null
+          let calculatedRateValue = record.rate_value
+          if ((record.rate_value === 0 || record.rate_value === null) && rate) {
+            if (rate.rate_type === 'per_kg') {
+              calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0)
+            } else if (rate.rate_type === 'fixed') {
+              calculatedRateValue = rate.base_rate || 0
+            } else if (rate.rate_type === 'multiplier') {
+              calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0) * (rate.multiplier || 1)
+            }
+            // Round to 2 decimal places
+            calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
+          }
+          
+          return {
+            ...record,
+            rates: rate || null,
+            customers: customer || null,
+            calculated_rate_value: calculatedRateValue
+          }
+        })
       }
 
       // Generate CSV content
@@ -499,6 +526,7 @@ export function ExecuteRates() {
       'Mail Class',
       'Total Weight (kg)',
       'Invoice',
+      'Customer Name',
       'Rate Name',
       'Rate Value',
       'Rate Currency',
@@ -522,6 +550,7 @@ export function ExecuteRates() {
         record.mail_class || '',
         record.total_kg || '0.0',
         record.invoice || '',
+        record.customers?.name || record.customer_name_number || '',
         record.rates?.name || record.rate_name || '',
         record.calculated_rate_value || '0.00',
         record.rate_currency || record.rates?.currency || 'EUR',
@@ -731,7 +760,9 @@ export function ExecuteRates() {
                 <TableHead className="border">Mail Class</TableHead>
                 <TableHead className="border text-right">Total kg</TableHead>
                 <TableHead className="border">Invoice</TableHead>
+                <TableHead className="border bg-yellow-200">customer</TableHead>
                 <TableHead className="border bg-yellow-200">Rate Name</TableHead>
+                <TableHead className="border bg-yellow-200">Base Rate</TableHead>
                 <TableHead className="border text-right bg-yellow-200">Rate Value</TableHead>
                 <TableHead className="border bg-yellow-200">Currency</TableHead>
                 <TableHead className="border bg-yellow-200">Assigned At</TableHead>
@@ -754,13 +785,19 @@ export function ExecuteRates() {
                   <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
                   <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
                   <TableCell className="border text-xs bg-yellow-200">
+                    {record.customers?.name || record.customer_name_number || 'N/A'}
+                  </TableCell>
+                  <TableCell className="border text-xs bg-yellow-200">
                     {record.rates?.name || record.rate_name || 'Unknown Rate'}
+                  </TableCell>
+                  <TableCell className="border text-xs bg-yellow-200">
+                    {record.rates?.base_rate || record.base_rate || 'N/A'}
                   </TableCell>
                   <TableCell className="border text-xs bg-yellow-200 text-right">
                     {(() => {
                       const value = record.calculated_rate_value
                       console.log(`🎯 Displaying rate for ${record.rec_id}: calculated_rate_value=${value}, type=${typeof value}`)
-                      return value ? `€${parseFloat(value).toFixed(2)}` : '€0.00'
+                      return value ? `${parseFloat(value).toFixed(2)}` : '0.00'
                     })()}
                   </TableCell>
                   <TableCell className="border text-xs bg-yellow-200">
