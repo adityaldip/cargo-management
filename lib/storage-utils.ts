@@ -45,7 +45,6 @@ export function saveDataset(dataset: StoredDataset): void {
     
     localStorage.setItem(STORAGE_KEYS.DATASETS, JSON.stringify(updatedDatasets))
   } catch (error) {
-    console.error('Error saving dataset to localStorage:', error)
     throw new Error('Failed to save dataset to local storage')
   }
 }
@@ -55,7 +54,6 @@ export function getStoredDatasets(): StoredDataset[] {
     const stored = localStorage.getItem(STORAGE_KEYS.DATASETS)
     return stored ? JSON.parse(stored) : []
   } catch (error) {
-    console.error('Error reading datasets from localStorage:', error)
     return []
   }
 }
@@ -66,7 +64,6 @@ export function deleteDataset(id: string): void {
     const filtered = datasets.filter(d => d.id !== id)
     localStorage.setItem(STORAGE_KEYS.DATASETS, JSON.stringify(filtered))
   } catch (error) {
-    console.error('Error deleting dataset:', error)
     throw new Error('Failed to delete dataset')
   }
 }
@@ -131,20 +128,17 @@ export function saveCurrentSession(data: CurrentSession): void {
     
     localStorage.setItem(STORAGE_KEYS.CURRENT_SESSION, JSON.stringify(lightweightData))
   } catch (error) {
-    console.error('Error saving current session:', error)
     // If it's a quota error, try to clear some space and save a minimal version
     if (error instanceof Error && error.name === 'QuotaExceededError') {
       try {
-        console.log('Quota exceeded, performing emergency cleanup...')
         emergencyCleanup()
         // Save only the essential info
         const minimalData: CurrentSession = {
           supabaseSaved: data.supabaseSaved
         }
         localStorage.setItem(STORAGE_KEYS.CURRENT_SESSION, JSON.stringify(minimalData))
-        console.log('Successfully saved minimal session data after cleanup')
       } catch (retryError) {
-        console.error('Failed to save even minimal session data:', retryError)
+        // Failed to save even minimal session data
       }
     }
   }
@@ -155,7 +149,6 @@ export function getCurrentSession(): CurrentSession | null {
     const stored = localStorage.getItem(STORAGE_KEYS.CURRENT_SESSION)
     return stored ? JSON.parse(stored) : null
   } catch (error) {
-    console.error('Error reading current session:', error)
     return null
   }
 }
@@ -164,7 +157,7 @@ export function clearCurrentSession(): void {
   try {
     localStorage.removeItem(STORAGE_KEYS.CURRENT_SESSION)
   } catch (error) {
-    console.error('Error clearing current session:', error)
+    // Error clearing current session
   }
 }
 
@@ -183,15 +176,13 @@ export function cleanOldDatasets(): void {
       localStorage.setItem(STORAGE_KEYS.DATASETS, JSON.stringify(keep))
     }
   } catch (error) {
-    console.error('Error cleaning old datasets:', error)
+    // Error cleaning old datasets
   }
 }
 
 // Aggressive cleanup when quota is exceeded
 export function emergencyCleanup(): void {
   try {
-    console.log('Performing emergency localStorage cleanup...')
-    
     // Clear all datasets
     localStorage.removeItem(STORAGE_KEYS.DATASETS)
     
@@ -206,16 +197,12 @@ export function emergencyCleanup(): void {
       }
       localStorage.setItem(STORAGE_KEYS.CURRENT_SESSION, JSON.stringify(minimalSession))
     }
-    
-    console.log('Emergency cleanup completed')
   } catch (error) {
-    console.error('Error during emergency cleanup:', error)
     // Last resort - clear everything
     try {
       localStorage.clear()
-      console.log('Cleared all localStorage as last resort')
     } catch (clearError) {
-      console.error('Failed to clear localStorage:', clearError)
+      // Failed to clear localStorage
     }
   }
 }
@@ -244,7 +231,6 @@ function convertCargoDataToSupabase(cargoData: CargoData) {
       processed_at: new Date().toISOString(),
     }
   } catch (error) {
-    console.error('Error converting cargo data to Supabase format:', error, cargoData)
     throw error
   }
 }
@@ -255,11 +241,6 @@ export async function saveMergedDataToSupabase(
   mailSystemDataset?: StoredDataset
 ): Promise<{ success: boolean; error?: string; savedCount?: number }> {
   try {
-    console.log('Starting Supabase save process...', { 
-      hasMailAgent: !!mailAgentDataset, 
-      hasMailSystem: !!mailSystemDataset 
-    })
-
     if (!mailAgentDataset && !mailSystemDataset) {
       return { success: false, error: "No datasets provided" }
     }
@@ -267,16 +248,13 @@ export async function saveMergedDataToSupabase(
     // Combine the datasets
     const datasets = []
     if (mailAgentDataset) {
-      console.log('Adding mail agent data:', mailAgentDataset.data.summary)
       datasets.push(mailAgentDataset.data)
     }
     if (mailSystemDataset) {
-      console.log('Adding mail system data:', mailSystemDataset.data.summary)
       datasets.push(mailSystemDataset.data)
     }
     
     const mergedData = datasets.length > 1 ? combineProcessedData(datasets) : datasets[0]
-    console.log('Merged data summary:', mergedData.summary)
     
     // Convert to Supabase format with error handling
     const supabaseData = []
@@ -285,13 +263,10 @@ export async function saveMergedDataToSupabase(
         const converted = convertCargoDataToSupabase(mergedData.data[i])
         supabaseData.push(converted)
       } catch (conversionError) {
-        console.error(`Error converting record ${i}:`, conversionError, mergedData.data[i])
         // Skip invalid records but continue processing
         continue
       }
     }
-    
-    console.log(`Converted ${supabaseData.length} records for Supabase`)
     
     if (supabaseData.length === 0) {
       return { success: false, error: "No valid records to save after conversion" }
@@ -303,13 +278,10 @@ export async function saveMergedDataToSupabase(
     
     for (let i = 0; i < supabaseData.length; i += batchSize) {
       const batch = supabaseData.slice(i, i + batchSize)
-      console.log(`Saving batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(supabaseData.length/batchSize)} (${batch.length} records)`)
       
       const result = await cargoDataOperations.bulkInsert(batch)
       
       if (result.error) {
-        console.error('Error saving batch to Supabase:', result.error)
-        console.error('Sample batch data:', batch.slice(0, 2)) // Log first 2 records for debugging
         return { 
           success: false, 
           error: `Failed to save batch ${Math.floor(i/batchSize) + 1}: ${result.error}`,
@@ -318,7 +290,6 @@ export async function saveMergedDataToSupabase(
       }
       
       totalSaved += batch.length
-      console.log(`Successfully saved batch. Total saved so far: ${totalSaved}`)
     }
     
     // Update session to mark as saved to Supabase (without saving large data)
@@ -332,13 +303,11 @@ export async function saveMergedDataToSupabase(
     }
     saveCurrentSession(currentSession)
     
-    console.log(`Successfully saved ${totalSaved} records to Supabase`)
     return { 
       success: true, 
       savedCount: totalSaved 
     }
   } catch (error) {
-    console.error('Error saving merged data to Supabase:', error)
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error occurred' 
@@ -386,9 +355,7 @@ export function clearAllLocalStorage(): void {
   try {
     localStorage.removeItem(STORAGE_KEYS.DATASETS)
     localStorage.removeItem(STORAGE_KEYS.CURRENT_SESSION)
-    console.log('✅ Local storage cleared successfully')
   } catch (error) {
-    console.error('Error clearing local storage:', error)
     throw new Error('Failed to clear local storage')
   }
 }
@@ -405,8 +372,6 @@ export async function clearFilteredSupabaseData(
   shouldStop?: () => boolean
 ): Promise<{ success: boolean; error?: string; deletedCount?: number; cancelled?: boolean }> {
   try {
-    console.log('🗑️ Starting filtered Supabase data clearing process...')
-    console.log('🔍 clearFilteredSupabaseData called with filters:', filters, 'logic:', filterLogic)
     
     // Step 1: Get filtered IDs for batch deletion
     onProgress?.(0, "Fetching filtered record IDs from database...", 0, 3)
@@ -424,11 +389,7 @@ export async function clearFilteredSupabaseData(
       
       const result = await cargoDataOperations.getFilteredIds(filters, filterLogic, currentPage, fetchBatchSize)
       
-      console.log(`🔍 getFilteredIds page ${currentPage}:`, result)
-      console.log(`🔍 getFilteredIds page ${currentPage} data length:`, Array.isArray(result.data) ? result.data.length : 0)
-      
       if (result.error) {
-        console.error('Error fetching filtered cargo data IDs:', result.error)
         return { success: false, error: result.error }
       }
       
@@ -446,15 +407,11 @@ export async function clearFilteredSupabaseData(
       
       // Safety check to prevent infinite loops
       if (currentPage > 1000) {
-        console.warn('⚠️ Reached maximum page limit (1000), stopping ID fetch')
         hasMoreData = false
       }
     }
     
-    console.log(`🔍 Total filtered IDs to delete: ${allIds.length}`)
-    
     if (allIds.length === 0) {
-      console.log('🔍 No filtered records found to delete')
       return { success: true, deletedCount: 0 }
     }
     
@@ -473,21 +430,13 @@ export async function clearFilteredSupabaseData(
       const batch = allIds.slice(i, i + deleteBatchSize)
       batchIndex++
       
-      console.log(`🗑️ Deleting batch ${batchIndex} (${batch.length} records)...`)
-      
       try {
-        console.log(`🗑️ Attempting to delete batch ${batchIndex} with ${batch.length} IDs:`, batch.slice(0, 3), '...')
         const deleteResult = await cargoDataOperations.deleteByIds(batch)
         
-        console.log(`🗑️ Delete result for batch ${batchIndex}:`, deleteResult)
-        
         if (deleteResult.error) {
-          console.error(`❌ Error deleting batch ${batchIndex}:`, deleteResult.error)
           
           // If it's a network error, try with smaller batch size
           if (deleteResult.error.includes('Failed to fetch') || deleteResult.error.includes('timeout')) {
-            console.log(`🔄 Network error detected, trying smaller batch size for filtered batch ${batchIndex}`)
-            
             // Try deleting in smaller chunks
             const smallerBatchSize = Math.ceil(batch.length / 2)
             let partialSuccess = 0
@@ -498,12 +447,9 @@ export async function clearFilteredSupabaseData(
                 const retryResult = await cargoDataOperations.deleteByIds(smallerBatch)
                 if (!retryResult.error) {
                   partialSuccess += smallerBatch.length
-                  console.log(`✅ Partial success: deleted ${smallerBatch.length} filtered records from batch ${batchIndex}`)
-                } else {
-                  console.error(`❌ Even smaller filtered batch failed:`, retryResult.error)
                 }
               } catch (retryError) {
-                console.error(`❌ Retry attempt failed for filtered batch:`, retryError)
+                // Retry attempt failed
               }
               
               // Add delay between smaller batches
@@ -511,15 +457,10 @@ export async function clearFilteredSupabaseData(
             }
             
             deletedCount += partialSuccess
-            console.log(`📊 Filtered batch ${batchIndex} partial success: ${partialSuccess}/${batch.length} records deleted`)
-          } else {
-            // For non-network errors, continue with next batch instead of failing completely
-            console.log(`⚠️ Non-network error in filtered batch ${batchIndex}, continuing with next batch`)
           }
         } else {
           // Success case
           deletedCount += batch.length
-          console.log(`✅ Filtered batch ${batchIndex}: Successfully deleted ${batch.length} records`)
         }
         
         // Update progress (20-90%)
@@ -530,7 +471,6 @@ export async function clearFilteredSupabaseData(
         await new Promise(resolve => setTimeout(resolve, 100))
         
       } catch (error) {
-        console.error(`❌ Exception deleting filtered batch ${batchIndex}:`, error)
         // Continue with next batch instead of failing completely
       }
     }
@@ -544,18 +484,11 @@ export async function clearFilteredSupabaseData(
     // Use the tracked count from successful batches
     const finalDeletedCount = deletedCount > 0 ? deletedCount : 0
     
-    console.log(`📊 Filtered deletion final count calculation:`)
-    console.log(`  - Total filtered records to delete: ${allIds.length}`)
-    console.log(`  - Tracked deleted count: ${deletedCount}`)
-    console.log(`  - Final count to return: ${finalDeletedCount}`)
-    
     onProgress?.(100, `Successfully deleted ${finalDeletedCount} filtered records!`, 2, 3)
     
-    console.log(`✅ Successfully deleted ${finalDeletedCount} filtered records`)
     return { success: true, deletedCount: finalDeletedCount }
     
   } catch (error) {
-    console.error('❌ Error in clearFilteredSupabaseData:', error)
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error occurred' 
@@ -569,18 +502,15 @@ export async function clearSupabaseData(
   shouldStop?: () => boolean
 ): Promise<{ success: boolean; error?: string; deletedCount?: number; cancelled?: boolean }> {
   try {
-    console.log('🗑️ Starting Supabase data clearing process with batch deletion...')
-    console.log('🔍 clearSupabaseData called - Stack trace:', new Error().stack)
     
     // Step 1: Get all IDs for batch deletion (more efficient than getting full records)
     onProgress?.(0, "Fetching record IDs from database...", 0, 3)
     
     // First, let's check the total count in the database
     try {
-      const countResult = await cargoDataOperations.getStats("")
-      console.log(`🔍 Database total count:`, countResult)
+      await cargoDataOperations.getStats("")
     } catch (error) {
-      console.log(`🔍 Could not get database count:`, error)
+      // Could not get database count
     }
     
     let allIds: string[] = []
@@ -596,12 +526,7 @@ export async function clearSupabaseData(
       
       const result = await cargoDataOperations.getAllIds(currentPage, fetchBatchSize)
       
-      console.log(`🔍 getAllIds page ${currentPage}:`, result)
-      console.log(`🔍 getAllIds page ${currentPage} data length:`, Array.isArray(result.data) ? result.data.length : 0)
-      console.log(`🔍 getAllIds page ${currentPage} fetchBatchSize:`, fetchBatchSize)
-      
       if (result.error) {
-        console.error('Error fetching cargo data IDs:', result.error)
         return { success: false, error: result.error }
       }
       
@@ -623,18 +548,12 @@ export async function clearSupabaseData(
       }
     }
     
-    console.log(`Found ${allIds.length} records to delete using batch deletion`)
-    console.log(`🔍 Debug: allIds sample:`, allIds.slice(0, 5))
-    console.log(`🔍 Debug: total pages fetched:`, currentPage - 1)
-    
     if (allIds.length === 0) {
       onProgress?.(100, "No data to delete", 2, 3)
-      console.log('⚠️ No records found to delete - database might already be empty')
       
       // Check if this is a double call within 5 seconds of a successful deletion
       const now = Date.now()
       if (now - lastDeletionTimestamp < 5000 && lastSuccessfulDeletionCount > 0) {
-        console.log(`🔄 Detected double call - returning last successful count: ${lastSuccessfulDeletionCount}`)
         return { success: true, deletedCount: lastSuccessfulDeletionCount }
       }
       
@@ -646,9 +565,6 @@ export async function clearSupabaseData(
     let deletedCount = 0
     const deleteBatchSize = 500 // Reduced batch size to prevent network issues
     const totalBatches = Math.ceil(allIds.length / deleteBatchSize)
-    
-    console.log(`🔄 Starting batch deletion: ${totalBatches} batches of up to ${deleteBatchSize} records each`)
-    console.log(`📊 Initial deletedCount: ${deletedCount}`)
     
     for (let i = 0; i < allIds.length; i += deleteBatchSize) {
       if (shouldStop?.()) {
@@ -668,20 +584,13 @@ export async function clearSupabaseData(
       )
       
       try {
-        console.log(`🔄 Executing batch ${currentBatch}/${totalBatches}: Deleting ${batchIds.length} records`)
-        
         // Use the cargoDataOperations.deleteByIds function for proper error handling
         const deleteResult = await cargoDataOperations.deleteByIds(batchIds)
         
-        console.log(`📊 Batch ${currentBatch} delete result:`, deleteResult)
-        
         if (deleteResult.error) {
-          console.error(`❌ Failed to delete batch ${currentBatch}:`, deleteResult.error)
           
           // If it's a network error, try with smaller batch size
           if (deleteResult.error.includes('Failed to fetch') || deleteResult.error.includes('timeout')) {
-            console.log(`🔄 Network error detected, trying smaller batch size for batch ${currentBatch}`)
-            
             // Try deleting in smaller chunks
             const smallerBatchSize = Math.ceil(batchIds.length / 2)
             let partialSuccess = 0
@@ -692,12 +601,9 @@ export async function clearSupabaseData(
                 const retryResult = await cargoDataOperations.deleteByIds(smallerBatch)
                 if (!retryResult.error) {
                   partialSuccess += smallerBatch.length
-                  console.log(`✅ Partial success: deleted ${smallerBatch.length} records from batch ${currentBatch}`)
-                } else {
-                  console.error(`❌ Even smaller batch failed:`, retryResult.error)
                 }
               } catch (retryError) {
-                console.error(`❌ Retry attempt failed:`, retryError)
+                // Retry attempt failed
               }
               
               // Add delay between smaller batches
@@ -705,7 +611,6 @@ export async function clearSupabaseData(
             }
             
             deletedCount += partialSuccess
-            console.log(`📊 Batch ${currentBatch} partial success: ${partialSuccess}/${batchIds.length} records deleted`)
           }
           // Continue with next batch instead of failing completely
         } else {
@@ -715,11 +620,8 @@ export async function clearSupabaseData(
           const actualDeletedCount = batchIds.length
             
           deletedCount += actualDeletedCount
-          console.log(`✅ Batch ${currentBatch}: Successfully deleted ${actualDeletedCount} records`)
-          console.log(`📊 Running total deletedCount: ${deletedCount}`)
         }
       } catch (error) {
-        console.error(`❌ Exception deleting batch ${currentBatch}:`, error)
         // Continue with next batch
       }
       
@@ -731,28 +633,12 @@ export async function clearSupabaseData(
     // This should be reliable since we only count successful deletions
     const finalDeletedCount = deletedCount > 0 ? deletedCount : allIds.length
     
-    console.log(`📊 Final count calculation:`)
-    console.log(`  - Total records to delete: ${allIds.length}`)
-    console.log(`  - Tracked deleted count: ${deletedCount}`)
-    console.log(`  - Final count to return: ${finalDeletedCount}`)
-    
-    // Debug: Double-check the values
-    console.log(`🔍 Debug values:`)
-    console.log(`  - deletedCount type: ${typeof deletedCount}`)
-    console.log(`  - deletedCount value: ${deletedCount}`)
-    console.log(`  - allIds.length: ${allIds.length}`)
-    console.log(`  - finalDeletedCount: ${finalDeletedCount}`)
-    
     onProgress?.(100, `Successfully deleted ${finalDeletedCount} records`, 2, 3)
-    
-    console.log(`✅ Successfully deleted ${finalDeletedCount} out of ${allIds.length} records using batch deletion`)
-    console.log(`🔍 Final result being returned: { success: true, deletedCount: ${finalDeletedCount} }`)
     
     // Store successful deletion info for potential double calls
     if (finalDeletedCount > 0) {
       lastSuccessfulDeletionCount = finalDeletedCount
       lastDeletionTimestamp = Date.now()
-      console.log(`💾 Stored last successful deletion: ${finalDeletedCount} records at ${lastDeletionTimestamp}`)
     }
     
     return { 
@@ -760,7 +646,6 @@ export async function clearSupabaseData(
       deletedCount: finalDeletedCount 
     }
   } catch (error) {
-    console.error('❌ Error clearing Supabase data:', error)
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error occurred' 
@@ -818,8 +703,6 @@ export async function clearAllData(
     if (supabaseResult.success) {
       supabaseCleared = true
       supabaseDeletedCount = supabaseResult.deletedCount || 0
-      console.log(`🔍 clearAllData: Received supabaseDeletedCount = ${supabaseDeletedCount} from clearSupabaseData`)
-      console.log(`🔍 clearAllData: Full supabaseResult:`, supabaseResult)
     } else if (supabaseResult.cancelled) {
       return {
         success: false,
@@ -836,11 +719,6 @@ export async function clearAllData(
     errors.push(`Supabase: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
   
-  // Ensure we have a reasonable count for successful operations
-  if (supabaseCleared && supabaseDeletedCount === 0) {
-    console.log(`⚠️ Warning: Supabase cleared successfully but count is 0. This might indicate a counting issue.`)
-  }
-  
   const finalResult = {
     success: localCleared && supabaseCleared,
     error: errors.length > 0 ? errors.join('; ') : undefined,
@@ -848,8 +726,6 @@ export async function clearAllData(
     supabaseCleared,
     supabaseDeletedCount
   }
-  
-  console.log(`🔍 clearAllData final result being returned to UI:`, finalResult)
   
   return finalResult
 }
@@ -872,11 +748,8 @@ export function saveUploadSession(dataSource: "mail-agent" | "mail-system", sess
     existingSessions[dataSource] = lightweightSessionData
     localStorage.setItem(STORAGE_KEYS.UPLOAD_SESSIONS, JSON.stringify(existingSessions))
   } catch (error) {
-    console.error('Error saving upload session to localStorage:', error)
-    
     // If quota exceeded, try to clean up old data and retry
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      console.log('localStorage quota exceeded, attempting cleanup...')
       try {
         // Clean up old datasets first
         cleanOldDatasets()
@@ -895,11 +768,8 @@ export function saveUploadSession(dataSource: "mail-agent" | "mail-system", sess
         
         existingSessions[dataSource] = minimalSessionData
         localStorage.setItem(STORAGE_KEYS.UPLOAD_SESSIONS, JSON.stringify(existingSessions))
-        console.log('Successfully saved minimal session data after cleanup')
       } catch (retryError) {
-        console.error('Failed to save even minimal session data:', retryError)
-        // Don't throw error - just log it and continue
-        console.warn('Continuing without saving session data to localStorage')
+        // Don't throw error - just continue
       }
     } else {
       throw new Error('Failed to save upload session to local storage')
@@ -912,7 +782,6 @@ export function getUploadSession(dataSource: "mail-agent" | "mail-system"): Uplo
     const sessions = getUploadSessions()
     return sessions[dataSource] || null
   } catch (error) {
-    console.error('Error reading upload session from localStorage:', error)
     return null
   }
 }
@@ -922,7 +791,6 @@ export function getUploadSessions(): Record<string, UploadSession> {
     const stored = localStorage.getItem(STORAGE_KEYS.UPLOAD_SESSIONS)
     return stored ? JSON.parse(stored) : {}
   } catch (error) {
-    console.error('Error reading upload sessions from localStorage:', error)
     return {}
   }
 }
@@ -933,15 +801,12 @@ export function clearUploadSession(dataSource: "mail-agent" | "mail-system"): vo
     delete existingSessions[dataSource]
     localStorage.setItem(STORAGE_KEYS.UPLOAD_SESSIONS, JSON.stringify(existingSessions))
   } catch (error) {
-    console.error('Error clearing upload session from localStorage:', error)
-    
     // If quota exceeded, try to remove the entire key
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
       try {
         localStorage.removeItem(STORAGE_KEYS.UPLOAD_SESSIONS)
-        console.log('Cleared upload sessions by removing entire key due to quota')
       } catch (removeError) {
-        console.error('Failed to clear upload sessions:', removeError)
+        // Failed to clear upload sessions
       }
     }
   }
@@ -951,7 +816,7 @@ export function clearAllUploadSessions(): void {
   try {
     localStorage.removeItem(STORAGE_KEYS.UPLOAD_SESSIONS)
   } catch (error) {
-    console.error('Error clearing all upload sessions from localStorage:', error)
+    // Error clearing all upload sessions
   }
 }
 
@@ -972,7 +837,6 @@ export function checkLocalStorageQuota(): { used: number; available: number; per
     
     return { used, available, percentage }
   } catch (error) {
-    console.error('Error checking localStorage quota:', error)
     return { used: 0, available: 0, percentage: 0 }
   }
 }
@@ -1107,7 +971,6 @@ export function getStorageQuotaInfo(): StorageQuotaInfo {
       isFull: percentage > 90 || available < 200 * 1024 // Less than 200KB available
     }
   } catch (error) {
-    console.error('Error checking storage quota:', error)
     return { used: 0, available: 0, percentage: 0, isNearLimit: false, isFull: false }
   }
 }
@@ -1127,7 +990,6 @@ export async function performProgressiveCleanup(
     }
     
     try {
-      console.log(`Executing cleanup strategy: ${strategy.name}`)
       strategy.execute()
       strategiesUsed.push(strategy.name)
       totalItemsRemoved += 1 // Count strategies executed
@@ -1137,7 +999,7 @@ export async function performProgressiveCleanup(
       // Small delay to allow UI updates
       await new Promise(resolve => setTimeout(resolve, 100))
     } catch (error) {
-      console.error(`Error executing cleanup strategy ${strategy.name}:`, error)
+      // Error executing cleanup strategy
     }
   }
   
@@ -1160,15 +1022,11 @@ export async function safeLocalStorageSetItem(
     return { success: true }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      console.warn(`localStorage quota exceeded for key: ${key}`)
-      
       // Get storage info
       const quotaInfo = getStorageQuotaInfo()
-      console.log('Storage quota info:', quotaInfo)
       
       // Perform progressive cleanup
       const cleanupResult = await performProgressiveCleanup(onCleanupProgress)
-      console.log('Cleanup result:', cleanupResult)
       
       if (!cleanupResult.success) {
         return {
@@ -1181,10 +1039,8 @@ export async function safeLocalStorageSetItem(
       // Try to save again after cleanup
       try {
         localStorage.setItem(key, value)
-        console.log('Successfully saved after progressive cleanup')
         return { success: true, cleanupPerformed: true }
       } catch (retryError) {
-        console.error('Failed to save even after progressive cleanup:', retryError)
         return {
           success: false,
           error: 'Storage cleanup completed but still unable to save data. Consider reducing data size.',
@@ -1192,7 +1048,6 @@ export async function safeLocalStorageSetItem(
         }
       }
     } else {
-      console.error('Error saving to localStorage:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown storage error'
@@ -1208,20 +1063,15 @@ export function safeLocalStorageSetItemSync(key: string, value: string): boolean
     return true
   } catch (error) {
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      console.warn(`localStorage quota exceeded for key: ${key}`)
-      
       // Try to clean up old data
       try {
         cleanOldDatasets()
         localStorage.setItem(key, value)
-        console.log('Successfully saved after cleanup')
         return true
       } catch (retryError) {
-        console.error('Failed to save even after cleanup:', retryError)
         return false
       }
     } else {
-      console.error('Error saving to localStorage:', error)
       return false
     }
   }

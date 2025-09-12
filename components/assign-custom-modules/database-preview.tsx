@@ -436,8 +436,10 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
           duration: 5000,
         })
         
-        // Call the original onClearData callback
-        await onClearData()
+        // Only call the original onClearData callback for full clearing, not filtered clearing
+        if (!hasActiveFilters || filterConditions.length === 0) {
+          await onClearData()
+        }
       } else if (result.cancelled) {
         setClearError("Process cancelled by user")
         setDataCleared(false)
