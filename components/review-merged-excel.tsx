@@ -35,7 +35,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
   const handleClearData = async () => {
     console.log('🔍 handleClearData called in review-merged-excel')
     try {
-      const result = await clearAllData()
+      const result = await clearAllData(undefined, undefined)
       
       if (result.success) {
         console.log(`result`, result)

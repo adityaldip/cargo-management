@@ -49,7 +49,8 @@ CREATE TABLE public.customer_codes (
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(customer_id, code)
+    CONSTRAINT customer_codes_pkey PRIMARY KEY (id),
+    CONSTRAINT customer_codes_customer_id_code_key UNIQUE (customer_id, code)
 ) TABLESPACE pg_default;
 
 -- 3. Create rates table
@@ -121,6 +122,7 @@ CREATE TABLE public.cargo_data (
     invoice CHARACTER VARYING(100) NULL,
     customer_name_number TEXT NULL,
     assigned_customer UUID NULL,
+    customer_code_id UUID NULL,
     assigned_rate NUMERIC(10, 2) NULL,
     rate_currency CHARACTER VARYING(3) NULL,
     processed_at TIMESTAMP WITH TIME ZONE NULL,
@@ -130,7 +132,8 @@ CREATE TABLE public.cargo_data (
     rate_id UUID NULL,
     rate_value NUMERIC(10, 2) NULL,
     CONSTRAINT cargo_data_pkey PRIMARY KEY (id),
-    CONSTRAINT cargo_data_rate_id_fkey FOREIGN KEY (rate_id) REFERENCES rates (id) ON DELETE SET NULL
+    CONSTRAINT cargo_data_rate_id_fkey FOREIGN KEY (rate_id) REFERENCES rates (id) ON DELETE SET NULL,
+    CONSTRAINT cargo_data_customer_code_id_fkey FOREIGN KEY (customer_code_id) REFERENCES customer_codes (id) ON DELETE SET NULL
 ) TABLESPACE pg_default;
 
 -- 7. Create column_mappings table
@@ -189,6 +192,7 @@ CREATE INDEX IF NOT EXISTS idx_cargo_data_assigned_at ON public.cargo_data USING
 CREATE INDEX IF NOT EXISTS idx_cargo_data_rate_id ON public.cargo_data USING btree (rate_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_cargo_data_rate_value ON public.cargo_data USING btree (rate_value) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_cargo_data_assigned_customer ON public.cargo_data USING btree (assigned_customer) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_cargo_data_customer_code_id ON public.cargo_data USING btree (customer_code_id) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON public.invoices USING btree (customer_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices USING btree (status) TABLESPACE pg_default;
@@ -297,24 +301,35 @@ INSERT INTO public.customers (name, code, email, phone, address, contact_person,
 ('Cargo Masters International', 'CARG004', 'operations@cargomasters.com', '+49 30 1234 5678', 'Berlin, Germany', 'Hans Mueller', 'medium', 134),
 ('General Mail Services', 'GENM005', 'service@generalmail.com', '+33 1 2345 6789', 'Paris, France', 'Marie Dubois', 'low', 78);
 
+-- Insert sample customer codes
+INSERT INTO public.customer_codes (customer_id, code, accounting_label, is_active) VALUES
+((SELECT id FROM public.customers WHERE code = 'PREM001'), 'PREM001', 'Premium Express Main Code', true),
+((SELECT id FROM public.customers WHERE code = 'PREM001'), 'PREM001-EXPRESS', 'Premium Express Express Service', true),
+((SELECT id FROM public.customers WHERE code = 'NORD002'), 'NORD002', 'Nordic Post Main Code', true),
+((SELECT id FROM public.customers WHERE code = 'NORD002'), 'NORD002-PRIORITY', 'Nordic Post Priority Service', true),
+((SELECT id FROM public.customers WHERE code = 'BALT003'), 'BALT003', 'Baltic Express Main Code', true),
+((SELECT id FROM public.customers WHERE code = 'CARG004'), 'CARG004', 'Cargo Masters Main Code', true),
+((SELECT id FROM public.customers WHERE code = 'CARG004'), 'CARG004-HEAVY', 'Cargo Masters Heavy Cargo', true),
+((SELECT id FROM public.customers WHERE code = 'GENM005'), 'GENM005', 'General Mail Main Code', true);
+
 -- Insert sample rates
 INSERT INTO public.rates (name, description, rate_type, base_rate, currency, multiplier, tags, is_active) VALUES
 ('EU Standard Rate', 'Standard rate for EU destinations', 'per_kg', 4.50, 'EUR', 1.0, ARRAY['EU', 'Standard'], true),
 ('Nordic Express Premium', 'Premium rates for Nordic routes', 'per_kg', 6.75, 'EUR', 1.25, ARRAY['Nordic', 'Premium'], true),
 ('Heavy Cargo Discount', 'Discounted rates for heavy shipments', 'per_kg', 3.25, 'EUR', 0.85, ARRAY['Heavy', 'Discount'], true);
 
--- Insert sample customer rules (first 10 for brevity)
+-- Insert sample customer rules (using customer code IDs)
 INSERT INTO public.customer_rules (name, description, priority, conditions, actions, where_fields) VALUES
-('DKCPHA', 'Route rule for DKCPHA', 1, '[{"field": "orig_dest_oe", "operator": "equals", "value": "DKCPHA"}]'::jsonb, '{"assignTo": "premium-express"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('DKCPHB', 'Route rule for DKCPHB', 2, '[{"field": "orig_dest_oe", "operator": "equals", "value": "DKCPHB"}]'::jsonb, '{"assignTo": "premium-express"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('DKCPHC', 'Route rule for DKCPHC', 3, '[{"field": "orig_dest_oe", "operator": "equals", "value": "DKCPHC"}]'::jsonb, '{"assignTo": "premium-express"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('DKCPHP', 'Route rule for DKCPHP', 4, '[{"field": "orig_dest_oe", "operator": "equals", "value": "DKCPHP"}]'::jsonb, '{"assignTo": "premium-express"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('ISREKA', 'Route rule for ISREKA', 5, '[{"field": "orig_dest_oe", "operator": "equals", "value": "ISREKA"}]'::jsonb, '{"assignTo": "premium-express"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('SESTOK', 'Route rule for SESTOK', 6, '[{"field": "orig_dest_oe", "operator": "equals", "value": "SESTOK"}]'::jsonb, '{"assignTo": "nordic-post"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('USEWRZ', 'Route rule for USEWRZ', 7, '[{"field": "orig_dest_oe", "operator": "equals", "value": "USEWRZ"}]'::jsonb, '{"assignTo": "cargo-masters"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('USCHIX', 'Route rule for USCHIX', 8, '[{"field": "orig_dest_oe", "operator": "equals", "value": "USCHIX"}]'::jsonb, '{"assignTo": "cargo-masters"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('USLAXS', 'Route rule for USLAXS', 9, '[{"field": "orig_dest_oe", "operator": "equals", "value": "USLAXS"}]'::jsonb, '{"assignTo": "cargo-masters"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']),
-('SEARND', 'Route rule for SEARND', 10, '[{"field": "orig_dest_oe", "operator": "equals", "value": "SEARND"}]'::jsonb, '{"assignTo": "nordic-post"}'::jsonb, ARRAY['Orig.OE', 'Des.OE']);
+('DKCPHA', 'Route rule for DKCPHA', 1, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHA"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'PREM001') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('DKCPHB', 'Route rule for DKCPHB', 2, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHB"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'PREM001-EXPRESS') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('DKCPHC', 'Route rule for DKCPHC', 3, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHC"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'PREM001') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('DKCPHP', 'Route rule for DKCPHP', 4, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHP"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'PREM001-EXPRESS') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('ISREKA', 'Route rule for ISREKA', 5, '[{"field": "orig_oe", "operator": "equals", "value": "ISREKA"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'NORD002') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('SESTOK', 'Route rule for SESTOK', 6, '[{"field": "orig_oe", "operator": "equals", "value": "SESTOK"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'NORD002-PRIORITY') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('USEWRZ', 'Route rule for USEWRZ', 7, '[{"field": "orig_oe", "operator": "equals", "value": "USEWRZ"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'CARG004') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('USCHIX', 'Route rule for USCHIX', 8, '[{"field": "orig_oe", "operator": "equals", "value": "USCHIX"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'CARG004-HEAVY') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('USLAXS', 'Route rule for USLAXS', 9, '[{"field": "orig_oe", "operator": "equals", "value": "USLAXS"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'CARG004') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
+('SEARND', 'Route rule for SEARND', 10, '[{"field": "orig_oe", "operator": "equals", "value": "SEARND"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'BALT003') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']);
 
 -- Insert sample rate rules
 INSERT INTO public.rate_rules (name, description, priority, conditions, rate_id) VALUES

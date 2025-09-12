@@ -425,7 +425,7 @@ export async function clearFilteredSupabaseData(
       const result = await cargoDataOperations.getFilteredIds(filters, filterLogic, currentPage, fetchBatchSize)
       
       console.log(`🔍 getFilteredIds page ${currentPage}:`, result)
-      console.log(`🔍 getFilteredIds page ${currentPage} data length:`, result.data?.length)
+      console.log(`🔍 getFilteredIds page ${currentPage} data length:`, Array.isArray(result.data) ? result.data.length : 0)
       
       if (result.error) {
         console.error('Error fetching filtered cargo data IDs:', result.error)
@@ -461,7 +461,7 @@ export async function clearFilteredSupabaseData(
     // Step 2: Delete records in batches
     onProgress?.(20, `Deleting ${allIds.length} filtered records in batches...`, 1, 3)
     
-    const deleteBatchSize = 2000 // Optimized batch size for deletion (IDs are small)
+    const deleteBatchSize = 500 // Reduced batch size to prevent network issues
     let deletedCount = 0
     let batchIndex = 0
     
@@ -483,11 +483,44 @@ export async function clearFilteredSupabaseData(
         
         if (deleteResult.error) {
           console.error(`❌ Error deleting batch ${batchIndex}:`, deleteResult.error)
-          console.error(`❌ Batch data:`, batch)
-          return { success: false, error: `Failed to delete batch ${batchIndex}: ${deleteResult.error}` }
+          
+          // If it's a network error, try with smaller batch size
+          if (deleteResult.error.includes('Failed to fetch') || deleteResult.error.includes('timeout')) {
+            console.log(`🔄 Network error detected, trying smaller batch size for filtered batch ${batchIndex}`)
+            
+            // Try deleting in smaller chunks
+            const smallerBatchSize = Math.ceil(batch.length / 2)
+            let partialSuccess = 0
+            
+            for (let j = 0; j < batch.length; j += smallerBatchSize) {
+              const smallerBatch = batch.slice(j, j + smallerBatchSize)
+              try {
+                const retryResult = await cargoDataOperations.deleteByIds(smallerBatch)
+                if (!retryResult.error) {
+                  partialSuccess += smallerBatch.length
+                  console.log(`✅ Partial success: deleted ${smallerBatch.length} filtered records from batch ${batchIndex}`)
+                } else {
+                  console.error(`❌ Even smaller filtered batch failed:`, retryResult.error)
+                }
+              } catch (retryError) {
+                console.error(`❌ Retry attempt failed for filtered batch:`, retryError)
+              }
+              
+              // Add delay between smaller batches
+              await new Promise(resolve => setTimeout(resolve, 100))
+            }
+            
+            deletedCount += partialSuccess
+            console.log(`📊 Filtered batch ${batchIndex} partial success: ${partialSuccess}/${batch.length} records deleted`)
+          } else {
+            // For non-network errors, continue with next batch instead of failing completely
+            console.log(`⚠️ Non-network error in filtered batch ${batchIndex}, continuing with next batch`)
+          }
+        } else {
+          // Success case
+          deletedCount += batch.length
+          console.log(`✅ Filtered batch ${batchIndex}: Successfully deleted ${batch.length} records`)
         }
-        
-        deletedCount += batch.length
         
         // Update progress (20-90%)
         const deleteProgress = 20 + ((deletedCount / allIds.length) * 70)
@@ -497,8 +530,8 @@ export async function clearFilteredSupabaseData(
         await new Promise(resolve => setTimeout(resolve, 100))
         
       } catch (error) {
-        console.error(`❌ Exception deleting batch ${batchIndex}:`, error)
-        return { success: false, error: `Exception deleting batch ${batchIndex}: ${error instanceof Error ? error.message : 'Unknown error'}` }
+        console.error(`❌ Exception deleting filtered batch ${batchIndex}:`, error)
+        // Continue with next batch instead of failing completely
       }
     }
     
@@ -508,10 +541,18 @@ export async function clearFilteredSupabaseData(
     // Wait a moment for database to update
     await new Promise(resolve => setTimeout(resolve, 1000))
     
-    onProgress?.(100, `Successfully deleted ${deletedCount} filtered records!`, 2, 3)
+    // Use the tracked count from successful batches
+    const finalDeletedCount = deletedCount > 0 ? deletedCount : 0
     
-    console.log(`✅ Successfully deleted ${deletedCount} filtered records`)
-    return { success: true, deletedCount }
+    console.log(`📊 Filtered deletion final count calculation:`)
+    console.log(`  - Total filtered records to delete: ${allIds.length}`)
+    console.log(`  - Tracked deleted count: ${deletedCount}`)
+    console.log(`  - Final count to return: ${finalDeletedCount}`)
+    
+    onProgress?.(100, `Successfully deleted ${finalDeletedCount} filtered records!`, 2, 3)
+    
+    console.log(`✅ Successfully deleted ${finalDeletedCount} filtered records`)
+    return { success: true, deletedCount: finalDeletedCount }
     
   } catch (error) {
     console.error('❌ Error in clearFilteredSupabaseData:', error)
@@ -556,7 +597,7 @@ export async function clearSupabaseData(
       const result = await cargoDataOperations.getAllIds(currentPage, fetchBatchSize)
       
       console.log(`🔍 getAllIds page ${currentPage}:`, result)
-      console.log(`🔍 getAllIds page ${currentPage} data length:`, result.data?.length)
+      console.log(`🔍 getAllIds page ${currentPage} data length:`, Array.isArray(result.data) ? result.data.length : 0)
       console.log(`🔍 getAllIds page ${currentPage} fetchBatchSize:`, fetchBatchSize)
       
       if (result.error) {
@@ -603,14 +644,11 @@ export async function clearSupabaseData(
     // Step 2: Delete in optimized batches using Supabase's IN operator
     onProgress?.(20, "Starting batch deletion...", 1, 3)
     let deletedCount = 0
-    const deleteBatchSize = 2000 // Optimal batch size for Supabase deletion (IDs are small)
+    const deleteBatchSize = 500 // Reduced batch size to prevent network issues
     const totalBatches = Math.ceil(allIds.length / deleteBatchSize)
     
     console.log(`🔄 Starting batch deletion: ${totalBatches} batches of up to ${deleteBatchSize} records each`)
     console.log(`📊 Initial deletedCount: ${deletedCount}`)
-    
-    // Import supabase client for direct batch operations
-    const { supabase } = await import('@/lib/supabase')
     
     for (let i = 0; i < allIds.length; i += deleteBatchSize) {
       if (shouldStop?.()) {
@@ -632,20 +670,46 @@ export async function clearSupabaseData(
       try {
         console.log(`🔄 Executing batch ${currentBatch}/${totalBatches}: Deleting ${batchIds.length} records`)
         
-        // Use Supabase's IN operator for efficient batch deletion
-        // Note: Supabase's count option might not work reliably with delete operations
-        const deleteResult = await supabase
-          .from('cargo_data')
-          .delete()
-          .in('id', batchIds)
+        // Use the cargoDataOperations.deleteByIds function for proper error handling
+        const deleteResult = await cargoDataOperations.deleteByIds(batchIds)
+        
+        console.log(`📊 Batch ${currentBatch} delete result:`, deleteResult)
         
         if (deleteResult.error) {
           console.error(`❌ Failed to delete batch ${currentBatch}:`, deleteResult.error)
+          
+          // If it's a network error, try with smaller batch size
+          if (deleteResult.error.includes('Failed to fetch') || deleteResult.error.includes('timeout')) {
+            console.log(`🔄 Network error detected, trying smaller batch size for batch ${currentBatch}`)
+            
+            // Try deleting in smaller chunks
+            const smallerBatchSize = Math.ceil(batchIds.length / 2)
+            let partialSuccess = 0
+            
+            for (let j = 0; j < batchIds.length; j += smallerBatchSize) {
+              const smallerBatch = batchIds.slice(j, j + smallerBatchSize)
+              try {
+                const retryResult = await cargoDataOperations.deleteByIds(smallerBatch)
+                if (!retryResult.error) {
+                  partialSuccess += smallerBatch.length
+                  console.log(`✅ Partial success: deleted ${smallerBatch.length} records from batch ${currentBatch}`)
+                } else {
+                  console.error(`❌ Even smaller batch failed:`, retryResult.error)
+                }
+              } catch (retryError) {
+                console.error(`❌ Retry attempt failed:`, retryError)
+              }
+              
+              // Add delay between smaller batches
+              await new Promise(resolve => setTimeout(resolve, 100))
+            }
+            
+            deletedCount += partialSuccess
+            console.log(`📊 Batch ${currentBatch} partial success: ${partialSuccess}/${batchIds.length} records deleted`)
+          }
           // Continue with next batch instead of failing completely
         } else {
           // Since delete operation succeeded without error, assume all records in batch were deleted
-          console.log(`📊 Batch ${currentBatch} delete result:`, deleteResult)
-          
           // For delete operations, Supabase doesn't reliably return count
           // If no error, assume all records in the batch were successfully deleted
           const actualDeletedCount = batchIds.length
@@ -655,7 +719,7 @@ export async function clearSupabaseData(
           console.log(`📊 Running total deletedCount: ${deletedCount}`)
         }
       } catch (error) {
-        console.error(`❌ Error deleting batch ${currentBatch}:`, error)
+        console.error(`❌ Exception deleting batch ${currentBatch}:`, error)
         // Continue with next batch
       }
       

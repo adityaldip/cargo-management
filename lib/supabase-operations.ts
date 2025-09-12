@@ -430,18 +430,134 @@ export const cargoDataOperations = {
     const offset = (page - 1) * limit
     
     try {
-      // For now, let's use a simpler approach - get all IDs and let the filtering happen at the API level
-      // This avoids the complexity of the /api/cargo-data endpoint
       console.log('🔍 getFilteredIds called with:', { filters, filterLogic, page, limit })
       
-      // Use the same approach as getAllIds but with pagination
-      return safeSupabaseOperation(() =>
-        supabase
-          .from('cargo_data')
-          .select('id')
-          .order('created_at', { ascending: false })
-          .range(offset, offset + limit - 1)
-      )
+      if (!filters) {
+        // If no filters, just get all IDs
+        return safeSupabaseOperation(() =>
+          supabase
+            .from('cargo_data')
+            .select('id')
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1)
+        )
+      }
+      
+      // Parse and apply filters
+      const filterConditions = JSON.parse(filters)
+      console.log('🔍 Applying filters to getFilteredIds:', filterConditions, 'with logic:', filterLogic)
+      
+      let query = supabase
+        .from('cargo_data')
+        .select('id')
+        .order('created_at', { ascending: false })
+      
+      // Apply filter conditions based on logic
+      if (filterLogic === 'OR') {
+        // For OR logic, build OR conditions
+        const orConditions: string[] = []
+        
+        filterConditions.forEach((condition: any) => {
+          const { field, operator, value } = condition
+          
+          // Map frontend field names to database column names
+          const dbField = field === 'assigned_customer' ? 'assigned_customer' :
+                         field === 'assigned_rate' ? 'assigned_rate' :
+                         field === 'total_kg' ? 'total_kg' :
+                         field === 'inb_flight_date' ? 'inb_flight_date' :
+                         field === 'outb_flight_date' ? 'outb_flight_date' :
+                         field === 'rec_id' ? 'rec_id' :
+                         field === 'orig_oe' ? 'orig_oe' :
+                         field === 'dest_oe' ? 'dest_oe' :
+                         field === 'mail_cat' ? 'mail_cat' :
+                         field === 'mail_class' ? 'mail_class' :
+                         field === 'invoice' ? 'invoice' :
+                         field
+          
+          switch (operator) {
+            case 'equals':
+              orConditions.push(`${dbField}.eq.${value}`)
+              break
+            case 'contains':
+              orConditions.push(`${dbField}.ilike.%${value}%`)
+              break
+            case 'starts_with':
+              orConditions.push(`${dbField}.ilike.${value}%`)
+              break
+            case 'ends_with':
+              orConditions.push(`${dbField}.ilike.%${value}`)
+              break
+            case 'greater_than':
+              orConditions.push(`${dbField}.gt.${parseFloat(value)}`)
+              break
+            case 'less_than':
+              orConditions.push(`${dbField}.lt.${parseFloat(value)}`)
+              break
+            case 'not_empty':
+              orConditions.push(`and(${dbField}.not.is.null,${dbField}.neq.)`)
+              break
+            case 'is_empty':
+              orConditions.push(`or(${dbField}.is.null,${dbField}.eq.)`)
+              break
+          }
+        })
+        
+        if (orConditions.length > 0) {
+          query = query.or(orConditions.join(','))
+        }
+      } else {
+        // For AND logic (default), apply filters sequentially
+        filterConditions.forEach((condition: any) => {
+          const { field, operator, value } = condition
+          
+          // Map frontend field names to database column names
+          const dbField = field === 'assigned_customer' ? 'assigned_customer' :
+                         field === 'assigned_rate' ? 'assigned_rate' :
+                         field === 'total_kg' ? 'total_kg' :
+                         field === 'inb_flight_date' ? 'inb_flight_date' :
+                         field === 'outb_flight_date' ? 'outb_flight_date' :
+                         field === 'rec_id' ? 'rec_id' :
+                         field === 'orig_oe' ? 'orig_oe' :
+                         field === 'dest_oe' ? 'dest_oe' :
+                         field === 'mail_cat' ? 'mail_cat' :
+                         field === 'mail_class' ? 'mail_class' :
+                         field === 'invoice' ? 'invoice' :
+                         field
+          
+          switch (operator) {
+            case 'equals':
+              query = query.eq(dbField, value)
+              break
+            case 'contains':
+              query = query.ilike(dbField, `%${value}%`)
+              break
+            case 'starts_with':
+              query = query.ilike(dbField, `${value}%`)
+              break
+            case 'ends_with':
+              query = query.ilike(dbField, `%${value}`)
+              break
+            case 'greater_than':
+              query = query.gt(dbField, parseFloat(value))
+              break
+            case 'less_than':
+              query = query.lt(dbField, parseFloat(value))
+              break
+            case 'not_empty':
+              query = query.not(dbField, 'is', null).neq(dbField, '')
+              break
+            case 'is_empty':
+              query = query.or(`${dbField}.is.null,${dbField}.eq.`)
+              break
+          }
+        })
+      }
+      
+      // Apply pagination
+      query = query.range(offset, offset + limit - 1)
+      
+      return safeSupabaseOperation(() => query)
+      
     } catch (error) {
       console.error('Error fetching filtered cargo data IDs:', error)
       return {

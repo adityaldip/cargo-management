@@ -89,13 +89,13 @@ export function RulesConfiguration() {
   
   // State for editing rule basic info
   const [editingRuleName, setEditingRuleName] = useState("")
-  const [editingRuleAssignTo, setEditingRuleAssignTo] = useState("")
+  const [editingRuleAssignTo, setEditingRuleAssignTo] = useState("") // This will now store customer_code ID
   const [isSaving, setIsSaving] = useState(false)
   const [isReordering, setIsReordering] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [customers, setCustomers] = useState<{id: string, name: string, code: string, codes: {id: string, code: string, is_active: boolean}[]}[]>([])
   const [loadingCustomers, setLoadingCustomers] = useState(false)
-  const [openCustomerSelect, setOpenCustomerSelect] = useState(false)
+  const [openCustomerCodeSelect, setOpenCustomerCodeSelect] = useState(false)
   const [openFieldSelects, setOpenFieldSelects] = useState<Record<number, boolean>>({})
   const [openOperatorSelects, setOpenOperatorSelects] = useState<Record<number, boolean>>({})
   const [isExecuting, setIsExecuting] = useState(false)
@@ -112,6 +112,7 @@ export function RulesConfiguration() {
   const [showDeleteAlert, setShowDeleteAlert] = useState(false)
   const [ruleToDelete, setRuleToDelete] = useState<CustomerRuleExtended | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null)
   
   // Available field options from cargo_data columns (matching review-merged-excel.tsx)
   const cargoDataFields = [
@@ -321,6 +322,7 @@ export function RulesConfiguration() {
         
         // Initialize editing state with current rule data
         setEditingRuleName(rule.name)
+        // The assignTo field now stores customer_code ID, so we can use it directly
         setEditingRuleAssignTo(rule.actions.assignTo || "")
         
         // Initialize editing state with current rule conditions
@@ -459,7 +461,7 @@ export function RulesConfiguration() {
       const updateData = {
         name: editingRuleName.trim(),
         conditions: editingRuleConditions.filter(cond => cond.value.trim()),
-        actions: { assignTo: editingRuleAssignTo },
+        actions: { assignTo: editingRuleAssignTo }, // This now stores customer_code ID
         where_fields: (currentRule as any).where || []
       }
 
@@ -550,6 +552,66 @@ export function RulesConfiguration() {
   const cancelDeleteRule = () => {
     setRuleToDelete(null)
     setShowDeleteAlert(false)
+  }
+
+  // Custom toggle handler with loading state
+  const handleToggleRule = async (ruleId: string) => {
+    if (togglingRuleId || isExecutingRules) return // Prevent multiple toggles
+    
+    setTogglingRuleId(ruleId)
+    try {
+      // Get current rule state before toggle
+      const currentRule = rules.find(r => r.id === ruleId)
+      if (!currentRule) {
+        throw new Error('Rule not found')
+      }
+      
+      const newActiveState = !(currentRule as any).is_active
+      
+      // Optimistically update the UI first
+      const updatedRules = rules.map((rule: any) => 
+        rule.id === ruleId 
+          ? { ...rule, is_active: newActiveState }
+          : rule
+      )
+      setRules(updatedRules as any)
+      
+      // Then call the API
+      await toggleRule(ruleId)
+      
+      // Force a refresh to ensure data consistency
+      setTimeout(() => {
+        refetch()
+      }, 100)
+      
+      // Show success message
+      toast({
+        title: "Rule Updated",
+        description: `"${currentRule.name}" has been ${newActiveState ? 'activated' : 'deactivated'}.`,
+        duration: 2000,
+      })
+    } catch (error) {
+      console.error('Error toggling rule:', error)
+      
+      // Revert the optimistic update on error
+      const currentRule = rules.find(r => r.id === ruleId)
+      if (currentRule) {
+        const revertedRules = rules.map((rule: any) => 
+          rule.id === ruleId 
+            ? { ...rule, is_active: (currentRule as any).is_active }
+            : rule
+        )
+        setRules(revertedRules as any)
+      }
+      
+      toast({
+        title: "Toggle Failed",
+        description: "Failed to update rule status. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setTogglingRuleId(null)
+    }
   }
 
   // Execute rules to assign customers
@@ -874,9 +936,10 @@ export function RulesConfiguration() {
                     (rule as any).is_active ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
                     draggedRule === rule.id && "opacity-50",
                     (expandedRule === rule.id || expandingRuleId === rule.id) && "bg-gray-50",
-                    isReordering && "pointer-events-none opacity-75"
+                    isReordering && "pointer-events-none opacity-75",
+                    togglingRuleId === rule.id && "bg-blue-50 border-blue-200"
                   )}
-                  onClick={() => !isExecutingRules && handleEditRule(rule as any)}
+                  onClick={() => !isExecutingRules && !togglingRuleId && handleEditRule(rule as any)}
                 >
                   {/* Drag Handle */}
                   <div className="cursor-grab hover:cursor-grabbing">
@@ -889,13 +952,20 @@ export function RulesConfiguration() {
                   </div>
 
                   {/* Toggle Switch */}
-                  <Switch
-                    checked={(rule as any).is_active}
-                    onCheckedChange={() => toggleRule(rule.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    disabled={isExecutingRules}
-                    className="scale-75"
-                  />
+                  <div className="relative">
+                    <Switch
+                      checked={(rule as any).is_active}
+                      onCheckedChange={() => handleToggleRule(rule.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={isExecutingRules || togglingRuleId === rule.id}
+                      className="scale-75"
+                    />
+                    {togglingRuleId === rule.id && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                      </div>
+                    )}
+                  </div>
                   
                   {/* Rule Info */}
                   <div className="flex-1 min-w-0">
@@ -907,7 +977,15 @@ export function RulesConfiguration() {
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
-                      <h3 className="font-medium text-black text-sm">{rule.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-black text-sm">{rule.name}</h3>
+                        {togglingRuleId === rule.id && (
+                          <div className="flex items-center gap-1 text-xs text-blue-600">
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                            <span>Updating...</span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -1100,71 +1178,68 @@ export function RulesConfiguration() {
                             </div>
                           ))}
 
-                          {/* Customer Assignment Row */}
+                          {/* Customer Code Assignment Row */}
                           <div className="flex flex-wrap items-center gap-2 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
-                            <span className="text-xs font-medium text-gray-700 w-12 flex-shrink-0">Customer</span>
-                            <Popover open={openCustomerSelect} onOpenChange={setOpenCustomerSelect}>
+                            <span className="text-xs font-medium text-gray-700 w-12 flex-shrink-0">Assign To</span>
+                            <Popover open={openCustomerCodeSelect} onOpenChange={setOpenCustomerCodeSelect}>
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
                                   role="combobox"
-                                  aria-expanded={openCustomerSelect}
+                                  aria-expanded={openCustomerCodeSelect}
                                   className="h-7 text-xs border-gray-200 flex-1 min-w-32 max-w-48 justify-between font-normal"
                                   disabled={loadingCustomers}
                                 >
                                   <span className="truncate">
                                     {editingRuleAssignTo
                                       ? (() => {
-                                          const selectedCustomer = memoizedCustomers.find((customer) => customer.id === editingRuleAssignTo)
-                                          if (selectedCustomer) {
-                                            const activeCodes = selectedCustomer.codes.filter(code => code.is_active)
-                                            if (activeCodes.length > 0) {
-                                              return `${selectedCustomer.name} (${activeCodes.map(c => c.code).join(', ')})`
+                                          // Find the selected customer code
+                                          for (const customer of memoizedCustomers) {
+                                            const selectedCode = customer.codes.find(code => code.id === editingRuleAssignTo)
+                                            if (selectedCode) {
+                                              return `${selectedCode.code} (${customer.name})`
                                             }
-                                            return selectedCustomer.name
                                           }
-                                          return "Select customer..."
+                                          return "Select customer code..."
                                         })()
                                       : loadingCustomers 
-                                        ? "Loading customers..." 
-                                        : "Select customer..."}
+                                        ? "Loading customer codes..." 
+                                        : "Select customer code..."}
                                   </span>
                                   <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-64 p-0">
+                              <PopoverContent className="w-80 p-0">
                                 <Command>
-                                  <CommandInput placeholder="Search customer..." className="h-8 text-xs" />
+                                  <CommandInput placeholder="Search customer code..." className="h-8 text-xs" />
                                   <CommandEmpty>
-                                    {loadingCustomers ? "Loading..." : "No customer found."}
+                                    {loadingCustomers ? "Loading..." : "No customer code found."}
                                   </CommandEmpty>
                                   <CommandGroup className="max-h-48 overflow-auto">
                                     {memoizedCustomers.map((customer) => {
                                       const activeCodes = customer.codes.filter(code => code.is_active)
-                                      return (
+                                      return activeCodes.map((code) => (
                                         <CommandItem
-                                          key={customer.id}
-                                          value={`${customer.name} ${activeCodes.map(c => c.code).join(' ')}`}
+                                          key={code.id}
+                                          value={`${code.code} ${customer.name}`}
                                           onSelect={() => {
-                                            setEditingRuleAssignTo(customer.id)
-                                            setOpenCustomerSelect(false)
+                                            setEditingRuleAssignTo(code.id)
+                                            setOpenCustomerCodeSelect(false)
                                           }}
                                           className="text-xs"
                                         >
                                           <Check
                                             className={cn(
                                               "mr-2 h-3 w-3",
-                                              editingRuleAssignTo === customer.id ? "opacity-100" : "opacity-0"
+                                              editingRuleAssignTo === code.id ? "opacity-100" : "opacity-0"
                                             )}
                                           />
                                           <div className="flex flex-col">
-                                            <span className="font-medium">{customer.name}</span>
-                                            <span className="text-gray-500">
-                                              ({activeCodes.length > 0 ? activeCodes.map(c => c.code).join(', ') : 'No active codes'})
-                                            </span>
+                                            <span className="font-medium">{code.code}</span>
+                                            <span className="text-gray-500">{customer.name}</span>
                                           </div>
                                         </CommandItem>
-                                      )
+                                      ))
                                     })}
                                   </CommandGroup>
                                 </Command>

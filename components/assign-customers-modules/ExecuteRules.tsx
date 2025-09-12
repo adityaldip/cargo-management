@@ -260,38 +260,65 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         throw new Error(`Failed to fetch cargo data: ${cargoError.message}`)
       }
 
-      // Fetch customer data to resolve customer names
+      // Fetch customer data to resolve customer names and codes
       let enrichedCargo: any[] = cargo || []
       if (cargo && cargo.length > 0) {
-        // Get unique customer IDs from the cargo data
+        // Get unique customer IDs and customer code IDs from the cargo data
         const customerIds = [...new Set(cargo.map((record: any) => record.assigned_customer).filter(Boolean))]
+        const customerCodeIds = [...new Set(cargo.map((record: any) => record.customer_code_id).filter(Boolean))]
         
         console.log('🔍 Customer IDs to lookup:', customerIds)
+        console.log('🔍 Customer Code IDs to lookup:', customerCodeIds)
         
-        if (customerIds.length > 0) {
+        if (customerIds.length > 0 || customerCodeIds.length > 0) {
           try {
-            // Since assigned_customer is now UUID, fetch customers by ID only
-            console.log('🔍 Customer UUIDs to lookup:', customerIds)
-            
-            const { data: customersData, error: customersError } = await supabase
-              .from('customers')
-              .select('id, name, code')
-              .in('id', customerIds)
-            
-            if (customersError) {
-              console.error('Error fetching customers by UUID:', customersError)
-            } else {
-              console.log('✅ Found customers by UUID:', customersData?.length || 0)
+            // Fetch customers by ID
+            let customersData: any[] = []
+            if (customerIds.length > 0) {
+              console.log('🔍 Customer UUIDs to lookup:', customerIds)
               
-              // Merge customer data with cargo data
-              enrichedCargo = cargo.map((record: any) => {
-                const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
-                return {
-                  ...record,
-                  customers: customer || null
-                }
-              })
+              const { data: customers, error: customersError } = await supabase
+                .from('customers')
+                .select('id, name, code')
+                .in('id', customerIds)
+              
+              if (customersError) {
+                console.error('Error fetching customers by UUID:', customersError)
+              } else {
+                customersData = customers || []
+                console.log('✅ Found customers by UUID:', customersData.length)
+              }
             }
+
+            // Fetch customer codes by ID
+            let customerCodesData: any[] = []
+            if (customerCodeIds.length > 0) {
+              console.log('🔍 Customer Code UUIDs to lookup:', customerCodeIds)
+              
+              const { data: customerCodes, error: customerCodesError } = await supabase
+                .from('customer_codes')
+                .select('id, code, customer_id, customers!inner(id, name)')
+                .in('id', customerCodeIds)
+              
+              if (customerCodesError) {
+                console.error('Error fetching customer codes by UUID:', customerCodesError)
+              } else {
+                customerCodesData = customerCodes || []
+                console.log('✅ Found customer codes by UUID:', customerCodesData.length)
+              }
+            }
+            
+            // Merge customer and customer code data with cargo data
+            enrichedCargo = cargo.map((record: any) => {
+              const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+              const customerCode = customerCodesData?.find((cc: any) => cc.id === record.customer_code_id)
+              
+              return {
+                ...record,
+                customers: customer || null,
+                customer_codes: customerCode || null
+              }
+            })
             
           } catch (customerFetchError) {
             console.error('Error in customer fetch operation:', customerFetchError)
@@ -463,38 +490,65 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
       setExportProgress(100)
       console.log(`✅ All batches completed! Total records fetched: ${allData.length}`)
 
-      // Fetch customer data to resolve customer names for all records
+      // Fetch customer data to resolve customer names and codes for all records
       let enrichedData: any[] = allData
       if (allData.length > 0) {
-        // Get unique customer IDs from the cargo data
+        // Get unique customer IDs and customer code IDs from the cargo data
         const customerIds = [...new Set(allData.map((record: any) => record.assigned_customer).filter(Boolean))]
+        const customerCodeIds = [...new Set(allData.map((record: any) => record.customer_code_id).filter(Boolean))]
         
         console.log('🔍 Export - Customer IDs to lookup:', customerIds)
+        console.log('🔍 Export - Customer Code IDs to lookup:', customerCodeIds)
         
-        if (customerIds.length > 0) {
+        if (customerIds.length > 0 || customerCodeIds.length > 0) {
           try {
-            // Since assigned_customer is now UUID, fetch customers by ID only
-            console.log('🔍 Export - Customer UUIDs to lookup:', customerIds)
-            
-            const { data: customersData, error: customersError } = await supabase
-              .from('customers')
-              .select('id, name, code')
-              .in('id', customerIds)
-            
-            if (customersError) {
-              console.error('Error fetching customers by UUID for export:', customersError)
-            } else {
-              console.log('✅ Export - Found customers by UUID:', customersData?.length || 0)
+            // Fetch customers by ID
+            let customersData: any[] = []
+            if (customerIds.length > 0) {
+              console.log('🔍 Export - Customer UUIDs to lookup:', customerIds)
               
-              // Merge customer data with cargo data
-              enrichedData = allData.map((record: any) => {
-                const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
-                return {
-                  ...record,
-                  customers: customer || null
-                }
-              })
+              const { data: customers, error: customersError } = await supabase
+                .from('customers')
+                .select('id, name, code')
+                .in('id', customerIds)
+              
+              if (customersError) {
+                console.error('Error fetching customers by UUID for export:', customersError)
+              } else {
+                customersData = customers || []
+                console.log('✅ Export - Found customers by UUID:', customersData.length)
+              }
             }
+
+            // Fetch customer codes by ID
+            let customerCodesData: any[] = []
+            if (customerCodeIds.length > 0) {
+              console.log('🔍 Export - Customer Code UUIDs to lookup:', customerCodeIds)
+              
+              const { data: customerCodes, error: customerCodesError } = await supabase
+                .from('customer_codes')
+                .select('id, code, customer_id, customers!inner(id, name)')
+                .in('id', customerCodeIds)
+              
+              if (customerCodesError) {
+                console.error('Error fetching customer codes by UUID for export:', customerCodesError)
+              } else {
+                customerCodesData = customerCodes || []
+                console.log('✅ Export - Found customer codes by UUID:', customerCodesData.length)
+              }
+            }
+            
+            // Merge customer and customer code data with cargo data
+            enrichedData = allData.map((record: any) => {
+              const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+              const customerCode = customerCodesData?.find((cc: any) => cc.id === record.customer_code_id)
+              
+              return {
+                ...record,
+                customers: customer || null,
+                customer_codes: customerCode || null
+              }
+            })
             
           } catch (customerFetchError) {
             console.error('Error in customer fetch operation for export:', customerFetchError)
@@ -559,6 +613,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
       'Total Weight (kg)',
       'Invoice',
       'Assigned Customer',
+      'Customer Code',
       'Assigned At'
     ]
     csv += headers.join(",") + "\n"
@@ -580,6 +635,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         record.total_kg || '0.0',
         record.invoice || '',
         record.customers?.name || (record.assigned_customer ? `Customer ID: ${record.assigned_customer}` : ''),
+        record.customer_codes?.code || '',
         record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : ''
       ]
       csv += row.map(field => `"${field}"`).join(",") + "\n"
@@ -832,6 +888,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   <TableHead className="border text-right">Total kg</TableHead>
                   <TableHead className="border">Invoice</TableHead>
                     <TableHead className="border bg-yellow-200">Assigned Customer</TableHead>
+                    <TableHead className="border bg-yellow-200">Customer Code</TableHead>
                     <TableHead className="border bg-yellow-200">Assigned At</TableHead>
                 </TableRow>
               </TableHeader>
@@ -853,6 +910,9 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                       <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
                         {record.customers?.name || (record.assigned_customer ? `Customer ID: ${record.assigned_customer}` : 'Unassigned')}
+                      </TableCell>
+                      <TableCell className="border text-xs bg-yellow-200">
+                        {(record as any).customer_codes?.code || 'N/A'}
                       </TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
                         {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
@@ -945,6 +1005,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                     <TableHead>Mail Cat.</TableHead>
                     <TableHead>Weight (kg)</TableHead>
                     <TableHead>Assigned Customer</TableHead>
+                    <TableHead>Customer Code</TableHead>
                     <TableHead>Assigned At</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -978,6 +1039,9 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate">
                           {row.customers?.name || (row.assigned_customer ? `Customer ID: ${row.assigned_customer}` : 'Unassigned')}
+                        </TableCell>
+                        <TableCell>
+                          {(row as any).customer_codes?.code || 'N/A'}
                         </TableCell>
                         <TableCell>
                           {row.assigned_at ? new Date(row.assigned_at).toLocaleDateString() : "N/A"}

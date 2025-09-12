@@ -16,12 +16,22 @@ export interface CargoDataRecord {
   total_kg?: string | number
   invoice?: string
   assigned_customer?: string
+  customer_code_id?: string
   assigned_at?: string
   created_at?: string
   customers?: {
     id: string
     name: string
     code: string
+  }
+  customer_codes?: {
+    id: string
+    code: string
+    customer_id: string
+    customers: {
+      id: string
+      name: string
+    }
   }
 }
 

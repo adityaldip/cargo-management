@@ -40,6 +40,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Validate that all rules have valid assignTo values
+    const rulesWithoutAssignment = rules.filter((rule: any) => !rule.actions?.assignTo)
+    if (rulesWithoutAssignment.length > 0) {
+      console.warn(`⚠️ Found ${rulesWithoutAssignment.length} rules without customer assignments:`, rulesWithoutAssignment.map((r: any) => r.name))
+    }
     console.log('Getting cargo data...')
     console.log('Processing mode: ALL DATA')
     // Get all cargo data - always process all data
@@ -76,20 +82,65 @@ export async function POST(request: NextRequest) {
     const cargoData = allCargoData
     console.log("Total cargo data fetched:", cargoData.length)    
     
-    console.log("Getting customers data...")
-    // Also get customers to resolve customer names to IDs
-    const { data: customers, error: customersError } = await supabaseAdmin
-      .from('customers')
-      .select('id, name')
+    console.log("Getting customer codes data...")
+    // Get customer codes to resolve customer code IDs to customer IDs
+    const { data: customerCodes, error: customerCodesError } = await supabaseAdmin
+      .from('customer_codes')
+      .select(`
+        id,
+        code,
+        customer_id,
+        customers!inner(id, name)
+      `)
       .eq('is_active', true)
 
-    if (customersError) {
-      console.error('Error fetching customers:', customersError)
+    if (customerCodesError) {
+      console.error('Error fetching customer codes:', customerCodesError)
       return NextResponse.json(
-        { error: 'Failed to fetch customers', details: customersError.message },
+        { error: 'Failed to fetch customer codes', details: customerCodesError.message },
         { status: 500 }
       )
     }
+
+    console.log(`Loaded ${customerCodes?.length || 0} customer codes`)
+    
+    // Validate that we have customer codes available
+    if (!customerCodes || customerCodes.length === 0) {
+      console.warn('No active customer codes found in database')
+    }
+
+    // Filter out rules with invalid customer code assignments (skip them instead of failing)
+    const customerCodeIds = customerCodes?.map((cc: any) => cc.id) || []
+    const validRules = rules.filter((rule: any) => {
+      const assignTo = rule.actions?.assignTo
+      if (!assignTo) {
+        console.warn(`⚠️ Skipping rule "${rule.name}" - no customer assignment configured`)
+        return false
+      }
+      if (!customerCodeIds.includes(assignTo)) {
+        console.warn(`⚠️ Skipping rule "${rule.name}" - invalid customer code assignment (${assignTo})`)
+        return false
+      }
+      return true
+    })
+    
+    const invalidRules = rules.filter((rule: any) => {
+      const assignTo = rule.actions?.assignTo
+      return !assignTo || !customerCodeIds.includes(assignTo)
+    })
+    
+    if (invalidRules.length > 0) {
+      console.warn(`⚠️ Skipping ${invalidRules.length} rules with invalid customer code assignments:`, invalidRules.map((r: any) => r.name))
+    }
+    
+    if (validRules.length === 0) {
+      return NextResponse.json(
+        { error: 'No valid rules found with proper customer code assignments' },
+        { status: 400 }
+      )
+    }
+    
+    console.log(`✅ Processing ${validRules.length} valid rules (skipped ${invalidRules.length} invalid rules)`)
 
 
     if (!cargoData || cargoData.length === 0) {
@@ -100,6 +151,13 @@ export async function POST(request: NextRequest) {
           totalProcessed: 0,
           totalAssigned: 0,
           totalSkipped: 0,
+          validRulesProcessed: validRules.length,
+          invalidRulesSkipped: invalidRules.length,
+          skippedRules: invalidRules.map((rule: any) => ({
+            name: rule.name,
+            reason: !rule.actions?.assignTo ? 'No customer assignment configured' : 'Invalid customer code assignment',
+            assignTo: rule.actions?.assignTo || null
+          })),
           ruleResults: []
         }
       })
@@ -128,8 +186,13 @@ export async function POST(request: NextRequest) {
       })))
     }
     
-    // Debug: Log available customers
-    console.log(`Available customers:`, customers?.map((c: any) => ({ id: c.id, name: c.name })))
+    // Debug: Log available customer codes
+    console.log(`Available customer codes:`, customerCodes?.map((cc: any) => ({ 
+      id: cc.id, 
+      code: cc.code, 
+      customer_id: cc.customer_id,
+      customer_name: cc.customers?.name 
+    })))
 
     const results = {
       totalProcessed: cargoData.length,
@@ -162,8 +225,8 @@ export async function POST(request: NextRequest) {
       actions: r.actions 
     })))
 
-    // Ensure rules are sorted by priority (additional safeguard)
-    const sortedRules = [...rules].sort((a: any, b: any) => a.priority - b.priority)
+    // Ensure valid rules are sorted by priority (additional safeguard)
+    const sortedRules = [...validRules].sort((a: any, b: any) => a.priority - b.priority)
     console.log(`Rules sorted by priority:`, sortedRules.map((r: any) => ({ 
       name: r.name, 
       priority: r.priority 
@@ -228,35 +291,49 @@ export async function POST(request: NextRequest) {
         if (matches) {
           console.log(`✅ MATCH FOUND! Rule ${(rule as any).name} matched cargo ${(cargo as any).rec_id} (des_no: ${(cargo as any).des_no})`)
           
-          // Resolve customer name to ID if needed
+          // Resolve customer code ID to customer ID
           let assignedCustomerId = (rule as any).actions.assignTo
+          let customerCodeInfo = null
           
-          // If assignTo is a customer name, find the corresponding ID
-          if (customers && customers.length > 0) {
-            const customer = customers.find((c: any) => c.name === (rule as any).actions.assignTo)
-            if (customer) {
-              assignedCustomerId = (customer as any).id
-              console.log(`Resolved customer name "${(rule as any).actions.assignTo}" to ID: ${assignedCustomerId}`)
+          // If assignTo is a customer code ID, find the corresponding customer ID
+          if (customerCodes && customerCodes.length > 0) {
+            const customerCode = customerCodes.find((cc: any) => cc.id === (rule as any).actions.assignTo)
+            if (customerCode) {
+              assignedCustomerId = (customerCode as any).customer_id
+              customerCodeInfo = {
+                code: (customerCode as any).code,
+                customerName: (customerCode as any).customers?.name || 'Unknown Customer'
+              }
+              console.log(`✅ Resolved customer code ID "${(rule as any).actions.assignTo}" (${(customerCode as any).code}) to customer ID: ${assignedCustomerId} (${(customerCode as any).customers?.name})`)
             } else {
-              // If not found by name, assume it's already an ID
-              console.log(`Customer "${(rule as any).actions.assignTo}" not found, using as ID: ${assignedCustomerId}`)
+              // If not found by customer code ID, assume it's already a customer ID (backward compatibility)
+              console.warn(`⚠️ Customer code ID "${(rule as any).actions.assignTo}" not found in active customer codes, using as customer ID: ${assignedCustomerId}`)
             }
+          } else {
+            console.warn(`⚠️ No customer codes available, using assignTo value as customer ID: ${assignedCustomerId}`)
           }
 
           ruleResult.matches++
           ruleResult.assignments.push({
             cargoId: (cargo as any).id,
             recId: (cargo as any).rec_id,
-            assignedCustomer: assignedCustomerId
-          })
+            assignedCustomer: assignedCustomerId,
+            customerCode: customerCodeInfo?.code || null,
+            customerName: customerCodeInfo?.customerName || null
+          } as any)
 
           assignments.push({
             id: (cargo as any).id,
             assigned_customer: assignedCustomerId,
+            customer_code_id: (rule as any).actions.assignTo, // Store the original customer code ID
             assigned_at: new Date().toISOString()
-          })
+          } as any)
           
-          console.log(`📝 Assignment created: cargo ${(cargo as any).rec_id} → customer ${assignedCustomerId}`)
+          if (customerCodeInfo) {
+            console.log(`📝 Assignment created: cargo ${(cargo as any).rec_id} → customer code ${customerCodeInfo.code} (${customerCodeInfo.customerName}) → customer ID ${assignedCustomerId}`)
+          } else {
+            console.log(`📝 Assignment created: cargo ${(cargo as any).rec_id} → customer ID ${assignedCustomerId}`)
+          }
         }
       }
 
@@ -272,10 +349,38 @@ export async function POST(request: NextRequest) {
     console.log(`Total cargo records processed: ${results.totalProcessed}`)
     console.log(`Total assignments made: ${results.totalAssigned}`)
     console.log(`Total skipped: ${results.totalSkipped}`)
+    console.log(`Customer codes available: ${customerCodes?.length || 0}`)
+    console.log(`Valid rules processed: ${validRules.length}`)
+    console.log(`Invalid rules skipped: ${invalidRules.length}`)
     console.log(`Rules executed in priority order:`)
     results.ruleResults.forEach((result, index) => {
       console.log(`  ${index + 1}. ${result.ruleName}: ${result.matches} assignments`)
     })
+    
+    if (invalidRules.length > 0) {
+      console.log(`\n⚠️ Skipped Rules (Invalid Customer Code Assignments):`)
+      invalidRules.forEach((rule: any, index: number) => {
+        console.log(`  ${index + 1}. ${rule.name}: ${rule.actions?.assignTo || 'No assignment'}`)
+      })
+    }
+    
+    // Log customer code usage summary
+    const customerCodeUsage = new Map()
+    results.ruleResults.forEach((result: any) => {
+      result.assignments.forEach((assignment: any) => {
+        if (assignment.customerCode) {
+          const key = `${assignment.customerCode} (${assignment.customerName})`
+          customerCodeUsage.set(key, (customerCodeUsage.get(key) || 0) + 1)
+        }
+      })
+    })
+    
+    if (customerCodeUsage.size > 0) {
+      console.log(`\n📋 Customer Code Assignment Summary:`)
+      customerCodeUsage.forEach((count, customerCode) => {
+        console.log(`  ${customerCode}: ${count} assignments`)
+      })
+    }
 
     // If not a dry run, update the database
     if (!dryRun && assignments.length > 0) {
@@ -292,11 +397,12 @@ export async function POST(request: NextRequest) {
         console.log(`Processing batch of ${batch.length} records...`)
         
         // Use Promise.all for concurrent updates within each batch
-        const updatePromises = batch.map(assignment => 
-          supabaseAdmin
+        const updatePromises = batch.map((assignment: any) => 
+          (supabaseAdmin as any)
             .from('cargo_data')
             .update({
               assigned_customer: assignment.assigned_customer,
+              customer_code_id: assignment.customer_code_id,
               assigned_at: assignment.assigned_at
             })
             .eq('id', assignment.id)
@@ -343,7 +449,16 @@ export async function POST(request: NextRequest) {
       message: dryRun 
         ? `Dry run completed. Would assign ${results.totalAssigned} records.`
         : `Successfully assigned ${results.totalAssigned} records.`,
-      results
+      results: {
+        ...results,
+        validRulesProcessed: validRules.length,
+        invalidRulesSkipped: invalidRules.length,
+        skippedRules: invalidRules.map((rule: any) => ({
+          name: rule.name,
+          reason: !rule.actions?.assignTo ? 'No customer assignment configured' : 'Invalid customer code assignment',
+          assignTo: rule.actions?.assignTo || null
+        }))
+      }
     })
 
   } catch (error) {

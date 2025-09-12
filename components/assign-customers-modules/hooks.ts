@@ -321,22 +321,40 @@ export function useCustomerRules() {
 
   const toggleRule = async (ruleId: string) => {
     const rule = rules.find(r => r.id === ruleId)
-    if (!rule) return
+    if (!rule) {
+      console.error('Rule not found for toggle:', ruleId)
+      return
+    }
 
     try {
+      console.log('Toggling rule:', ruleId, 'from', rule.is_active, 'to', !rule.is_active)
       const { data: updatedRule, error } = await rulesAPI.toggleActive(ruleId, !rule.is_active)
+      
       if (error) {
+        console.error('API error:', error)
         setError(`Failed to update rule: ${error}`)
-        return
+        throw new Error(error)
       }
       
+      console.log('API response:', updatedRule)
+      
       if (updatedRule && typeof updatedRule === 'object' && 'is_active' in updatedRule) {
-        setRules(prev => prev.map(r => 
-          r.id === ruleId ? { ...r, is_active: (updatedRule as any).is_active } : r
-        ))
+        console.log('Updating local state with:', (updatedRule as any).is_active)
+        setRules(prev => {
+          const newRules = prev.map(r => 
+            r.id === ruleId ? { ...r, is_active: (updatedRule as any).is_active } : r
+          )
+          console.log('New rules state:', newRules)
+          return newRules
+        })
+      } else {
+        console.warn('Invalid API response:', updatedRule)
+        throw new Error('Invalid response from server')
       }
     } catch (err) {
+      console.error('Toggle rule error:', err)
       setError(`Failed to update rule: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      throw err // Re-throw to let the component handle it
     }
   }
 

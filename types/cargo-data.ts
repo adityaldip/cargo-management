@@ -39,6 +39,7 @@ export interface DatabaseCargoData {
   invoice: string | null
   customer_name_number: string | null
   assigned_customer: string | null
+  customer_code_id: string | null
   assigned_rate: number | null
   rate_currency: string | null
   processed_at: string | null

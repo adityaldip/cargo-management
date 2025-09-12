@@ -51,52 +51,108 @@ export async function GET(request: NextRequest) {
     if (filters) {
       try {
         const filterConditions = JSON.parse(filters)
-        console.log('🔍 Applying filters:', filterConditions)
+        console.log('🔍 Applying filters:', filterConditions, 'with logic:', filterLogic)
         
-        filterConditions.forEach((condition: any) => {
-          const { field, operator, value } = condition
+        // Apply filter conditions based on logic
+        if (filterLogic === 'OR') {
+          // For OR logic, build OR conditions
+          const orConditions: string[] = []
           
-          // Map frontend field names to database column names
-          const dbField = field === 'assigned_customer' ? 'assigned_customer' :
-                         field === 'assigned_rate' ? 'assigned_rate' :
-                         field === 'total_kg' ? 'total_kg' :
-                         field === 'inb_flight_date' ? 'inb_flight_date' :
-                         field === 'outb_flight_date' ? 'outb_flight_date' :
-                         field === 'rec_id' ? 'rec_id' :
-                         field === 'orig_oe' ? 'orig_oe' :
-                         field === 'dest_oe' ? 'dest_oe' :
-                         field === 'mail_cat' ? 'mail_cat' :
-                         field === 'mail_class' ? 'mail_class' :
-                         field === 'invoice' ? 'invoice' :
-                         field
+          filterConditions.forEach((condition: any) => {
+            const { field, operator, value } = condition
+            
+            // Map frontend field names to database column names
+            const dbField = field === 'assigned_customer' ? 'assigned_customer' :
+                           field === 'assigned_rate' ? 'assigned_rate' :
+                           field === 'total_kg' ? 'total_kg' :
+                           field === 'inb_flight_date' ? 'inb_flight_date' :
+                           field === 'outb_flight_date' ? 'outb_flight_date' :
+                           field === 'rec_id' ? 'rec_id' :
+                           field === 'orig_oe' ? 'orig_oe' :
+                           field === 'dest_oe' ? 'dest_oe' :
+                           field === 'mail_cat' ? 'mail_cat' :
+                           field === 'mail_class' ? 'mail_class' :
+                           field === 'invoice' ? 'invoice' :
+                           field
+            
+            switch (operator) {
+              case 'equals':
+                orConditions.push(`${dbField}.eq.${value}`)
+                break
+              case 'contains':
+                orConditions.push(`${dbField}.ilike.%${value}%`)
+                break
+              case 'starts_with':
+                orConditions.push(`${dbField}.ilike.${value}%`)
+                break
+              case 'ends_with':
+                orConditions.push(`${dbField}.ilike.%${value}`)
+                break
+              case 'greater_than':
+                orConditions.push(`${dbField}.gt.${parseFloat(value)}`)
+                break
+              case 'less_than':
+                orConditions.push(`${dbField}.lt.${parseFloat(value)}`)
+                break
+              case 'not_empty':
+                orConditions.push(`and(${dbField}.not.is.null,${dbField}.neq.)`)
+                break
+              case 'is_empty':
+                orConditions.push(`or(${dbField}.is.null,${dbField}.eq.)`)
+                break
+            }
+          })
           
-          switch (operator) {
-            case 'equals':
-              query = query.eq(dbField, value)
-              break
-            case 'contains':
-              query = query.ilike(dbField, `%${value}%`)
-              break
-            case 'starts_with':
-              query = query.ilike(dbField, `${value}%`)
-              break
-            case 'ends_with':
-              query = query.ilike(dbField, `%${value}`)
-              break
-            case 'greater_than':
-              query = query.gt(dbField, parseFloat(value))
-              break
-            case 'less_than':
-              query = query.lt(dbField, parseFloat(value))
-              break
-            case 'not_empty':
-              query = query.not(dbField, 'is', null).neq(dbField, '')
-              break
-            case 'is_empty':
-              query = query.or(`${dbField}.is.null,${dbField}.eq.`)
-              break
+          if (orConditions.length > 0) {
+            query = query.or(orConditions.join(','))
           }
-        })
+        } else {
+          // For AND logic (default), apply filters sequentially
+          filterConditions.forEach((condition: any) => {
+            const { field, operator, value } = condition
+            
+            // Map frontend field names to database column names
+            const dbField = field === 'assigned_customer' ? 'assigned_customer' :
+                           field === 'assigned_rate' ? 'assigned_rate' :
+                           field === 'total_kg' ? 'total_kg' :
+                           field === 'inb_flight_date' ? 'inb_flight_date' :
+                           field === 'outb_flight_date' ? 'outb_flight_date' :
+                           field === 'rec_id' ? 'rec_id' :
+                           field === 'orig_oe' ? 'orig_oe' :
+                           field === 'dest_oe' ? 'dest_oe' :
+                           field === 'mail_cat' ? 'mail_cat' :
+                           field === 'mail_class' ? 'mail_class' :
+                           field === 'invoice' ? 'invoice' :
+                           field
+            
+            switch (operator) {
+              case 'equals':
+                query = query.eq(dbField, value)
+                break
+              case 'contains':
+                query = query.ilike(dbField, `%${value}%`)
+                break
+              case 'starts_with':
+                query = query.ilike(dbField, `${value}%`)
+                break
+              case 'ends_with':
+                query = query.ilike(dbField, `%${value}`)
+                break
+              case 'greater_than':
+                query = query.gt(dbField, parseFloat(value))
+                break
+              case 'less_than':
+                query = query.lt(dbField, parseFloat(value))
+                break
+              case 'not_empty':
+                query = query.not(dbField, 'is', null).neq(dbField, '')
+                break
+              case 'is_empty':
+                query = query.or(`${dbField}.is.null,${dbField}.eq.`)
+                break
+            }
+          })
+        }
       } catch (error) {
         console.error('Error parsing filters:', error)
       }
@@ -126,50 +182,106 @@ export async function GET(request: NextRequest) {
       try {
         const filterConditions = JSON.parse(filters)
         
-        filterConditions.forEach((condition: any) => {
-          const { field, operator, value } = condition
+        // Apply filter conditions based on logic
+        if (filterLogic === 'OR') {
+          // For OR logic, build OR conditions
+          const orConditions: string[] = []
           
-          // Map frontend field names to database column names
-          const dbField = field === 'assigned_customer' ? 'assigned_customer' :
-                         field === 'assigned_rate' ? 'assigned_rate' :
-                         field === 'total_kg' ? 'total_kg' :
-                         field === 'inb_flight_date' ? 'inb_flight_date' :
-                         field === 'outb_flight_date' ? 'outb_flight_date' :
-                         field === 'rec_id' ? 'rec_id' :
-                         field === 'orig_oe' ? 'orig_oe' :
-                         field === 'dest_oe' ? 'dest_oe' :
-                         field === 'mail_cat' ? 'mail_cat' :
-                         field === 'mail_class' ? 'mail_class' :
-                         field === 'invoice' ? 'invoice' :
-                         field
+          filterConditions.forEach((condition: any) => {
+            const { field, operator, value } = condition
+            
+            // Map frontend field names to database column names
+            const dbField = field === 'assigned_customer' ? 'assigned_customer' :
+                           field === 'assigned_rate' ? 'assigned_rate' :
+                           field === 'total_kg' ? 'total_kg' :
+                           field === 'inb_flight_date' ? 'inb_flight_date' :
+                           field === 'outb_flight_date' ? 'outb_flight_date' :
+                           field === 'rec_id' ? 'rec_id' :
+                           field === 'orig_oe' ? 'orig_oe' :
+                           field === 'dest_oe' ? 'dest_oe' :
+                           field === 'mail_cat' ? 'mail_cat' :
+                           field === 'mail_class' ? 'mail_class' :
+                           field === 'invoice' ? 'invoice' :
+                           field
+            
+            switch (operator) {
+              case 'equals':
+                orConditions.push(`${dbField}.eq.${value}`)
+                break
+              case 'contains':
+                orConditions.push(`${dbField}.ilike.%${value}%`)
+                break
+              case 'starts_with':
+                orConditions.push(`${dbField}.ilike.${value}%`)
+                break
+              case 'ends_with':
+                orConditions.push(`${dbField}.ilike.%${value}`)
+                break
+              case 'greater_than':
+                orConditions.push(`${dbField}.gt.${parseFloat(value)}`)
+                break
+              case 'less_than':
+                orConditions.push(`${dbField}.lt.${parseFloat(value)}`)
+                break
+              case 'not_empty':
+                orConditions.push(`and(${dbField}.not.is.null,${dbField}.neq.)`)
+                break
+              case 'is_empty':
+                orConditions.push(`or(${dbField}.is.null,${dbField}.eq.)`)
+                break
+            }
+          })
           
-          switch (operator) {
-            case 'equals':
-              countQuery = countQuery.eq(dbField, value)
-              break
-            case 'contains':
-              countQuery = countQuery.ilike(dbField, `%${value}%`)
-              break
-            case 'starts_with':
-              countQuery = countQuery.ilike(dbField, `${value}%`)
-              break
-            case 'ends_with':
-              countQuery = countQuery.ilike(dbField, `%${value}`)
-              break
-            case 'greater_than':
-              countQuery = countQuery.gt(dbField, parseFloat(value))
-              break
-            case 'less_than':
-              countQuery = countQuery.lt(dbField, parseFloat(value))
-              break
-            case 'not_empty':
-              countQuery = countQuery.not(dbField, 'is', null).neq(dbField, '')
-              break
-            case 'is_empty':
-              countQuery = countQuery.or(`${dbField}.is.null,${dbField}.eq.`)
-              break
+          if (orConditions.length > 0) {
+            countQuery = countQuery.or(orConditions.join(','))
           }
-        })
+        } else {
+          // For AND logic (default), apply filters sequentially
+          filterConditions.forEach((condition: any) => {
+            const { field, operator, value } = condition
+            
+            // Map frontend field names to database column names
+            const dbField = field === 'assigned_customer' ? 'assigned_customer' :
+                           field === 'assigned_rate' ? 'assigned_rate' :
+                           field === 'total_kg' ? 'total_kg' :
+                           field === 'inb_flight_date' ? 'inb_flight_date' :
+                           field === 'outb_flight_date' ? 'outb_flight_date' :
+                           field === 'rec_id' ? 'rec_id' :
+                           field === 'orig_oe' ? 'orig_oe' :
+                           field === 'dest_oe' ? 'dest_oe' :
+                           field === 'mail_cat' ? 'mail_cat' :
+                           field === 'mail_class' ? 'mail_class' :
+                           field === 'invoice' ? 'invoice' :
+                           field
+            
+            switch (operator) {
+              case 'equals':
+                countQuery = countQuery.eq(dbField, value)
+                break
+              case 'contains':
+                countQuery = countQuery.ilike(dbField, `%${value}%`)
+                break
+              case 'starts_with':
+                countQuery = countQuery.ilike(dbField, `${value}%`)
+                break
+              case 'ends_with':
+                countQuery = countQuery.ilike(dbField, `%${value}`)
+                break
+              case 'greater_than':
+                countQuery = countQuery.gt(dbField, parseFloat(value))
+                break
+              case 'less_than':
+                countQuery = countQuery.lt(dbField, parseFloat(value))
+                break
+              case 'not_empty':
+                countQuery = countQuery.not(dbField, 'is', null).neq(dbField, '')
+                break
+              case 'is_empty':
+                countQuery = countQuery.or(`${dbField}.is.null,${dbField}.eq.`)
+                break
+            }
+          })
+        }
       } catch (error) {
         console.error('Error parsing filters for count query:', error)
       }

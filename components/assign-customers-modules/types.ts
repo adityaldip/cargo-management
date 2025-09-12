@@ -18,7 +18,7 @@ export interface CustomerRuleExtended extends Omit<CustomerRuleDB, 'conditions' 
     value: string
   }>
   actions: {
-    assignTo: string
+    assignTo: string // This will now store customer_code ID instead of customer ID
   }
   where: string[]
 }

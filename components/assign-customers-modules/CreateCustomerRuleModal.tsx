@@ -35,7 +35,7 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
     { field: "orig_oe", operator: "equals", value: "" }
   ])
   
-  const [assignTo, setAssignTo] = useState("")
+  const [assignTo, setAssignTo] = useState("") // This will now store customer_code ID
   const [isLoading, setIsLoading] = useState(false)
   const [customers, setCustomers] = useState<{id: string, name: string, code: string, codes: {id: string, code: string, is_active: boolean}[]}[]>([])
   const [loadingCustomers, setLoadingCustomers] = useState(false)
@@ -135,7 +135,7 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
     }
 
     if (!assignTo) {
-      alert("Please select a customer to assign to")
+      alert("Please select a customer code to assign to")
       return
     }
 
@@ -322,26 +322,24 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
             </div>
           </div>
 
-          {/* Customer Assignment */}
+          {/* Customer Code Assignment */}
           <div className="space-y-2">
-            <Label htmlFor="assign-to">Assign To Customer *</Label>
+            <Label htmlFor="assign-to">Assign To Customer Code *</Label>
             <Select value={assignTo} onValueChange={setAssignTo} disabled={loadingCustomers}>
               <SelectTrigger>
-                <SelectValue placeholder={loadingCustomers ? "Loading customers..." : "Select customer..."} />
+                <SelectValue placeholder={loadingCustomers ? "Loading customer codes..." : "Select customer code..."} />
               </SelectTrigger>
               <SelectContent>
                 {customers.map((customer) => {
                   const activeCodes = customer.codes.filter(code => code.is_active)
-                  return (
-                    <SelectItem key={customer.id} value={customer.id}>
+                  return activeCodes.map((code) => (
+                    <SelectItem key={code.id} value={code.id}>
                       <div className="flex flex-col">
-                        <span className="font-medium">{customer.name}</span>
-                        <span className="text-gray-500 text-xs">
-                          ({activeCodes.length > 0 ? activeCodes.map(c => c.code).join(', ') : 'No active codes'})
-                        </span>
+                        <span className="font-medium">{code.code}</span>
+                        <span className="text-gray-500 text-xs">{customer.name}</span>
                       </div>
                     </SelectItem>
-                  )
+                  ))
                 })}
               </SelectContent>
             </Select>

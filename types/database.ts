@@ -229,6 +229,7 @@ export interface Database {
           invoice: string
           customer_name_number: string | null
           assigned_customer: string | null
+          customer_code_id: string | null
           assigned_at: string | null
           assigned_rate: number | null
           rate_id: string | null
@@ -255,6 +256,7 @@ export interface Database {
           invoice: string
           customer_name_number?: string | null
           assigned_customer?: string | null
+          customer_code_id?: string | null
           assigned_at?: string | null
           assigned_rate?: number | null
           rate_id?: string | null
@@ -281,6 +283,7 @@ export interface Database {
           invoice?: string
           customer_name_number?: string | null
           assigned_customer?: string | null
+          customer_code_id?: string | null
           assigned_rate?: number | null
           rate_currency?: string | null
           processed_at?: string | null
