@@ -91,7 +91,7 @@ export function CustomerManagement() {
         const matchesSearch = customer.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
           customer.code.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
           (customer.codes && customer.codes.some(code => 
-            code.code.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+            code.product && typeof code.product === 'string' && code.product.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
           ))
         
         // Status filter
@@ -418,7 +418,7 @@ export function CustomerManagement() {
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <div className="flex-1 relative">
               <Input
-                placeholder="Search contractees by name or code..."
+                placeholder="Search contractees by name, code, or product..."
                 value={customerSearchTerm}
                 onChange={(e) => setCustomerSearchTerm(e.target.value)}
                 className="w-full pr-8"
@@ -473,7 +473,8 @@ export function CustomerManagement() {
                       )}
                     </Button>
                   </TableHead>
-                  <TableHead className="h-8 py-1 text-xs">Code & Products</TableHead>
+                  <TableHead className="h-8 py-1 text-xs">Code</TableHead>
+                  <TableHead className="h-8 py-1 text-xs">Products</TableHead>
                   <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -501,13 +502,14 @@ export function CustomerManagement() {
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2">
+                      <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
+                        {customer.code}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-1 px-2">
                       <div className="flex flex-wrap gap-1">
-                        {/* Display contractee code */}
-                        <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
-                          {customer.code}
-                        </Badge>
                         {/* Display products from customer_codes table */}
-                        {customer.codes && customer.codes.length > 0 && customer.codes.map((codeItem, index) => (
+                        {customer.codes && customer.codes.length > 0 ? customer.codes.map((codeItem, index) => (
                           <div key={codeItem.id || index} className="flex items-center gap-1">
                             <Switch
                               checked={codeItem.is_active}
@@ -525,7 +527,9 @@ export function CustomerManagement() {
                               {codeItem.product || 'No Product'}
                             </Badge>
                           </div>
-                        ))}
+                        )) : (
+                          <span className="text-xs text-gray-400">No products</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="py-1 px-2">
