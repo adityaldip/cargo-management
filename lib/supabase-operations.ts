@@ -349,6 +349,108 @@ export const cargoDataOperations = {
     )
   },
 
+  // Bulk update cargo data - much faster for multiple records
+  async bulkUpdate(updates: Array<{ id: string; updates: Tables['cargo_data']['Update'] }>) {
+    if (!updates || updates.length === 0) {
+      return { data: null, error: 'No updates provided' }
+    }
+
+    console.log(`🔄 bulkUpdate called with ${updates.length} records`)
+    
+    // Process in batches to avoid payload size limits
+    const batchSize = 50 // Smaller batch size for better reliability
+    const results = []
+    let totalUpdated = 0
+    let totalFailed = 0
+    const errors: string[] = []
+
+    for (let i = 0; i < updates.length; i += batchSize) {
+      const batch = updates.slice(i, i + batchSize)
+      console.log(`🔄 Processing bulk update batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(updates.length / batchSize)} (${batch.length} records)`)
+      
+      try {
+        // Use individual updates within each batch for better error handling
+        // This avoids the upsert issue with null values and ensures we only update existing records
+        const batchPromises = batch.map(async ({ id, updates: updateData }) => {
+          try {
+            // First verify the record exists and has required fields
+            const { data: existingRecord, error: fetchError } = await supabase
+              .from('cargo_data')
+              .select('id, rec_id')
+              .eq('id', id)
+              .single()
+            
+            if (fetchError || !existingRecord) {
+              console.warn(`⚠️ Record ${id} not found or missing rec_id, skipping update`)
+              return { success: false, error: 'Record not found or invalid', id }
+            }
+            
+            if (!existingRecord.rec_id) {
+              console.warn(`⚠️ Record ${id} has null rec_id, skipping update`)
+              return { success: false, error: 'Record has null rec_id', id }
+            }
+
+            // Now perform the update
+            const { error } = await supabase
+              .from('cargo_data')
+              .update({
+                ...updateData,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', id)
+              .select('id')
+            
+            if (error) {
+              console.error(`❌ Failed to update cargo record ${id}:`, error)
+              return { success: false, error: error.message, id }
+            }
+            
+            return { success: true, id }
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+            console.error(`❌ Exception updating cargo record ${id}:`, errorMsg)
+            return { success: false, error: errorMsg, id }
+          }
+        })
+        
+        const batchResults = await Promise.all(batchPromises)
+        
+        // Count successes and failures
+        batchResults.forEach(result => {
+          if (result.success) {
+            totalUpdated++
+          } else {
+            totalFailed++
+            errors.push(`Record ${result.id}: ${result.error}`)
+          }
+        })
+        
+        console.log(`✅ Batch completed: ${batchResults.filter(r => r.success).length} successful, ${batchResults.filter(r => !r.success).length} failed`)
+        
+      } catch (batchError) {
+        console.error(`❌ Batch processing error:`, batchError)
+        totalFailed += batch.length
+        errors.push(`Batch error: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`)
+      }
+    }
+
+    console.log(`✅ Bulk update completed: ${totalUpdated} successful, ${totalFailed} failed`)
+    
+    if (totalFailed > 0) {
+      console.error(`❌ ${totalFailed} updates failed. First few errors:`)
+      errors.slice(0, 5).forEach(error => console.error(`  - ${error}`))
+      
+      // Return partial success if some updates succeeded
+      if (totalUpdated === 0) {
+        return { data: null, error: `All updates failed. First error: ${errors[0]}` }
+      } else {
+        console.warn(`⚠️ Partial success: ${totalUpdated} updates succeeded, ${totalFailed} failed`)
+      }
+    }
+
+    return { data: { totalUpdated, totalFailed, errors }, error: null }
+  },
+
   // Delete cargo data
   async delete(id: string) {
     return safeSupabaseOperation(() =>

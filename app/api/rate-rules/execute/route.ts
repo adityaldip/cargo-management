@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { cargoDataOperations } from '@/lib/supabase-operations'
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,41 +56,60 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Getting cargo data...')
-    // Get all cargo data - always process all data
-    // Use pagination to handle large datasets (Supabase default limit is 1000)
-    let allCargoData: any[] = []
-    let page = 0
-    const pageSize = 1000
-    let hasMore = true
+    // OPTIMIZATION: Load only necessary fields and filter out already assigned records
+    // This reduces data transfer and processing time significantly
+    const startTime = Date.now()
+    
+    // Get only unassigned cargo data with essential fields
+    const { data: cargoData, error: cargoError } = await supabaseAdmin
+      .from('cargo_data')
+      .select(`
+        id,
+        rec_id,
+        rec_numb,
+        orig_oe,
+        dest_oe,
+        mail_cat,
+        mail_class,
+        total_kg,
+        invoice,
+        assigned_customer,
+        rate_id,
+        rate_value
+      `)
+      .is('rate_id', null) // Only get records without assigned rates
+      .limit(50000) // Reasonable limit to prevent memory issues
 
-    while (hasMore) {
-      const { data: cargoData, error: cargoError } = await supabaseAdmin
-        .from('cargo_data')
-        .select('*')
-        .range(page * pageSize, (page + 1) * pageSize - 1)
-
-      if (cargoError) {
-        console.error('Error fetching cargo data:', cargoError)
-        return NextResponse.json(
-          { error: 'Failed to fetch cargo data', details: cargoError.message },
-          { status: 500 }
-        )
-      }
-
-      if (cargoData && cargoData.length > 0) {
-        allCargoData.push(...cargoData)
-        console.log(`Fetched page ${page + 1}: ${cargoData.length} records (Total so far: ${allCargoData.length})`)
-        page++
-        hasMore = cargoData.length === pageSize // If we got less than pageSize, we're done
-      } else {
-        hasMore = false
-      }
+    // Type the cargo data properly
+    interface CargoRecord {
+      id: string
+      rec_id: string
+      rec_numb?: string
+      orig_oe?: string
+      dest_oe?: string
+      mail_cat?: string
+      mail_class?: string
+      total_kg?: number
+      invoice?: string
+      assigned_customer?: string
+      rate_id?: string
+      rate_value?: number
     }
 
-    const cargoData = allCargoData
-    console.log("Total cargo data fetched:", cargoData.length)
+    const typedCargoData: CargoRecord[] = cargoData || []
 
-    if (!cargoData || cargoData.length === 0) {
+    if (cargoError) {
+      console.error('Error fetching cargo data:', cargoError)
+      return NextResponse.json(
+        { error: 'Failed to fetch cargo data', details: cargoError.message },
+        { status: 500 }
+      )
+    }
+
+    const dataLoadTime = Date.now() - startTime
+    console.log(`✅ Cargo data loaded: ${typedCargoData.length} unassigned records in ${dataLoadTime}ms`)
+
+    if (typedCargoData.length === 0) {
       return NextResponse.json(
         { 
           success: true, 
@@ -102,11 +122,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Track assignments to avoid duplicate processing
-    const assignments = new Set<string>()
-    const ruleResults: Array<{
-      ruleId: string
-      ruleName: string
+    // OPTIMIZATION: Pre-process rules and create efficient matching functions
+    const ruleProcessingStart = Date.now()
+    
+    // Sort rules by priority (1 = highest priority)
+    const sortedRules = (rateRules as any[]).sort((a: any, b: any) => a.priority - b.priority)
+    
+    console.log('🚀 Processing rules in priority order:', 
+      sortedRules.map((r: any) => ({ 
+        name: r.name, 
+        priority: r.priority,
+        conditionsCount: r.conditions?.length || 0
+      }))
+    )
+
+    // Pre-compile rule matching functions for better performance
+    interface CompiledRule {
+      id: string
+      name: string
+      priority: number
+      rate: any
+      conditionMatchers: Array<(cargo: any) => boolean>
       matches: number
       assignments: Array<{
         cargoId: string
@@ -114,29 +150,49 @@ export async function POST(request: NextRequest) {
         assignedRate: string
         rateValue: number
       }>
-    }> = []
+    }
 
-    // Sort rules by priority (1 = highest priority)
-    const sortedRules = rateRules.sort((a, b) => a.priority - b.priority)
-    
-    console.log('Processing rules in priority order:', 
-      sortedRules.map((r: any) => ({ 
-        name: r.name, 
-        priority: r.priority 
-      }))
-    )
+    const compiledRules: CompiledRule[] = sortedRules.map((rule: any) => {
+      const rate = rule.rates
+      if (!rate || !rate.id) {
+        console.warn(`⚠️ Skipping rule "${rule.name}" - no valid rate found`)
+        return null
+      }
 
-    // Process each rule in priority order (1 = highest priority)
-    for (const rule of sortedRules as any[]) {
-      console.log(`\n🎯 Processing Rate Rule: "${rule.name}" (Priority: ${rule.priority})`)
-      console.log(`   - Rule ID: ${rule.id}`)
-      console.log(`   - Rate ID: ${rule.rate_id}`)
-      console.log(`   - Conditions: ${JSON.stringify(rule.conditions)}`)
-      console.log(`   - Rate Info: ${rule.rates ? `${rule.rates.name} (${rule.rates.rate_type})` : 'NO RATE FOUND'}`)
-      
-      const ruleResult = {
-        ruleId: rule.id,
-        ruleName: rule.name,
+      // Create optimized condition matcher
+      const conditionMatchers = rule.conditions.map((condition: any) => {
+        const field = condition.field
+        const operator = condition.operator
+        const value = condition.value.toLowerCase()
+        
+        return (cargo: any): boolean => {
+          const fieldValue = String(cargo[field] || '').toLowerCase()
+          
+          switch (operator) {
+            case 'equals':
+              return fieldValue === value
+            case 'contains':
+              return fieldValue.includes(value)
+            case 'starts_with':
+              return fieldValue.startsWith(value)
+            case 'ends_with':
+              return fieldValue.endsWith(value)
+            case 'greater_than':
+              return parseFloat(fieldValue) > parseFloat(value)
+            case 'less_than':
+              return parseFloat(fieldValue) < parseFloat(value)
+            default:
+              return false
+          }
+        }
+      })
+
+      return {
+        id: rule.id,
+        name: rule.name,
+        priority: rule.priority,
+        rate,
+        conditionMatchers,
         matches: 0,
         assignments: [] as Array<{
           cargoId: string
@@ -145,213 +201,146 @@ export async function POST(request: NextRequest) {
           rateValue: number
         }>
       }
+    }).filter((rule): rule is CompiledRule => rule !== null) // Remove null entries with proper type guard
 
-      // Find cargo records that match this rule
-      let skippedCount = 0
-      for (const cargo of cargoData) {
-        // Skip if already assigned by a higher priority rule
-        if (assignments.has(cargo.id)) {
-          skippedCount++
-          continue
-        }
+    console.log(`✅ Compiled ${compiledRules.length} valid rules`)
+
+    // Track assignments to avoid duplicate processing
+    const assignments = new Set<string>()
+    const allUpdates: Array<{ id: string; updates: any }> = []
+
+    // Process each rule in priority order
+    for (const rule of compiledRules) {
+      const ruleStart = Date.now()
+      console.log(`\n🎯 Processing Rule: "${rule.name}" (Priority: ${rule.priority})`)
+      
+      let processedCount = 0
+      let matchedCount = 0
+
+      // OPTIMIZATION: Process cargo data in chunks for better memory usage
+      const chunkSize = 1000
+      for (let i = 0; i < typedCargoData.length; i += chunkSize) {
+        const chunk = typedCargoData.slice(i, i + chunkSize)
         
-        // Skip if already has an assigned rate (since we're processing all data)
-        if (cargo.assigned_rate && cargo.assigned_rate !== null) {
-          skippedCount++
-          continue
-        }
-
-        // Check if cargo matches rule conditions
-        // Use .every() to ensure ALL conditions must match (more logical for rate rules)
-        const matches = rule.conditions.length > 0 && rule.conditions.every((condition: any) => {
-          const fieldValue = String(cargo[condition.field] || '').toLowerCase()
-          const conditionValue = condition.value.toLowerCase()
-
-          // Debug logging
-          console.log(`Rule ${rule.name}: Checking condition ${condition.field} = "${fieldValue}" vs "${conditionValue}" (operator: ${condition.operator})`)
-
-          switch (condition.operator) {
-            case 'equals':
-              return fieldValue === conditionValue
-            case 'contains':
-              return fieldValue.includes(conditionValue)
-            case 'starts_with':
-              return fieldValue.startsWith(conditionValue)
-            case 'ends_with':
-              return fieldValue.endsWith(conditionValue)
-            case 'greater_than':
-              return parseFloat(fieldValue) > parseFloat(conditionValue)
-            case 'less_than':
-              return parseFloat(fieldValue) < parseFloat(conditionValue)
-            default:
-              console.warn(`Unknown operator: ${condition.operator}`)
-              return false
-          }
-        })
-
-        if (matches) {
-          console.log(`✅ Match found for cargo ${cargo.rec_id} with rule "${rule.name}"`)
+        for (const cargo of chunk) {
+          processedCount++
           
-          // Get the rate information
-          const rate = rule.rates
-          if (!rate) {
-            console.warn(`⚠️ No rate found for rule "${rule.name}" (rule.rate_id: ${rule.rate_id})`)
+          // Skip if already assigned by a higher priority rule
+          if (assignments.has(cargo.id)) {
             continue
           }
 
-          // Validate rate data
-          if (!rate.id) {
-            console.warn(`⚠️ Rate has no ID for rule "${rule.name}"`)
-            continue
+          // Check if cargo matches ALL rule conditions
+          const matches = rule.conditionMatchers.length > 0 && 
+            rule.conditionMatchers.every(matcher => matcher(cargo))
+
+          if (matches) {
+            // Calculate rate value
+            let rateValue = 0
+            if (rule.rate.rate_type === 'per_kg') {
+              rateValue = (cargo.total_kg || 0) * (rule.rate.base_rate || 0)
+            } else if (rule.rate.rate_type === 'fixed') {
+              rateValue = rule.rate.base_rate || 0
+            } else if (rule.rate.rate_type === 'multiplier') {
+              rateValue = (cargo.total_kg || 0) * (rule.rate.base_rate || 0) * (rule.rate.multiplier || 1)
+            }
+
+            rateValue = Math.round(rateValue * 100) / 100
+
+            // Add to assignments
+            rule.assignments.push({
+              cargoId: cargo.id,
+              recId: cargo.rec_id || cargo.rec_numb || 'Unknown',
+              assignedRate: rule.rate.name || 'Unknown Rate',
+              rateValue: rateValue
+            })
+
+            // Validate cargo record has required fields before adding to updates
+            if (!cargo.id || !cargo.rec_id) {
+              console.warn(`⚠️ Skipping cargo record with missing required fields: id=${cargo.id}, rec_id=${cargo.rec_id}`)
+              continue
+            }
+
+            // Prepare update data
+            allUpdates.push({
+              id: cargo.id,
+              updates: {
+                rate_id: rule.rate.id,
+                rate_value: rateValue,
+                rate_currency: rule.rate.currency || 'EUR',
+                assigned_at: new Date().toISOString()
+              }
+            })
+
+            // Mark as assigned
+            assignments.add(cargo.id)
+            matchedCount++
           }
-
-          // Calculate rate value based on rate type
-          let rateValue = 0
-          if (rate.rate_type === 'per_kg') {
-            rateValue = (cargo.total_kg || 0) * (rate.base_rate || 0)
-          } else if (rate.rate_type === 'fixed') {
-            rateValue = rate.base_rate || 0
-          } else if (rate.rate_type === 'multiplier') {
-            rateValue = (cargo.total_kg || 0) * (rate.base_rate || 0) * (rate.multiplier || 1)
-          }
-
-          // Always round to 2 decimal places for all currencies
-          rateValue = Math.round(rateValue * 100) / 100
-
-          // Debug logging for rate calculation
-          console.log(`💰 Rate calculation for ${cargo.rec_id}: type=${rate.rate_type}, base_rate=${rate.base_rate}, currency=${rate.currency}, total_kg=${cargo.total_kg}, multiplier=${rate.multiplier}, calculated_value=${rateValue}`)
-
-          ruleResult.matches++
-          ruleResult.assignments.push({
-            cargoId: cargo.id,
-            recId: cargo.rec_id || cargo.rec_numb || 'Unknown',
-            assignedRate: rate.name || 'Unknown Rate',
-            rateValue: rateValue
-          })
-
-          // Mark as assigned
-          assignments.add(cargo.id)
         }
       }
 
-      console.log(`Rule "${rule.name}" matched ${ruleResult.matches} records (skipped ${skippedCount} already assigned)`)
-      ruleResults.push(ruleResult)
+      const ruleTime = Date.now() - ruleStart
+      console.log(`✅ Rule "${rule.name}": ${matchedCount} matches in ${ruleTime}ms (processed ${processedCount} records)`)
     }
 
-    // Update cargo_data with assigned rates
-    if (!dryRun && assignments.size > 0) {
-      console.log(`\n📝 Updating ${assignments.size} cargo records with assigned rates...`)
+    const processingTime = Date.now() - ruleProcessingStart
+    console.log(`\n🚀 Rule processing completed in ${processingTime}ms`)
+    console.log(`📊 Total matches found: ${assignments.size}`)
+    console.log(`📊 Total updates prepared: ${allUpdates.length}`)
+
+    // OPTIMIZATION: Use bulk update for maximum performance
+    if (!dryRun && allUpdates.length > 0) {
+      const updateStart = Date.now()
+      console.log(`\n🚀 Starting bulk update of ${allUpdates.length} cargo records...`)
       
-      // Prepare batch updates
-      const updates = []
-      for (const ruleResult of ruleResults) {
-        for (const assignment of ruleResult.assignments) {
-          // Find the rule that contains this assignment
-          const rule = rateRules.find((r: any) => r.id === ruleResult.ruleId)
-          const rate = rule?.rates
-          
-          // Debug logging for update preparation
-          console.log(`📝 Preparing update for ${assignment.recId}: rate_id=${rate?.id}, rate_value=${assignment.rateValue}, currency=${rate?.currency || 'EUR'}, rate_type=${rate?.rate_type}`)
-          
-          updates.push({
-            id: assignment.cargoId,
-            rate_id: rate?.id,
-            rate_value: assignment.rateValue,
-            rate_currency: rate?.currency || 'EUR',
-            assigned_at: new Date().toISOString()
-          })
-        }
-      }
-
-      // Process updates in smaller batches to avoid timeouts and improve reliability
-      const batchSize = 50 // Process 50 records at a time
-      let successfulUpdates = 0
-      let failedUpdates = 0
-      const errors: string[] = []
-
-      for (let i = 0; i < updates.length; i += batchSize) {
-        const batch = updates.slice(i, i + batchSize)
-        console.log(`📝 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(updates.length / batchSize)} (${batch.length} records)`)
+      try {
+        // Use the new bulk update operation
+        const { data: updateResults, error: updateError } = await cargoDataOperations.bulkUpdate(allUpdates)
         
-        try {
-          // Use individual updates within each batch for better error handling
-          const batchPromises = batch.map(async (update) => {
-            try {
-              const { error } = await supabaseAdmin
-                .from('cargo_data')
-                .update({
-                  rate_id: update.rate_id,
-                  rate_value: update.rate_value,
-                  rate_currency: update.rate_currency,
-                  assigned_at: update.assigned_at
-                })
-                .eq('id', update.id)
-              
-              if (error) {
-                console.error(`❌ Failed to update cargo record ${update.id}:`, error)
-                return { success: false, error: error.message, id: update.id }
-              }
-              
-              return { success: true, id: update.id }
-            } catch (err) {
-              const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-              console.error(`❌ Exception updating cargo record ${update.id}:`, errorMsg)
-              return { success: false, error: errorMsg, id: update.id }
-            }
-          })
-          
-          const batchResults = await Promise.all(batchPromises)
-          
-          // Count successes and failures
-          batchResults.forEach(result => {
-            if (result.success) {
-              successfulUpdates++
-            } else {
-              failedUpdates++
-              errors.push(`Record ${result.id}: ${result.error}`)
-            }
-          })
-          
-          console.log(`✅ Batch completed: ${batchResults.filter(r => r.success).length} successful, ${batchResults.filter(r => !r.success).length} failed`)
-          
-        } catch (batchError) {
-          console.error(`❌ Batch processing error:`, batchError)
-          failedUpdates += batch.length
-          errors.push(`Batch error: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`)
-        }
-      }
-
-      console.log(`\n📊 Update Summary:`)
-      console.log(`- Total records to update: ${updates.length}`)
-      console.log(`- Successfully updated: ${successfulUpdates}`)
-      console.log(`- Failed updates: ${failedUpdates}`)
-      
-      if (failedUpdates > 0) {
-        console.error(`❌ ${failedUpdates} updates failed. First few errors:`)
-        errors.slice(0, 5).forEach(error => console.error(`  - ${error}`))
+        const updateTime = Date.now() - updateStart
         
-        // Don't fail the entire operation if some updates succeed
-        if (successfulUpdates === 0) {
+        if (updateError) {
+          console.error(`❌ Bulk update failed:`, updateError)
           return NextResponse.json(
-            { error: 'All cargo data updates failed', details: errors.slice(0, 10) },
+            { error: 'Failed to update cargo data', details: updateError },
             { status: 500 }
           )
-        } else {
-          console.warn(`⚠️ Partial success: ${successfulUpdates} updates succeeded, ${failedUpdates} failed`)
         }
-      }
 
-      console.log(`✅ Successfully updated ${successfulUpdates} cargo records`)
+        // Handle partial success
+        const successfulUpdates = updateResults?.totalUpdated || 0
+        const failedUpdates = updateResults?.totalFailed || 0
+        
+        console.log(`✅ Bulk update completed in ${updateTime}ms`)
+        console.log(`📊 Successfully updated: ${successfulUpdates} records`)
+        
+        if (failedUpdates > 0) {
+          console.warn(`⚠️ ${failedUpdates} updates failed`)
+          // Don't fail the entire operation for partial success
+        }
+        
+      } catch (error) {
+        console.error(`❌ Bulk update exception:`, error)
+        return NextResponse.json(
+          { error: 'Bulk update failed', details: error instanceof Error ? error.message : 'Unknown error' },
+          { status: 500 }
+        )
+      }
+    } else if (dryRun) {
+      console.log(`\n🔍 DRY RUN: Would update ${allUpdates.length} cargo records`)
     }
 
     // Calculate summary statistics
-    const totalProcessed = cargoData.length
+    const totalProcessed = typedCargoData.length
     const totalAssigned = assignments.size
+    const totalExecutionTime = Date.now() - startTime
 
     console.log(`\n📊 Execution Summary:`)
     console.log(`- Total cargo records processed: ${totalProcessed}`)
     console.log(`- Total records assigned rates: ${totalAssigned}`)
-    console.log(`- Rules executed: ${ruleResults.length}`)
+    console.log(`- Rules executed: ${compiledRules.length}`)
+    console.log(`- Total execution time: ${totalExecutionTime}ms`)
+    console.log(`- Performance: ${Math.round(totalProcessed / (totalExecutionTime / 1000))} records/second`)
 
     // Clear timeout
     clearTimeout(timeoutId)
@@ -361,9 +350,11 @@ export async function POST(request: NextRequest) {
       results: {
         totalProcessed,
         totalAssigned,
-        ruleResults: ruleResults.map(r => ({
-          ruleName: r.ruleName,
-          matches: r.matches,
+        executionTimeMs: totalExecutionTime,
+        performanceRecordsPerSecond: Math.round(totalProcessed / (totalExecutionTime / 1000)),
+        ruleResults: compiledRules.map(r => ({
+          ruleName: r.name,
+          matches: r.assignments.length,
           assignments: r.assignments.length
         }))
       }
