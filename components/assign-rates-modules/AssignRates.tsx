@@ -7,9 +7,11 @@ import { SetupRates } from "./SetupRates"
 import { ConfigureRates } from "./ConfigureRates"
 import { ExecuteRates } from "./ExecuteRates"
 import { useAssignRatesTabStore } from "@/store/assign-rates-tab-store"
+import { useWorkflowStore } from "@/store/workflow-store"
 
 export function AssignRates({ data, savedRateConditions, onSaveRateConditions }: AssignRatesProps) {
   const { activeTab, setActiveTab } = useAssignRatesTabStore()
+  const { isExecutingRules } = useWorkflowStore()
 
   return (
     <div className="space-y-4 pt-2">
@@ -19,7 +21,8 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
           <Button
             variant={activeTab === "setup" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveTab("setup")}
+            onClick={() => !isExecutingRules && setActiveTab("setup")}
+            disabled={isExecutingRules}
             className={
               activeTab === "setup"
                 ? "bg-white shadow-sm text-black hover:bg-white"
@@ -32,7 +35,8 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
           <Button
             variant={activeTab === "configure" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveTab("configure")}
+            onClick={() => !isExecutingRules && setActiveTab("configure")}
+            disabled={isExecutingRules}
             className={
               activeTab === "configure"
                 ? "bg-black text-white hover:bg-gray-800"
@@ -44,7 +48,8 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
           <Button
             variant={activeTab === "execute" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveTab("execute")}
+            onClick={() => !isExecutingRules && setActiveTab("execute")}
+            disabled={isExecutingRules}
             className={
               activeTab === "execute"
                 ? "bg-black text-white hover:bg-gray-800"

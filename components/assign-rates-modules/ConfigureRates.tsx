@@ -23,6 +23,7 @@ import { RateRuleEditor } from "./RateRuleEditor"
 import { SweetAlert } from "@/components/ui/sweet-alert"
 import { useToast } from "@/hooks/use-toast"
 import { rateRulesAPI } from "@/lib/api-client"
+import { useWorkflowStore } from "@/store/workflow-store"
 
 export function ConfigureRates() {
   const {
@@ -40,6 +41,9 @@ export function ConfigureRates() {
   } = useRateRulesData()
   
   const { rates } = useRatesData()
+  
+  // Get workflow store for managing execution state
+  const { isExecutingRules, setIsExecutingRules } = useWorkflowStore()
   
   const [localRules, setLocalRules] = useState<RateRule[]>([])
 
@@ -359,7 +363,9 @@ export function ConfigureRates() {
       return
     }
 
+    // Set execution state in both local and workflow store
     setIsExecuting(true)
+    setIsExecutingRules(true)
     setExecutionProgress(0)
     setExecutionStep("Starting rate rule execution...")
     setError(null)
@@ -454,6 +460,7 @@ export function ConfigureRates() {
       })
     } finally {
       setIsExecuting(false)
+      setIsExecutingRules(false)
       setExecutionProgress(0)
       setExecutionStep("")
     }
@@ -526,6 +533,7 @@ export function ConfigureRates() {
                 variant="outline" 
                 size="sm"
                 onClick={() => setIsCreateModalOpen(true)}
+                disabled={isExecutingRules}
                 className="h-9 w-32"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -535,7 +543,7 @@ export function ConfigureRates() {
                 variant="outline" 
                 size="sm"
                 onClick={refetch}
-                disabled={isRefreshing}
+                disabled={isRefreshing || isExecutingRules}
                 className="h-9 w-32"
               >
                 {isRefreshing ? "Refreshing..." : "Refresh"}
@@ -545,7 +553,7 @@ export function ConfigureRates() {
                   size="sm"
                   className="bg-black hover:bg-gray-800 text-white h-9 w-32"
                   onClick={handleExecuteRules}
-                  disabled={isExecuting}
+                  disabled={isExecuting || isExecutingRules}
                 >
                   {isExecuting ? (
                     <>
@@ -628,17 +636,18 @@ export function ConfigureRates() {
           {filteredRules.map((rule) => (
             <div key={rule.id} className="border rounded-lg">
               <div
-                draggable
-                onDragStart={(e) => handleDragStart(e, rule.id)}
+                draggable={!isExecutingRules}
+                onDragStart={(e) => !isExecutingRules && handleDragStart(e, rule.id)}
                 onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, rule.id)}
+                onDrop={(e) => !isExecutingRules && handleDrop(e, rule.id)}
                 className={cn(
                   "flex items-center gap-1 p-1 transition-all cursor-pointer hover:bg-gray-50",
                   rule.isActive ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
                   draggedRule === rule.id && "opacity-50",
-                  expandedRule === rule.id && "bg-gray-50"
+                  expandedRule === rule.id && "bg-gray-50",
+                  isExecutingRules && "cursor-not-allowed opacity-50"
                 )}
-                onClick={() => handleEditRule(rule)}
+                onClick={() => !isExecutingRules && handleEditRule(rule)}
               >
                 {/* Drag Handle */}
                 <div className="cursor-grab hover:cursor-grabbing">
@@ -655,6 +664,7 @@ export function ConfigureRates() {
                   checked={rule.isActive}
                   onCheckedChange={() => handleToggleRule(rule.id)}
                   onClick={(e) => e.stopPropagation()}
+                  disabled={isExecutingRules}
                   className="scale-75"
                 />
                 
@@ -672,6 +682,7 @@ export function ConfigureRates() {
                     e.stopPropagation()
                     handleDeleteRule(rule)
                   }}
+                  disabled={isExecutingRules}
                   className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -684,6 +695,7 @@ export function ConfigureRates() {
                   rule={rule}
                   rates={rates}
                   isSaving={isSaving}
+                  isExecutingRules={isExecutingRules}
                   editingRuleConditions={editingRuleConditions}
                   editingRuleLogic={editingRuleLogic}
                   editingRuleRateId={editingRuleRateId}

@@ -20,6 +20,7 @@ interface RateRuleEditorProps {
   rule: RateRule
   rates: any[]
   isSaving: boolean
+  isExecutingRules?: boolean
   editingRuleConditions: ConditionType[]
   editingRuleLogic: "AND" | "OR"
   editingRuleRateId: string
@@ -60,6 +61,7 @@ export function RateRuleEditor({
   rule,
   rates,
   isSaving,
+  isExecutingRules = false,
   editingRuleConditions,
   editingRuleLogic,
   editingRuleRateId,
@@ -89,6 +91,7 @@ export function RateRuleEditor({
               variant="ghost"
               size="sm"
               onClick={onAddCondition}
+              disabled={isExecutingRules}
               className="h-7 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50"
             >
               <Plus className="h-3 w-3 mr-1" />
@@ -107,7 +110,7 @@ export function RateRuleEditor({
                     value={editingRuleLogic}
                     onValueChange={(value) => onUpdateLogic(value as "AND" | "OR")}
                   >
-                    <SelectTrigger className="h-6 w-16 text-xs border-gray-200">
+                    <SelectTrigger className="h-6 w-16 text-xs border-gray-200" disabled={isExecutingRules}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -126,6 +129,7 @@ export function RateRuleEditor({
                       variant="outline"
                       role="combobox"
                       aria-expanded={openFieldSelects[index]}
+                      disabled={isExecutingRules}
                       className="h-6 w-28 text-xs border-gray-200 justify-between font-normal"
                     >
                       <span className="truncate">
@@ -224,6 +228,7 @@ export function RateRuleEditor({
                   value={condition.value}
                   onChange={(e) => onUpdateCondition(index, { value: e.target.value })}
                   placeholder="Value..."
+                  disabled={isExecutingRules}
                   className="h-6 text-xs border-gray-200 flex-1 min-w-16"
                 />
 
@@ -232,6 +237,7 @@ export function RateRuleEditor({
                     variant="ghost"
                     size="sm"
                     onClick={() => onRemoveCondition(index)}
+                    disabled={isExecutingRules}
                     className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -245,7 +251,7 @@ export function RateRuleEditor({
               <span className="text-xs font-medium text-gray-700 min-w-6">Rate</span>
               {console.log('Select value being set to:', editingRuleRateId)}
               <Select value={editingRuleRateId} onValueChange={onUpdateRateId}>
-                <SelectTrigger className="h-6 text-xs border-gray-200 flex-1 min-w-40 max-w-64">
+                <SelectTrigger className="h-6 text-xs border-gray-200 flex-1 min-w-40 max-w-64" disabled={isExecutingRules}>
                   <SelectValue placeholder="Select rate" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
@@ -272,14 +278,14 @@ export function RateRuleEditor({
             size="sm"
             onClick={onCancel}
             className="h-6 text-xs px-3"
-            disabled={isSaving}
+            disabled={isSaving || isExecutingRules}
           >
             Cancel
           </Button>
           <Button 
             size="sm"
             onClick={onSave}
-            disabled={isSaving || !editingRuleRateId}
+            disabled={isSaving || isExecutingRules || !editingRuleRateId}
             className="bg-black hover:bg-gray-800 text-white h-6 text-xs px-3"
           >
             {isSaving ? (
