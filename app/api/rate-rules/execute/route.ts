@@ -60,25 +60,59 @@ export async function POST(request: NextRequest) {
     // This reduces data transfer and processing time significantly
     const startTime = Date.now()
     
-    // Get only unassigned cargo data with essential fields
-    const { data: cargoData, error: cargoError } = await supabaseAdmin
-      .from('cargo_data')
-      .select(`
-        id,
-        rec_id,
-        rec_numb,
-        orig_oe,
-        dest_oe,
-        mail_cat,
-        mail_class,
-        total_kg,
-        invoice,
-        assigned_customer,
-        rate_id,
-        rate_value
-      `)
-      .is('rate_id', null) // Only get records without assigned rates
-      .limit(50000) // Reasonable limit to prevent memory issues
+    // Get ALL unassigned cargo data with essential fields
+    // Use pagination to handle large datasets without memory issues
+    let allCargoData: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
+
+    console.log('📥 Loading all unassigned cargo data...')
+    
+    while (hasMore) {
+      const { data: cargoData, error: cargoError } = await supabaseAdmin
+        .from('cargo_data')
+        .select(`
+          id,
+          rec_id,
+          rec_numb,
+          orig_oe,
+          dest_oe,
+          mail_cat,
+          mail_class,
+          total_kg,
+          invoice,
+          assigned_customer,
+          rate_id,
+          rate_value
+        `)
+        .is('rate_id', null) // Only get records without assigned rates
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+
+      if (cargoError) {
+        console.error('Error fetching cargo data:', cargoError)
+        return NextResponse.json(
+          { error: 'Failed to fetch cargo data', details: cargoError.message },
+          { status: 500 }
+        )
+      }
+
+      if (cargoData && cargoData.length > 0) {
+        allCargoData.push(...cargoData)
+        console.log(`📥 Loaded page ${page + 1}: ${cargoData.length} records (Total so far: ${allCargoData.length})`)
+        page++
+        hasMore = cargoData.length === pageSize // If we got less than pageSize, we're done
+        
+        // Memory optimization: if we have too many records, process in chunks
+        if (allCargoData.length > 100000) {
+          console.log(`⚠️ Large dataset detected (${allCargoData.length} records). Consider processing in smaller batches.`)
+        }
+      } else {
+        hasMore = false
+      }
+    }
+
+    const cargoData = allCargoData
 
     // Type the cargo data properly
     interface CargoRecord {
@@ -96,18 +130,16 @@ export async function POST(request: NextRequest) {
       rate_value?: number
     }
 
-    const typedCargoData: CargoRecord[] = cargoData || []
-
-    if (cargoError) {
-      console.error('Error fetching cargo data:', cargoError)
-      return NextResponse.json(
-        { error: 'Failed to fetch cargo data', details: cargoError.message },
-        { status: 500 }
-      )
-    }
+    const typedCargoData: CargoRecord[] = cargoData
 
     const dataLoadTime = Date.now() - startTime
     console.log(`✅ Cargo data loaded: ${typedCargoData.length} unassigned records in ${dataLoadTime}ms`)
+
+    // Safety check for extremely large datasets
+    if (typedCargoData.length > 1000000) {
+      console.warn(`⚠️ Very large dataset detected: ${typedCargoData.length} records`)
+      console.warn(`⚠️ This may take a long time to process. Consider running during off-peak hours.`)
+    }
 
     if (typedCargoData.length === 0) {
       return NextResponse.json(
@@ -218,9 +250,18 @@ export async function POST(request: NextRequest) {
       let matchedCount = 0
 
       // OPTIMIZATION: Process cargo data in chunks for better memory usage
-      const chunkSize = 1000
+      // Use smaller chunks for very large datasets to prevent memory issues
+      const chunkSize = typedCargoData.length > 50000 ? 500 : 1000
+      const totalChunks = Math.ceil(typedCargoData.length / chunkSize)
+      
       for (let i = 0; i < typedCargoData.length; i += chunkSize) {
         const chunk = typedCargoData.slice(i, i + chunkSize)
+        const currentChunk = Math.floor(i / chunkSize) + 1
+        
+        // Progress reporting for large datasets
+        if (typedCargoData.length > 10000 && currentChunk % 10 === 0) {
+          console.log(`   📊 Processing chunk ${currentChunk}/${totalChunks} (${Math.round((currentChunk / totalChunks) * 100)}%)`)
+        }
         
         for (const cargo of chunk) {
           processedCount++
