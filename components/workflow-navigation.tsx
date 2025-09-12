@@ -39,7 +39,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
     { id: "import-mail-system", label: "Import Mail System", icon: FileUp, tooltip: "Upload and verify mail system Excel files for processing" },
     { id: "review-merged-excel", label: "Review Merged Data", icon: FileSpreadsheet, tooltip: "Combine and review data from available sources" },
     // { id: "review-customers", label: "Review Customers", icon: Users, tooltip: "Analyze customer performance and individual data breakdown" },
-    { id: "assign-customers", label: "Assign Customers", icon: UserCheck, tooltip: "Configure automated rules for cargo processing and team assignment" },
+    { id: "assign-customers", label: "Assign Contractees", icon: UserCheck, tooltip: "Configure automated rules for cargo processing and team assignment" },
     { id: "assign-rates", label: "Assign Rates", icon: Calculator, tooltip: "Configure automated rate assignment rules and pricing calculations" },
     // { id: "review-rates", label: "Review Rates", icon: DollarSign, tooltip: "Configure pricing for your routes and manage rate plans." },
     { id: "review-invoices", label: "Review Invoices", icon: Receipt, tooltip: "Review and manage generated invoices from processed cargo data" },

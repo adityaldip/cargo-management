@@ -4,11 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase'
 // GET /api/customers/[id]/codes - Get all codes for a customer
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = supabaseAdmin
-    const customerId = params.id
+    const { id: customerId } = await params
 
     const { data: codes, error } = await supabase
       .from('customer_codes')
@@ -37,13 +37,13 @@ export async function GET(
 // POST /api/customers/[id]/codes - Create a new customer code
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = supabaseAdmin
-    const customerId = params.id
+    const { id: customerId } = await params
     const body = await request.json()
-    const { code, accounting_label } = body
+    const { code, product } = body
 
     if (!code) {
       return NextResponse.json(
@@ -57,7 +57,7 @@ export async function POST(
       .insert({
         customer_id: customerId,
         code: code.trim().toUpperCase(),
-        accounting_label: accounting_label?.trim() || null,
+        product: product?.trim() || null,
         is_active: true
       })
       .select()

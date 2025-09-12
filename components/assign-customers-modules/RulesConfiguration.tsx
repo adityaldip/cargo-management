@@ -93,7 +93,7 @@ export function RulesConfiguration() {
   const [isSaving, setIsSaving] = useState(false)
   const [isReordering, setIsReordering] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [customers, setCustomers] = useState<{id: string, name: string, code: string, codes: {id: string, code: string, is_active: boolean}[]}[]>([])
+  const [customers, setCustomers] = useState<{id: string, name: string, code: string, codes: {id: string, code: string, product: string, is_active: boolean}[]}[]>([])
   const [loadingCustomers, setLoadingCustomers] = useState(false)
   const [openCustomerCodeSelect, setOpenCustomerCodeSelect] = useState(false)
   const [openFieldSelects, setOpenFieldSelects] = useState<Record<number, boolean>>({})
@@ -202,7 +202,7 @@ export function RulesConfiguration() {
         // Get all active codes for these customers
         const { data: codesData, error: codesError } = await supabase
           .from('customer_codes')
-          .select('id, customer_id, code, is_active')
+          .select('id, customer_id, code, product, is_active')
           .in('customer_id', customerIds)
           .eq('is_active', true)
           .order('code')
@@ -1178,7 +1178,7 @@ export function RulesConfiguration() {
                             </div>
                           ))}
 
-                          {/* Customer Code Assignment Row */}
+                          {/* Contractee Code Assignment Row */}
                           <div className="flex flex-wrap items-center gap-2 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
                             <span className="text-xs font-medium text-gray-700 w-12 flex-shrink-0">Assign To</span>
                             <Popover open={openCustomerCodeSelect} onOpenChange={setOpenCustomerCodeSelect}>
@@ -1193,27 +1193,27 @@ export function RulesConfiguration() {
                                   <span className="truncate">
                                     {editingRuleAssignTo
                                       ? (() => {
-                                          // Find the selected customer code
+                                          // Find the selected contractee code
                                           for (const customer of memoizedCustomers) {
                                             const selectedCode = customer.codes.find(code => code.id === editingRuleAssignTo)
                                             if (selectedCode) {
-                                              return `${selectedCode.code} (${customer.name})`
+                                              return `${selectedCode.product} (${customer.name})`
                                             }
                                           }
-                                          return "Select customer code..."
+                                          return "Select contractee product..."
                                         })()
                                       : loadingCustomers 
-                                        ? "Loading customer codes..." 
-                                        : "Select customer code..."}
+                                        ? "Loading contractee products..." 
+                                        : "Select contractee product..."}
                                   </span>
                                   <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-80 p-0">
                                 <Command>
-                                  <CommandInput placeholder="Search customer code..." className="h-8 text-xs" />
+                                  <CommandInput placeholder="Search contractee products..." className="h-8 text-xs" />
                                   <CommandEmpty>
-                                    {loadingCustomers ? "Loading..." : "No customer code found."}
+                                    {loadingCustomers ? "Loading..." : "No contractee products found."}
                                   </CommandEmpty>
                                   <CommandGroup className="max-h-48 overflow-auto">
                                     {memoizedCustomers.map((customer) => {
@@ -1221,7 +1221,7 @@ export function RulesConfiguration() {
                                       return activeCodes.map((code) => (
                                         <CommandItem
                                           key={code.id}
-                                          value={`${code.code} ${customer.name}`}
+                                          value={`${code.product} ${customer.name}`}
                                           onSelect={() => {
                                             setEditingRuleAssignTo(code.id)
                                             setOpenCustomerCodeSelect(false)
@@ -1235,8 +1235,8 @@ export function RulesConfiguration() {
                                             )}
                                           />
                                           <div className="flex flex-col">
-                                            <span className="font-medium">{code.code}</span>
-                                            <span className="text-gray-500">{customer.name}</span>
+                                            <span className="font-medium">{code.product}</span>
+                                            <span className="text-gray-500">{customer.name} ({customer.code})</span>
                                           </div>
                                         </CommandItem>
                                       ))

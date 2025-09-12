@@ -118,7 +118,7 @@ export const customerCodesAPI = {
   },
 
   // Create customer code
-  async create(customerId: string, codeData: { code: string; accounting_label?: string }) {
+  async create(customerId: string, codeData: { code: string; product?: string }) {
     return apiRequest(`/customers/${customerId}/codes`, {
       method: 'POST',
       body: JSON.stringify(codeData),
@@ -126,7 +126,7 @@ export const customerCodesAPI = {
   },
 
   // Update customer code
-  async update(codeId: string, updates: { code?: string; accounting_label?: string }) {
+  async update(codeId: string, updates: { code?: string; product?: string }) {
     return apiRequest(`/customer-codes/${codeId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -141,7 +141,7 @@ export const customerCodesAPI = {
   },
 
   // Bulk update customer codes (replace all codes for a customer)
-  async bulkUpdate(customerId: string, codes: Array<{ code: string; accounting_label?: string }>) {
+  async bulkUpdate(customerId: string, codes: Array<{ code: string; product?: string }>) {
     return apiRequest(`/customers/${customerId}/codes/bulk`, {
       method: 'PUT',
       body: JSON.stringify({ codes }),

@@ -4,11 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase'
 // PUT /api/customers/[id]/codes/bulk - Bulk update customer codes
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = supabaseAdmin
-    const customerId = params.id
+    const { id: customerId } = await params
     const body = await request.json()
     const { codes } = body
 
@@ -37,7 +37,7 @@ export async function PUT(
     const codesToInsert = codes.map((code: any) => ({
       customer_id: customerId,
       code: code.code.trim().toUpperCase(),
-      accounting_label: code.accounting_label?.trim() || null,
+      product: code.product?.trim() || null,
       is_active: true
     }))
 

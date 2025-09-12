@@ -62,8 +62,8 @@ export function ExecuteRates() {
     { key: 'mail_class', label: 'Mail Class', type: 'text' },
     { key: 'total_kg', label: 'Total Weight (kg)', type: 'number' },
     { key: 'invoice', label: 'Invoice', type: 'text' },
-    { key: 'customer_name_number', label: 'Customer Name', type: 'text' },
-    { key: 'assigned_customer', label: 'Customer ID', type: 'text' },
+    { key: 'customer_name_number', label: 'Contractee Name', type: 'text' },
+    { key: 'assigned_customer', label: 'Contractee ID', type: 'text' },
     { key: 'rate_name', label: 'Rate Name', type: 'text' },
     { key: 'rate_value', label: 'Rate Value', type: 'number' },
     { key: 'rate_currency', label: 'Rate Currency', type: 'text' }
@@ -526,7 +526,7 @@ export function ExecuteRates() {
       'Mail Class',
       'Total Weight (kg)',
       'Invoice',
-      'Customer Name',
+      'Contractee Name',
       'Rate Name',
       'Rate Value',
       'Rate Currency',
@@ -595,7 +595,7 @@ export function ExecuteRates() {
             <CardTitle className="text-black flex items-center gap-2">
               Assigned Rate Data Preview
             </CardTitle>
-            <p className="text-sm text-gray-600">Showing only cargo records with assigned rates</p>
+            <p className="text-sm text-gray-600">Showing only cargo records with assigned rates for contractees</p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -760,7 +760,7 @@ export function ExecuteRates() {
                 <TableHead className="border">Mail Class</TableHead>
                 <TableHead className="border text-right">Total kg</TableHead>
                 <TableHead className="border">Invoice</TableHead>
-                <TableHead className="border bg-yellow-200">customer</TableHead>
+                <TableHead className="border bg-yellow-200">Contractee</TableHead>
                 <TableHead className="border bg-yellow-200">Rate Name</TableHead>
                 <TableHead className="border bg-yellow-200">Base Rate</TableHead>
                 <TableHead className="border text-right bg-yellow-200">Rate Value</TableHead>

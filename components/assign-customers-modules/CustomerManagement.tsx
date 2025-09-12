@@ -54,9 +54,16 @@ export function CustomerManagement() {
   // New customer form state
   const [newCustomerForm, setNewCustomerForm] = useState({
     name: "",
-    code: ""
+    code: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
+    state: "",
+    postal_code: "",
+    country: ""
   })
-  const [customerCodes, setCustomerCodes] = useState<Array<{code: string, accounting_label: string}>>([{code: "", accounting_label: ""}])
+  const [customerCodes, setCustomerCodes] = useState<Array<{product: string}>>([{product: ""}])
   const [isCreating, setIsCreating] = useState(false)
   const [togglingCustomer, setTogglingCustomer] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -147,7 +154,14 @@ export function CustomerManagement() {
     // Pre-populate form with customer data
     setNewCustomerForm({
       name: customer.name,
-      code: customer.code
+      code: customer.code,
+      email: customer.email || "",
+      phone: customer.phone || "",
+      address: customer.address || "",
+      city: customer.city || "",
+      state: customer.state || "",
+      postal_code: customer.postal_code || "",
+      country: customer.country || ""
     })
     
     // Use existing codes from customer object or fetch if not available
@@ -160,17 +174,16 @@ export function CustomerManagement() {
       
       if (Array.isArray(codes) && codes.length > 0) {
         setCustomerCodes(codes.map((code: any) => ({
-          code: code.code,
-          accounting_label: code.accounting_label || ""
+          product: code.product || ""
         })))
       } else {
-        // Fallback to primary code if no codes found
-        setCustomerCodes([{code: customer.code, accounting_label: ""}])
+        // Fallback to empty product if no codes found
+        setCustomerCodes([{product: ""}])
       }
     } catch (err) {
       console.error('Error fetching customer codes:', err)
-      // Fallback to primary code
-      setCustomerCodes([{code: customer.code, accounting_label: ""}])
+      // Fallback to empty product
+      setCustomerCodes([{product: ""}])
     }
     
     setIsCustomerEditorOpen(true)
@@ -186,10 +199,21 @@ export function CustomerManagement() {
       return
     }
 
-    // Validate customer codes
-    const validCodes = customerCodes.filter(code => code.code.trim())
-    if (validCodes.length === 0) {
-      setError('Please add at least one customer code')
+    if (!newCustomerForm.email.trim()) {
+      setError('Please fill in email address')
+      return
+    }
+
+    // Validate contractee code
+    if (!newCustomerForm.code.trim()) {
+      setError('Please fill in contractee code')
+      return
+    }
+
+    // Validate products
+    const validProducts = customerCodes.filter(code => code.product.trim())
+    if (validProducts.length === 0) {
+      setError('Please add at least one product')
       return
     }
 
@@ -203,16 +227,19 @@ export function CustomerManagement() {
         // Update existing customer
         const result = await updateCustomer(selectedCustomer.id, {
           name: newCustomerForm.name.trim(),
+          email: newCustomerForm.email.trim(),
+          phone: newCustomerForm.phone.trim() || null,
+          address: newCustomerForm.address.trim() || null,
+          city: newCustomerForm.city.trim() || null,
+          state: newCustomerForm.state.trim() || null,
+          postal_code: newCustomerForm.postal_code.trim() || null,
+          country: newCustomerForm.country.trim() || null,
         })
 
         if (result?.success) {
           // Update customer codes
-          const codesResult = await updateCustomerCodes(selectedCustomer.id, validCodes)
+          const codesResult = await updateCustomerCodes(selectedCustomer.id, validProducts)
           if (codesResult?.success) {
-            // Refresh data to show updated codes
-            setIsRefreshing(true)
-            await refetch()
-            setIsRefreshing(false)
             handleCloseModal()
           }
         }
@@ -220,15 +247,19 @@ export function CustomerManagement() {
         // Create new customer
         const result = await createCustomer({
           name: newCustomerForm.name.trim(),
-          code: validCodes[0].code.trim().toUpperCase(), // Use first code as primary
-          email: `${validCodes[0].code.trim().toLowerCase()}@example.com`, // Default email
-          phone: null,
-          address: null,
+          code: newCustomerForm.code.trim().toUpperCase(),
+          email: newCustomerForm.email.trim() || `${newCustomerForm.code.trim().toLowerCase()}@example.com`,
+          phone: newCustomerForm.phone.trim() || null,
+          address: newCustomerForm.address.trim() || null,
+          city: newCustomerForm.city.trim() || null,
+          state: newCustomerForm.state.trim() || null,
+          postal_code: newCustomerForm.postal_code.trim() || null,
+          country: newCustomerForm.country.trim() || null,
           contact_person: null,
           priority: "medium",
           is_active: true,
           total_shipments: 0
-        }, validCodes)
+        }, validProducts)
 
         if (result?.success) {
           handleCloseModal()
@@ -245,18 +276,32 @@ export function CustomerManagement() {
     setSelectedCustomer(null)
     setNewCustomerForm({
       name: "",
-      code: ""
+      code: "",
+      email: "",
+      phone: "",
+      address: "",
+      city: "",
+      state: "",
+      postal_code: "",
+      country: ""
     })
-    setCustomerCodes([{code: "", accounting_label: ""}])
+    setCustomerCodes([{product: ""}])
     setIsCustomerEditorOpen(true)
   }
 
   const handleCloseModal = () => {
     setNewCustomerForm({
       name: "",
-      code: ""
+      code: "",
+      email: "",
+      phone: "",
+      address: "",
+      city: "",
+      state: "",
+      postal_code: "",
+      country: ""
     })
-    setCustomerCodes([{code: "", accounting_label: ""}])
+    setCustomerCodes([{product: ""}])
     setSelectedCustomer(null)
     setIsCustomerEditorOpen(false)
     setError(null)
@@ -264,7 +309,7 @@ export function CustomerManagement() {
 
   // Customer codes management functions
   const addCustomerCode = () => {
-    setCustomerCodes([...customerCodes, {code: "", accounting_label: ""}])
+    setCustomerCodes([...customerCodes, {product: ""}])
   }
 
   const removeCustomerCode = (index: number) => {
@@ -273,7 +318,7 @@ export function CustomerManagement() {
     }
   }
 
-  const updateCustomerCode = (index: number, field: 'code' | 'accounting_label', value: string) => {
+  const updateCustomerCode = (index: number, field: 'product', value: string) => {
     const updated = [...customerCodes]
     updated[index] = { ...updated[index], [field]: value }
     setCustomerCodes(updated)
@@ -329,7 +374,7 @@ export function CustomerManagement() {
           <div className="flex items-center justify-between pb-2">
             <CardTitle className="text-black flex items-center gap-2">
               <UserCheck className="h-5 w-5" />
-              Customer Management
+              Contractee Management
             </CardTitle>
             <div className="flex gap-2">
               <Button 
@@ -339,7 +384,7 @@ export function CustomerManagement() {
                 disabled={!customerCodeAssignmentEnabled}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Customer
+                Add Contractee
               </Button>
               <Button 
                 variant="outline" 
@@ -373,7 +418,7 @@ export function CustomerManagement() {
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <div className="flex-1 relative">
               <Input
-                placeholder="Search customers by name or code..."
+                placeholder="Search contractees by name or code..."
                 value={customerSearchTerm}
                 onChange={(e) => setCustomerSearchTerm(e.target.value)}
                 className="w-full pr-8"
@@ -390,19 +435,19 @@ export function CustomerManagement() {
                 onCheckedChange={setCustomerCodeAssignmentEnabled}
                 className="scale-75"
               />
-              <span className="text-sm text-gray-600">Allow Code Assignment</span>
+              <span className="text-sm text-gray-600">Allow Product Assignment</span>
             </div>
           </div>
           
           {/* Results Summary */}
           {filteredCustomers.length > 0 && (
             <div className="mb-3 text-sm text-gray-600">
-              Showing {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''}
+              Showing {filteredCustomers.length} contractee{filteredCustomers.length !== 1 ? 's' : ''}
               {statusFilter !== 'all' && ` (${statusFilter} only)`}
               {debouncedSearchTerm && ` matching "${debouncedSearchTerm}"`}
               {!customerCodeAssignmentEnabled && (
                 <span className="ml-2 text-orange-600 font-medium">
-                  • Customer Code Assignment Disabled
+                  • Product Assignment Disabled
                 </span>
               )}
             </div>
@@ -420,7 +465,7 @@ export function CustomerManagement() {
                       onClick={handleSortToggle}
                       className="h-6 px-1 text-xs font-medium hover:bg-gray-100"
                     >
-                      Customer
+                      Contractee
                       {sortOrder === 'asc' ? (
                         <ArrowUp className="h-3 w-3 ml-1" />
                       ) : (
@@ -428,7 +473,7 @@ export function CustomerManagement() {
                       )}
                     </Button>
                   </TableHead>
-                  <TableHead className="h-8 py-1 text-xs">Codes</TableHead>
+                  <TableHead className="h-8 py-1 text-xs">Code & Products</TableHead>
                   <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -457,11 +502,11 @@ export function CustomerManagement() {
                     </TableCell>
                     <TableCell className="py-1 px-2">
                       <div className="flex flex-wrap gap-1">
-                        {/* Display primary code from customer table */}
-                        {/* <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
+                        {/* Display contractee code */}
+                        <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
                           {customer.code}
-                        </Badge> */}
-                        {/* Display additional codes from customer_codes table */}
+                        </Badge>
+                        {/* Display products from customer_codes table */}
                         {customer.codes && customer.codes.length > 0 && customer.codes.map((codeItem, index) => (
                           <div key={codeItem.id || index} className="flex items-center gap-1">
                             <Switch
@@ -473,11 +518,11 @@ export function CustomerManagement() {
                             <Badge 
                               variant={codeItem.is_active ? "secondary" : "outline"} 
                               className={cn(
-                                "font-mono text-xs px-1 py-0 h-5",
+                                "text-xs px-1 py-0 h-5",
                                 !codeItem.is_active && "opacity-50"
                               )}
                             >
-                              {codeItem.code}
+                              {codeItem.product || 'No Product'}
                             </Badge>
                           </div>
                         ))}
@@ -562,7 +607,7 @@ export function CustomerManagement() {
           {filteredCustomers.length === 0 && (
             <div className="text-center py-8">
               <UserCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500">No customers found matching your search criteria</p>
+              <p className="text-gray-500">No contractees found matching your search criteria</p>
             </div>
           )}
         </CardContent>
@@ -570,100 +615,182 @@ export function CustomerManagement() {
 
       {/* Create Customer Modal */}
       <Dialog open={isCustomerEditorOpen} onOpenChange={handleCloseModal}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedCustomer ? 'Edit Customer Code' : 'Add Customer Code'}
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-lg">
+              {selectedCustomer ? 'Edit Contractee' : 'Add Contractee'}
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Customer Name *</Label>
-                <Input
-                  id="name"
-                  value={newCustomerForm.name}
-                  onChange={(e) => setNewCustomerForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter customer name"
-                  className="w-full"
-                />
-              </div>
-
-              {/* Customer Codes Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Customer Codes *</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addCustomerCode}
-                    className="flex items-center gap-1"
-                  >
-                    <Plus className="h-3 w-3" />
-                    Add Code
-                  </Button>
+          <div className="space-y-4 py-2">
+            {/* Basic Information Section */}
+            <div className="space-y-3">
+              <h3 className="text-base font-medium text-gray-900">Basic Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="name" className="text-sm">Contractee Name *</Label>
+                  <Input
+                    id="name"
+                    value={newCustomerForm.name}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Enter contractee name"
+                    className="w-full h-8"
+                  />
                 </div>
-                
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="space-y-3">
-                    {customerCodes.map((codeItem, index) => (
-                      <div key={index} className="flex gap-3 items-end">
-                        <div className="flex-1">
-                          <Label htmlFor={`code-${index}`} className="text-xs text-gray-600">
-                            Code *
-                          </Label>
-                          <Input
-                            id={`code-${index}`}
-                            value={codeItem.code}
-                            onChange={(e) => updateCustomerCode(index, 'code', e.target.value.toUpperCase())}
-                            placeholder="e.g., CPHA"
-                            className="font-mono text-sm"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <Label htmlFor={`accounting-${index}`} className="text-xs text-gray-600">
-                            Accounting Label
-                          </Label>
-                          <Input
-                            id={`accounting-${index}`}
-                            value={codeItem.accounting_label}
-                            onChange={(e) => updateCustomerCode(index, 'accounting_label', e.target.value)}
-                            placeholder="e.g., Danija 1"
-                            className="text-sm"
-                          />
-                        </div>
-                        {customerCodes.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeCustomerCode(index)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        )}
+                <div className="space-y-1">
+                  <Label htmlFor="code" className="text-sm">Contractee Code *</Label>
+                  <Input
+                    id="code"
+                    value={newCustomerForm.code}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                    placeholder="e.g., CPHA"
+                    className="w-full font-mono h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="email" className="text-sm">Email *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newCustomerForm.email}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="Enter email address"
+                    className="w-full h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="phone" className="text-sm">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    value={newCustomerForm.phone}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="Enter phone number"
+                    className="w-full h-8"
+                  />
+                </div>
+                <div className="space-y-1 md:col-span-2">
+                  <Label htmlFor="address" className="text-sm">Address</Label>
+                  <Input
+                    id="address"
+                    value={newCustomerForm.address}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, address: e.target.value }))}
+                    placeholder="Enter street address"
+                    className="w-full h-8"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Address Information Section */}
+            <div className="space-y-3">
+              <h3 className="text-base font-medium text-gray-900">Address Information</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="city" className="text-sm">City</Label>
+                  <Input
+                    id="city"
+                    value={newCustomerForm.city}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, city: e.target.value }))}
+                    placeholder="Enter city"
+                    className="w-full h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="state" className="text-sm">State/Province</Label>
+                  <Input
+                    id="state"
+                    value={newCustomerForm.state}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, state: e.target.value }))}
+                    placeholder="Enter state or province"
+                    className="w-full h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="postal_code" className="text-sm">Postal Code</Label>
+                  <Input
+                    id="postal_code"
+                    value={newCustomerForm.postal_code}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, postal_code: e.target.value }))}
+                    placeholder="Enter postal code"
+                    className="w-full h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="country" className="text-sm">Country</Label>
+                  <Input
+                    id="country"
+                    value={newCustomerForm.country}
+                    onChange={(e) => setNewCustomerForm(prev => ({ ...prev, country: e.target.value }))}
+                    placeholder="Enter country"
+                    className="w-full h-8"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Contractee Code and Products Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-medium text-gray-900">Contractee Code & Products *</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addCustomerCode}
+                  className="flex items-center gap-1 h-7 px-2 text-xs"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add Product
+                </Button>
+              </div>
+              
+              <div className="border border-gray-200 rounded-lg p-3">
+                <div className="space-y-2">
+                  {customerCodes.map((codeItem, index) => (
+                    <div key={index} className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <Label htmlFor={`product-${index}`} className="text-xs text-gray-600">
+                          Product *
+                        </Label>
+                        <Input
+                          id={`product-${index}`}
+                          value={codeItem.product}
+                          onChange={(e) => updateCustomerCode(index, 'product', e.target.value)}
+                          placeholder="e.g., Express Mail"
+                          className="text-sm h-8"
+                        />
                       </div>
-                    ))}
-                  </div>
+                      {customerCodes.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeCustomerCode(index)}
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="pt-2">
             <Button 
               variant="outline" 
               onClick={handleCloseModal}
               disabled={isCreating}
+              size="sm"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleSaveCustomer}
-              disabled={isCreating || !newCustomerForm.name.trim() || customerCodes.every(code => !code.code.trim())}
+              disabled={isCreating || !newCustomerForm.name.trim() || !newCustomerForm.email.trim() || !newCustomerForm.code.trim() || customerCodes.every(code => !code.product.trim())}
+              size="sm"
             >
               {isCreating ? (
                 <>
@@ -671,7 +798,7 @@ export function CustomerManagement() {
                   {selectedCustomer ? 'Updating...' : 'Creating...'}
                 </>
               ) : (
-                selectedCustomer ? 'Update Customer Code' : 'Add Customer Code'
+                selectedCustomer ? 'Update Contractee' : 'Add Contractee'
               )}
             </Button>
           </DialogFooter>

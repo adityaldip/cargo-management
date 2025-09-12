@@ -10,7 +10,7 @@ export async function PUT(
     const supabase = supabaseAdmin
     const codeId = params.id
     const body = await request.json()
-    const { code, accounting_label } = body
+    const { code, product } = body
 
     if (!code) {
       return NextResponse.json(
@@ -23,7 +23,7 @@ export async function PUT(
       .from('customer_codes')
       .update({
         code: code.trim().toUpperCase(),
-        accounting_label: accounting_label?.trim() || null,
+        product: product?.trim() || null,
         updated_at: new Date().toISOString()
       })
       .eq('id', codeId)

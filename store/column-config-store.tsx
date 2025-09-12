@@ -35,7 +35,7 @@ const createDefaultColumnConfigs = (): ColumnConfig[] => {
     mail_class: 'Mail Class.',
     total_kg: 'Total Weight (kg).',
     invoice: 'Invoice.',
-    assigned_customer: 'Customer.',
+    assigned_customer: 'Contractee.',
     assigned_rate: 'Rate.',
   }
 

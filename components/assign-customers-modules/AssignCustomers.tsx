@@ -39,7 +39,7 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
-            Configure Customers
+            Configure Contractees
           </Button>
           <Button
             variant={activeTab === "configure" ? "default" : "ghost"}
@@ -83,7 +83,7 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
       {/* Tab Content */}
       {currentView === "rules" && (
         <>
-          {/* Configure Customers Tab */}
+          {/* Configure Contractees Tab */}
           {activeTab === "customers" && <CustomerManagement />}
 
           {/* Configure Rules Tab */}

@@ -92,7 +92,7 @@ export function useCustomerData() {
     }
   }
 
-  const createCustomer = async (customerData: any, customerCodes: Array<{code: string, accounting_label: string}>) => {
+  const createCustomer = async (customerData: any, customerCodes: Array<{product: string}>) => {
     try {
       // First create the customer
       const { data: newCustomer, error } = await customerAPI.create(customerData)
@@ -103,21 +103,24 @@ export function useCustomerData() {
       
       if (newCustomer) {
         // Then create customer codes if provided
+        let customerCodesData = []
         if (customerCodes && customerCodes.length > 0) {
           try {
-            const validCodes = customerCodes.filter(code => code.code.trim())
+            const validCodes = customerCodes.filter(code => code.product.trim())
             if (validCodes.length > 0) {
-              const { error: codesError } = await customerCodesAPI.bulkUpdate(
+              const { data: newCodes, error: codesError } = await customerCodesAPI.bulkUpdate(
                 (newCustomer as any).id, 
                 validCodes.map(code => ({
-                  code: code.code.trim(),
-                  accounting_label: code.accounting_label.trim() || null
+                  code: customerData.code.trim(), // Use the customer's code
+                  product: code.product.trim() || null
                 }))
               )
               
               if (codesError) {
                 console.warn('Failed to create customer codes:', codesError)
                 setError(`Customer created but failed to save codes: ${codesError}`)
+              } else if (newCodes) {
+                customerCodesData = newCodes
               }
             }
           } catch (codeError) {
@@ -126,8 +129,8 @@ export function useCustomerData() {
           }
         }
         
-        // Add the new customer with empty codes initially
-        setCustomers(prev => [{ ...newCustomer as Customer, codes: [] }, ...prev])
+        // Add the new customer with their codes
+        setCustomers(prev => [{ ...newCustomer as Customer, codes: customerCodesData }, ...prev])
         return { success: true, data: newCustomer }
       }
     } catch (err) {
@@ -192,42 +195,60 @@ export function useCustomerData() {
     }
   }
 
-  const updateCustomerCodes = async (customerId: string, codes: Array<{code: string, accounting_label: string}>) => {
+  const updateCustomerCodes = async (customerId: string, codes: Array<{product: string}>) => {
     try {
-      const validCodes = codes.filter(code => code.code.trim())
+      const validCodes = codes.filter(code => code.product.trim())
       if (validCodes.length === 0) {
-        return { success: false, error: 'No valid codes provided' }
+        return { success: false, error: 'No valid products provided' }
       }
 
-      const { error } = await customerCodesAPI.bulkUpdate(
+      // Get the customer's code to use for all products
+      const customer = customers.find(c => c.id === customerId)
+      if (!customer) {
+        return { success: false, error: 'Customer not found' }
+      }
+
+      // Use bulk update to replace all customer codes with new ones
+      console.log('Updating customer codes for:', customerId, 'with products:', validCodes)
+      const { data: newCodes, error } = await customerCodesAPI.bulkUpdate(
         customerId, 
         validCodes.map(code => ({
-          code: code.code.trim(),
-          accounting_label: code.accounting_label.trim() || null
+          code: customer.code.trim(), // Use the customer's code
+          product: code.product.trim() || null
         }))
       )
+      console.log('Bulk update result:', { newCodes, error })
       
       if (error) {
         setError(`Failed to update customer codes: ${error}`)
         return { success: false, error }
       }
       
-      // Update local state with new codes
-      const updatedCodes = validCodes.map((code, index) => ({
-        id: `temp-${Date.now()}-${index}`, // Temporary ID for local state
-        customer_id: customerId,
-        code: code.code.trim(),
-        accounting_label: code.accounting_label.trim() || null,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }))
-      
-      setCustomers(prev => prev.map(customer => 
-        customer.id === customerId 
-          ? { ...customer, codes: updatedCodes }
-          : customer
-      ))
+      // Update local state with the new codes returned from the API
+      if (newCodes && Array.isArray(newCodes)) {
+        setCustomers(prev => prev.map(customer => 
+          customer.id === customerId 
+            ? { ...customer, codes: newCodes }
+            : customer
+        ))
+      } else {
+        // Fallback: update local state with expected structure
+        const updatedCodes = validCodes.map((code, index) => ({
+          id: `temp-${Date.now()}-${index}`, // Temporary ID for local state
+          customer_id: customerId,
+          code: customer.code.trim(), // Use the customer's code
+          product: code.product.trim() || null,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }))
+        
+        setCustomers(prev => prev.map(customer => 
+          customer.id === customerId 
+            ? { ...customer, codes: updatedCodes }
+            : customer
+        ))
+      }
       
       return { success: true }
     } catch (err) {

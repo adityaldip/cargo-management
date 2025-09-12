@@ -37,7 +37,7 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
   
   const [assignTo, setAssignTo] = useState("") // This will now store customer_code ID
   const [isLoading, setIsLoading] = useState(false)
-  const [customers, setCustomers] = useState<{id: string, name: string, code: string, codes: {id: string, code: string, is_active: boolean}[]}[]>([])
+  const [customers, setCustomers] = useState<{id: string, name: string, code: string, codes: {id: string, code: string, product: string, is_active: boolean}[]}[]>([])
   const [loadingCustomers, setLoadingCustomers] = useState(false)
   const [conditionLogic, setConditionLogic] = useState<"AND" | "OR">("AND")
 
@@ -92,7 +92,7 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
         // Get all active codes for these customers
         const { data: codesData, error: codesError } = await supabase
           .from('customer_codes')
-          .select('id, customer_id, code, is_active')
+          .select('id, customer_id, code, product, is_active')
           .in('customer_id', customerIds)
           .eq('is_active', true)
           .order('code')
@@ -135,7 +135,7 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
     }
 
     if (!assignTo) {
-      alert("Please select a customer code to assign to")
+      alert("Please select a contractee product to assign to")
       return
     }
 
@@ -190,7 +190,7 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Customer Assignment Rule</DialogTitle>
+          <DialogTitle>Create New Contractee Assignment Rule</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -322,12 +322,12 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
             </div>
           </div>
 
-          {/* Customer Code Assignment */}
+          {/* Contractee Code Assignment */}
           <div className="space-y-2">
-            <Label htmlFor="assign-to">Assign To Customer Code *</Label>
+            <Label htmlFor="assign-to">Assign To Contractee Product *</Label>
             <Select value={assignTo} onValueChange={setAssignTo} disabled={loadingCustomers}>
               <SelectTrigger>
-                <SelectValue placeholder={loadingCustomers ? "Loading customer codes..." : "Select customer code..."} />
+                <SelectValue placeholder={loadingCustomers ? "Loading contractee products..." : "Select contractee product..."} />
               </SelectTrigger>
               <SelectContent>
                 {customers.map((customer) => {
@@ -335,8 +335,10 @@ export function CreateCustomerRuleModal({ isOpen, onClose, onSave }: CreateCusto
                   return activeCodes.map((code) => (
                     <SelectItem key={code.id} value={code.id}>
                       <div className="flex flex-col">
-                        <span className="font-medium">{code.code}</span>
-                        <span className="text-gray-500 text-xs">{customer.name}</span>
+                        <span className="font-medium">{code.product}</span>
+                        <span className="text-gray-500 text-xs">
+                          {customer.name} ({customer.code})
+                        </span>
                       </div>
                     </SelectItem>
                   ))

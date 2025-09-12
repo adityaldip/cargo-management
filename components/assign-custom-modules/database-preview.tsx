@@ -147,7 +147,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         
         const convertedData = result.data.map((record: any) => {
           const customerValue = record.customer_name || record.assigned_customer || record.customer_name_number || null
-          console.log(`🔍 Frontend customer mapping: assigned_customer=${record.assigned_customer}, customer_name=${record.customer_name}, final=${customerValue}`)
+          console.log(`🔍 Frontend contractee mapping: assigned_customer=${record.assigned_customer}, customer_name=${record.customer_name}, final=${customerValue}`)
           
           return {
             id: record.id,

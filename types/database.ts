@@ -15,45 +15,60 @@ export interface Database {
           name: string
           code: string
           email: string
-          phone: string
-          address: string
-          contact_person: string
+          phone: string | null
+          address: string | null
+          city: string | null
+          state: string | null
+          postal_code: string | null
+          country: string | null
+          contact_person: string | null
           priority: 'high' | 'medium' | 'low'
           is_active: boolean
           created_date: string
           total_shipments: number
           created_at: string
           updated_at: string
+          accounting_label: string | null
         }
         Insert: {
           id?: string
           name: string
           code: string
           email: string
-          phone: string
-          address: string
-          contact_person: string
+          phone?: string | null
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          postal_code?: string | null
+          country?: string | null
+          contact_person?: string | null
           priority?: 'high' | 'medium' | 'low'
           is_active?: boolean
           created_date?: string
           total_shipments?: number
           created_at?: string
           updated_at?: string
+          accounting_label?: string | null
         }
         Update: {
           id?: string
           name?: string
           code?: string
           email?: string
-          phone?: string
-          address?: string
-          contact_person?: string
+          phone?: string | null
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          postal_code?: string | null
+          country?: string | null
+          contact_person?: string | null
           priority?: 'high' | 'medium' | 'low'
           is_active?: boolean
           created_date?: string
           total_shipments?: number
           created_at?: string
           updated_at?: string
+          accounting_label?: string | null
         }
       }
       customer_codes: {
@@ -62,6 +77,7 @@ export interface Database {
           customer_id: string
           code: string
           accounting_label: string | null
+          product: string | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -71,6 +87,7 @@ export interface Database {
           customer_id: string
           code: string
           accounting_label?: string | null
+          product?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -80,6 +97,7 @@ export interface Database {
           customer_id?: string
           code?: string
           accounting_label?: string | null
+          product?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string

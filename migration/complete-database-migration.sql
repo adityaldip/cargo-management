@@ -28,6 +28,10 @@ CREATE TABLE public.customers (
     email CHARACTER VARYING(255) NOT NULL,
     phone CHARACTER VARYING(50) NULL,
     address TEXT NULL,
+    city CHARACTER VARYING(100) NULL,
+    state CHARACTER VARYING(100) NULL,
+    postal_code CHARACTER VARYING(20) NULL,
+    country CHARACTER VARYING(100) NULL,
     contact_person CHARACTER VARYING(255) NULL,
     priority priority_level NULL DEFAULT 'medium'::priority_level,
     is_active BOOLEAN NULL DEFAULT true,
@@ -46,11 +50,12 @@ CREATE TABLE public.customer_codes (
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     code CHARACTER VARYING(50) NOT NULL,
     accounting_label CHARACTER VARYING(255) NULL,
+    product CHARACTER VARYING(255) NULL,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT customer_codes_pkey PRIMARY KEY (id),
-    CONSTRAINT customer_codes_customer_id_code_key UNIQUE (customer_id, code)
+    CONSTRAINT customer_codes_customer_id_product_key UNIQUE (customer_id, product)
 ) TABLESPACE pg_default;
 
 -- 3. Create rates table
@@ -172,9 +177,14 @@ CREATE TABLE public.invoices (
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_customers_code ON public.customers USING btree (code) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_customers_is_active ON public.customers USING btree (is_active) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_customers_city ON public.customers USING btree (city) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_customers_state ON public.customers USING btree (state) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_customers_country ON public.customers USING btree (country) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_customer_codes_customer_id ON public.customer_codes USING btree (customer_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_customer_codes_code ON public.customer_codes USING btree (code) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_customer_codes_customer_id_code ON public.customer_codes USING btree (customer_id, code) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_customer_codes_product ON public.customer_codes USING btree (product) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_rates_is_active ON public.rates USING btree (is_active) TABLESPACE pg_default;
 
@@ -296,23 +306,23 @@ GRANT ALL ON public.column_mappings TO service_role;
 GRANT ALL ON public.invoices TO service_role;
 
 -- Insert sample data
-INSERT INTO public.customers (name, code, email, phone, address, contact_person, priority, total_shipments) VALUES
-('Premium Express Ltd', 'PREM001', 'contact@premiumexpress.com', '+371 2345 6789', 'Riga, Latvia', 'Anna Berzina', 'high', 245),
-('Nordic Post AS', 'NORD002', 'info@nordicpost.ee', '+372 5678 9012', 'Tallinn, Estonia', 'Erik Saar', 'high', 189),
-('Baltic Express Network', 'BALT003', 'support@balticexpress.lt', '+370 6789 0123', 'Vilnius, Lithuania', 'Ruta Kazlauskas', 'medium', 156),
-('Cargo Masters International', 'CARG004', 'operations@cargomasters.com', '+49 30 1234 5678', 'Berlin, Germany', 'Hans Mueller', 'medium', 134),
-('General Mail Services', 'GENM005', 'service@generalmail.com', '+33 1 2345 6789', 'Paris, France', 'Marie Dubois', 'low', 78);
+INSERT INTO public.customers (name, code, email, phone, address, city, state, postal_code, country, contact_person, priority, total_shipments) VALUES
+('Premium Express Ltd', 'PREM001', 'contact@premiumexpress.com', '+371 2345 6789', 'Brivibas iela 123', 'Riga', 'Riga', 'LV-1010', 'Latvia', 'Anna Berzina', 'high', 245),
+('Nordic Post AS', 'NORD002', 'info@nordicpost.ee', '+372 5678 9012', 'Narva mnt 7', 'Tallinn', 'Harjumaa', '10117', 'Estonia', 'Erik Saar', 'high', 189),
+('Baltic Express Network', 'BALT003', 'support@balticexpress.lt', '+370 6789 0123', 'Gedimino pr. 1', 'Vilnius', 'Vilnius County', '01103', 'Lithuania', 'Ruta Kazlauskas', 'medium', 156),
+('Cargo Masters International', 'CARG004', 'operations@cargomasters.com', '+49 30 1234 5678', 'Unter den Linden 1', 'Berlin', 'Berlin', '10117', 'Germany', 'Hans Mueller', 'medium', 134),
+('General Mail Services', 'GENM005', 'service@generalmail.com', '+33 1 2345 6789', 'Champs-Élysées 1', 'Paris', 'Île-de-France', '75008', 'France', 'Marie Dubois', 'low', 78);
 
 -- Insert sample customer codes
-INSERT INTO public.customer_codes (customer_id, code, accounting_label, is_active) VALUES
-((SELECT id FROM public.customers WHERE code = 'PREM001'), 'PREM001', 'Premium Express Main Code', true),
-((SELECT id FROM public.customers WHERE code = 'PREM001'), 'PREM001-EXPRESS', 'Premium Express Express Service', true),
-((SELECT id FROM public.customers WHERE code = 'NORD002'), 'NORD002', 'Nordic Post Main Code', true),
-((SELECT id FROM public.customers WHERE code = 'NORD002'), 'NORD002-PRIORITY', 'Nordic Post Priority Service', true),
-((SELECT id FROM public.customers WHERE code = 'BALT003'), 'BALT003', 'Baltic Express Main Code', true),
-((SELECT id FROM public.customers WHERE code = 'CARG004'), 'CARG004', 'Cargo Masters Main Code', true),
-((SELECT id FROM public.customers WHERE code = 'CARG004'), 'CARG004-HEAVY', 'Cargo Masters Heavy Cargo', true),
-((SELECT id FROM public.customers WHERE code = 'GENM005'), 'GENM005', 'General Mail Main Code', true);
+INSERT INTO public.customer_codes (customer_id, code, accounting_label, product, is_active) VALUES
+((SELECT id FROM public.customers WHERE code = 'PREM001'), 'PREM001', 'Premium Express Main Code', 'Standard Mail', true),
+((SELECT id FROM public.customers WHERE code = 'PREM001'), 'PREM001-EXPRESS', 'Premium Express Express Service', 'Express Mail', true),
+((SELECT id FROM public.customers WHERE code = 'NORD002'), 'NORD002', 'Nordic Post Main Code', 'Standard Mail', true),
+((SELECT id FROM public.customers WHERE code = 'NORD002'), 'NORD002-PRIORITY', 'Nordic Post Priority Service', 'Priority Mail', true),
+((SELECT id FROM public.customers WHERE code = 'BALT003'), 'BALT003', 'Baltic Express Main Code', 'Standard Mail', true),
+((SELECT id FROM public.customers WHERE code = 'CARG004'), 'CARG004', 'Cargo Masters Main Code', 'Standard Cargo', true),
+((SELECT id FROM public.customers WHERE code = 'CARG004'), 'CARG004-HEAVY', 'Cargo Masters Heavy Cargo', 'Heavy Cargo', true),
+((SELECT id FROM public.customers WHERE code = 'GENM005'), 'GENM005', 'General Mail Main Code', 'Standard Mail', true);
 
 -- Insert sample rates
 INSERT INTO public.rates (name, description, rate_type, base_rate, currency, multiplier, tags, is_active) VALUES

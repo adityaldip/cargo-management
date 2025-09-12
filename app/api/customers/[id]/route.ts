@@ -26,11 +26,12 @@ export async function GET(
 // PUT /api/customers/[id] - Update customer
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
-    const { data: customer, error } = await customerOperations.update(params.id, body)
+    const { data: customer, error } = await customerOperations.update(id, body)
     
     if (error) {
       return NextResponse.json({ error }, { status: 400 })
@@ -49,10 +50,11 @@ export async function PUT(
 // DELETE /api/customers/[id] - Delete customer
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await customerOperations.delete(params.id)
+    const { id } = await params
+    const { error } = await customerOperations.delete(id)
     
     if (error) {
       return NextResponse.json({ error }, { status: 400 })

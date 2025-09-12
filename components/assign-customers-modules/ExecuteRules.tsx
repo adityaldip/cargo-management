@@ -73,7 +73,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
     { key: 'mail_class', label: 'Mail Class', type: 'text' },
     { key: 'total_kg', label: 'Total Weight (kg)', type: 'number' },
     { key: 'invoice', label: 'Invoice', type: 'text' },
-    { key: 'assigned_customer', label: 'Assigned Customer', type: 'text' }
+    { key: 'assigned_customer', label: 'Assigned Contractee', type: 'text' }
   ]
 
   // Fetch customers from Supabase
@@ -297,7 +297,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
               
               const { data: customerCodes, error: customerCodesError } = await supabase
                 .from('customer_codes')
-                .select('id, code, customer_id, customers!inner(id, name)')
+                .select('id, code, product, customer_id, customers!inner(id, name)')
                 .in('id', customerCodeIds)
               
               if (customerCodesError) {
@@ -527,7 +527,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
               
               const { data: customerCodes, error: customerCodesError } = await supabase
                 .from('customer_codes')
-                .select('id, code, customer_id, customers!inner(id, name)')
+                .select('id, code, product, customer_id, customers!inner(id, name)')
                 .in('id', customerCodeIds)
               
               if (customerCodesError) {
@@ -612,8 +612,8 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
       'Mail Class',
       'Total Weight (kg)',
       'Invoice',
-      'Assigned Customer',
-      'Customer Code',
+      'Assigned Contractee',
+      'Contractee Product',
       'Assigned At'
     ]
     csv += headers.join(",") + "\n"
@@ -634,8 +634,8 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         record.mail_class || '',
         record.total_kg || '0.0',
         record.invoice || '',
-        record.customers?.name || (record.assigned_customer ? `Customer ID: ${record.assigned_customer}` : ''),
-        record.customer_codes?.code || '',
+        record.customers?.name || (record.assigned_customer ? `Contractee ID: ${record.assigned_customer}` : ''),
+        record.customer_codes?.product || '',
         record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : ''
       ]
       csv += row.map(field => `"${field}"`).join(",") + "\n"
@@ -677,7 +677,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
           <div className="flex justify-between items-start">
             <div>
               <CardTitle className="text-black">Assigned Cargo Data Preview</CardTitle>
-              <p className="text-sm text-gray-600">Showing only cargo records with assigned customers</p>
+              <p className="text-sm text-gray-600">Showing only cargo records with assigned contractees</p>
             </div>
             <div className="flex gap-2">
               <Button
@@ -887,8 +887,8 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   <TableHead className="border">Mail Class</TableHead>
                   <TableHead className="border text-right">Total kg</TableHead>
                   <TableHead className="border">Invoice</TableHead>
-                    <TableHead className="border bg-yellow-200">Assigned Customer</TableHead>
-                    <TableHead className="border bg-yellow-200">Customer Code</TableHead>
+                    <TableHead className="border bg-yellow-200">Assigned Contractee</TableHead>
+                    <TableHead className="border bg-yellow-200">Contractee Product</TableHead>
                     <TableHead className="border bg-yellow-200">Assigned At</TableHead>
                 </TableRow>
               </TableHeader>
@@ -912,7 +912,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                         {record.customers?.name || (record.assigned_customer ? `Customer ID: ${record.assigned_customer}` : 'Unassigned')}
                       </TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
-                        {(record as any).customer_codes?.code || 'N/A'}
+                        {(record as any).customer_codes?.product || 'N/A'}
                       </TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
                         {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
@@ -1004,8 +1004,8 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                     <TableHead>Flight No.</TableHead>
                     <TableHead>Mail Cat.</TableHead>
                     <TableHead>Weight (kg)</TableHead>
-                    <TableHead>Assigned Customer</TableHead>
-                    <TableHead>Customer Code</TableHead>
+                    <TableHead>Assigned Contractee</TableHead>
+                    <TableHead>Contractee Product</TableHead>
                     <TableHead>Assigned At</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -1038,10 +1038,10 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                           {row.total_kg || "0.0"}
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate">
-                          {row.customers?.name || (row.assigned_customer ? `Customer ID: ${row.assigned_customer}` : 'Unassigned')}
+                          {row.customers?.name || (row.assigned_customer ? `Contractee ID: ${row.assigned_customer}` : 'Unassigned')}
                         </TableCell>
                         <TableCell>
-                          {(row as any).customer_codes?.code || 'N/A'}
+                          {(row as any).customer_codes?.product || 'N/A'}
                         </TableCell>
                         <TableCell>
                           {row.assigned_at ? new Date(row.assigned_at).toLocaleDateString() : "N/A"}
