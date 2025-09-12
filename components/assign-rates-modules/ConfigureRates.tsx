@@ -3,31 +3,20 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Calculator,
   Plus, 
   GripVertical,
-  Edit,
-  Copy,
   Trash2,
   Play,
   Pause,
   CheckCircle,
   Clock,
-  MapPin,
-  Weight,
-  Package,
-  DollarSign,
-  Plane,
   Settings
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RateRule } from "@/types/rate-management"
-import { SAMPLE_RATE_RULES } from "./sample-data"
 import { useRateRulesData, useRatesData } from "./hooks"
 import { CreateRateRuleModal } from "./CreateRateRuleModal"
 import { RateRuleEditor } from "./RateRuleEditor"
@@ -81,6 +70,7 @@ export function ConfigureRates() {
     loadRecordCount()
   }, [])
 
+
   // Sync local rules when database rules change
   useEffect(() => {
     if (rules.length > 0) {
@@ -88,16 +78,8 @@ export function ConfigureRates() {
     }
   }, [rules])
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
   const [draggedRule, setDraggedRule] = useState<string | null>(null)
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
-  const [showFilters, setShowFilters] = useState(false)
-  const [filterLogic, setFilterLogic] = useState<"AND" | "OR">("OR")
-  const [filterConditions, setFilterConditions] = useState<{
-    field: string
-    operator: string
-    value: string
-  }[]>([{ field: "route", operator: "equals", value: "" }])
   
   // State for expanded rule editing
   const [editingRuleConditions, setEditingRuleConditions] = useState<{
@@ -153,51 +135,17 @@ export function ConfigureRates() {
   // Use local rules if available, fallback to database rules
   const displayRules = localRules.length > 0 ? localRules : rules
 
-  // Filter rules based on search and conditions
-  const filteredRules = displayRules.filter(rule => {
-    // First apply search filter
-    const matchesSearch = !searchTerm || (
-      rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (rule.description && rule.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
-    
-    if (!matchesSearch) return false
-    
-    // Then apply condition filters if any are set
-    if (!showFilters || filterConditions.every(cond => !cond.value)) return true
-    
-    const activeConditions = filterConditions.filter(cond => cond.value.trim())
-    if (activeConditions.length === 0) return true
-    
-    const conditionResults = activeConditions.map((filterCond) => {
-      const ruleConditions = rule.conditions || []
-      return ruleConditions.some(ruleCond => {
-        const fieldMatch = ruleCond.field === filterCond.field
-        
-        if (!fieldMatch) return false
-        
-        const ruleValue = ruleCond.value.toLowerCase()
-        const filterValue = filterCond.value.toLowerCase()
-        
-        switch (filterCond.operator) {
-          case "contains":
-            return ruleValue.includes(filterValue)
-          case "equals":
-            return ruleValue === filterValue
-          case "starts_with":
-            return ruleValue.startsWith(filterValue)
-          case "ends_with":
-            return ruleValue.endsWith(filterValue)
-          default:
-            return false
-        }
-      })
-    })
-    
-    return filterLogic === "OR" 
-      ? conditionResults.some(result => result)
-      : conditionResults.every(result => result)
-  })
+  // Debug logging for data sources
+  console.log('=== DEBUG: Data Sources ===')
+  console.log('Database rules count:', rules.length)
+  console.log('Local rules count:', localRules.length)
+  console.log('Display rules count:', displayRules.length)
+  console.log('Database rules:', rules.map(r => ({ id: r.id, name: r.name })))
+  console.log('Local rules:', localRules.map(r => ({ id: r.id, name: r.name })))
+  console.log('Display rules:', displayRules.map(r => ({ id: r.id, name: r.name })))
+
+  // Display all rules (no filtering needed)
+  const filteredRules = displayRules
 
   const handleToggleRule = async (ruleId: string) => {
     const result = await toggleRateRule(ruleId)
@@ -318,32 +266,6 @@ export function ConfigureRates() {
     return <Clock className="h-4 w-4 text-yellow-500" />
   }
 
-  const getConditionIcon = (field: string) => {
-    const icons = {
-      route: MapPin,
-      weight: Weight,
-      mail_category: Package,
-      customer: DollarSign,
-      flight_number: Plane,
-      distance: Calculator
-    }
-    const Icon = icons[field as keyof typeof icons] || Settings
-    return <Icon className="h-3 w-3" />
-  }
-
-  const clearFilters = () => {
-    setFilterConditions([{ field: "route", operator: "equals", value: "" }])
-    setFilterLogic("OR")
-    setShowFilters(false)
-  }
-
-  // Get unique values for each field type from sample rules
-  const getFieldValues = (fieldType: string) => {
-    const allValues = SAMPLE_RATE_RULES.flatMap(rule => 
-      rule.conditions.map(cond => cond.value)
-    )
-    return [...new Set(allValues)]
-  }
 
   // Helper functions for editing rule conditions
   const addEditingRuleCondition = () => {
@@ -376,7 +298,14 @@ export function ConfigureRates() {
         rate_id: editingRuleRateId
       }
 
-      console.log('Saving rate rule with data:', updateData)
+      console.log('=== DEBUG: Saving rate rule ===')
+      console.log('Current rule:', currentRule)
+      console.log('Rule ID:', currentRule.id)
+      console.log('Rule ID type:', typeof currentRule.id)
+      console.log('Update data:', updateData)
+      console.log('Expanded rule ID:', expandedRule)
+      console.log('All display rules:', displayRules.map(r => ({ id: r.id, name: r.name })))
+      
       const result = await updateRateRule(currentRule.id, updateData)
       console.log('Save result:', result)
       
@@ -672,37 +601,25 @@ export function ConfigureRates() {
         )}
 
       <CardContent>
-        {/* Filter Section */}
+        {/* Rules Count Section */}
         <div className="mb-4 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {showFilters && filterConditions.some(c => c.value) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="text-xs h-8 px-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                >
-                  Clear all
-                </Button>
-              )}
-            </div>
             <div className="flex items-center gap-4">
               <div className="text-xs text-gray-500">
-                {filteredRules.length} of {displayRules.length} rules
+                {filteredRules.length} rules
               </div>
-              {/* Record Count Display */}
-              <div className="flex items-center gap-2 text-xs text-gray-600">
-                {isLoadingCount ? (
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
-                ) : recordCount ? (
-                  <>
-                    <span>Total records:</span>
-                    <span className="font-semibold text-blue-600">{recordCount.total.toLocaleString()}</span>
-                    <span className="text-gray-400">(all data will be processed)</span>
-                  </>
-                ) : null}
-              </div>
+            </div>
+            {/* Record Count Display - Moved to the right */}
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              {isLoadingCount ? (
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+              ) : recordCount ? (
+                <>
+                  <span>Total records:</span>
+                  <span className="font-semibold text-blue-600">{recordCount.total.toLocaleString()}</span>
+                  <span className="text-gray-400">(all data will be processed)</span>
+                </>
+              ) : null}
             </div>
           </div>
         </div>

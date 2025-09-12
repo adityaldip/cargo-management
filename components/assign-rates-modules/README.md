@@ -11,7 +11,6 @@ assign-rates-modules/
 ├── ConfigureRates.tsx    # Rate rules configuration tab
 ├── ExecuteRates.tsx      # Rate execution and results tab
 ├── types.ts              # TypeScript interfaces and types
-├── sample-data.ts        # Sample rate rules and configurations
 ├── index.ts              # Export barrel file
 └── README.md            # This file
 ```
@@ -46,12 +45,6 @@ All TypeScript interfaces are defined in `types.ts`:
 - `AssignRatesProps` - Main component props
 - `ViewType` - Tab navigation type
 
-## Sample Data
-
-`sample-data.ts` contains:
-- Sample rate rules with various conditions and actions
-- Default rate configuration settings
-- Mock data for testing and development
 
 ## Usage
 

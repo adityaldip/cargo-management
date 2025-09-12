@@ -10,6 +10,13 @@ export async function GET(request: NextRequest) {
       .from('cargo_data')
       .select('*', { count: 'exact', head: true })
     
+    // Also count rate rules for debugging
+    const { count: rateRulesCount, error: rateRulesError } = await supabaseAdmin
+      .from('rate_rules')
+      .select('*', { count: 'exact', head: true })
+    
+    console.log('Rate rules count:', rateRulesCount)
+    
     if (error) {
       console.error('Error counting cargo data:', error)
       return NextResponse.json(
@@ -23,8 +30,9 @@ export async function GET(request: NextRequest) {
       data: {
         recordsToProcess: count || 0,
         totalRecords: count || 0,
+        rateRulesCount: rateRulesCount || 0,
         processingMode: 'ALL_DATA',
-        message: `Found ${count || 0} total cargo records to process`
+        message: `Found ${count || 0} total cargo records to process and ${rateRulesCount || 0} rate rules`
       }
     })
     

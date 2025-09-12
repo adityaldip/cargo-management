@@ -20,11 +20,25 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    console.log('=== DEBUG: Fetching rate rule by ID ===')
+    console.log('Requested ID:', params.id)
+    
+    // First, let's see what rate rules exist in the database
+    const { data: allRules, error: allRulesError } = await supabaseAdmin
+      .from('rate_rules')
+      .select('id, name')
+      .limit(10)
+    
+    console.log('All rate rules in database:', allRules)
+    console.log('All rules error:', allRulesError)
+
     const { data: rateRule, error } = await supabaseAdmin
       .from('rate_rules')
       .select('*')
       .eq('id', params.id)
       .single()
+
+    console.log('Specific rule query result:', { rateRule, error })
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -47,8 +61,14 @@ export async function PUT(
   try {
     const body = await request.json()
 
+    console.log('=== DEBUG: Rate rule update API ===')
+    console.log('Params ID:', params.id)
+    console.log('Params ID type:', typeof params.id)
+    console.log('Request body:', body)
+
     // Validate ID parameter
     if (!params.id) {
+      console.log('ERROR: No ID parameter provided')
       return NextResponse.json(
         { error: 'Rate rule ID is required' },
         { status: 400 }
@@ -56,13 +76,17 @@ export async function PUT(
     }
 
     // Check if rule exists
+    console.log('Checking if rule exists with ID:', params.id)
     const { data: existingRule, error: fetchError } = await supabaseAdmin
       .from('rate_rules')
       .select('id')
       .eq('id', params.id)
       .single()
 
+    console.log('Existing rule query result:', { existingRule, fetchError })
+
     if (fetchError || !existingRule) {
+      console.log('ERROR: Rule not found or fetch error:', fetchError)
       return NextResponse.json(
         { error: 'Rate rule not found' },
         { status: 404 }

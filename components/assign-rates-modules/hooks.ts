@@ -19,13 +19,15 @@ export function useRateRulesData() {
       }
       setError(null)
 
-      // Data is already loaded from Zustand store
-      if (!isRefresh && rateRules.length > 0) {
-        setLoading(false)
-        return
-      }
+      // Always fetch fresh data from Supabase (no caching)
+      // Removed caching logic to ensure fresh data on every load
 
       const { data: rateRulesData, error: fetchError } = await rateRulesAPI.getAll()
+
+      console.log('=== DEBUG: API Response ===')
+      console.log('Rate rules API response:', { rateRulesData, fetchError })
+      console.log('Rate rules data type:', typeof rateRulesData)
+      console.log('Rate rules data length:', rateRulesData?.length)
 
       if (fetchError) {
         setError(fetchError)
@@ -38,7 +40,7 @@ export function useRateRulesData() {
           // Extract rate information from the joined rates table
           const rate = rule.rates || {}
           
-          return {
+          const transformedRule = {
             id: rule.id,
             name: rule.name || 'Unnamed Rule',
             description: rule.description || '',
@@ -55,7 +57,14 @@ export function useRateRulesData() {
             createdAt: rule.created_at || new Date().toISOString(),
             updatedAt: rule.updated_at || new Date().toISOString()
           }
+          
+          console.log('Transformed rule:', { original: rule, transformed: transformedRule })
+          return transformedRule
         })
+
+        console.log('=== DEBUG: Final Transformed Rules ===')
+        console.log('Transformed rules count:', transformedRules.length)
+        console.log('Transformed rules:', transformedRules.map(r => ({ id: r.id, name: r.name })))
 
         setRateRules(transformedRules)
       }
