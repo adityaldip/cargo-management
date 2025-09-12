@@ -95,6 +95,7 @@ CREATE TABLE public.rate_rules (
     is_active BOOLEAN DEFAULT true,
     priority INTEGER NOT NULL,
     conditions JSONB NOT NULL DEFAULT '[]',
+    actions JSONB NOT NULL DEFAULT '{}',
     rate_id UUID NOT NULL REFERENCES rates(id) ON DELETE CASCADE,
     match_count INTEGER DEFAULT 0,
     last_run TIMESTAMP WITH TIME ZONE NULL,
@@ -183,6 +184,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_rules_is_active ON public.customer_rules
 CREATE INDEX IF NOT EXISTS idx_rate_rules_priority ON public.rate_rules USING btree (priority) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_rate_rules_is_active ON public.rate_rules USING btree (is_active) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_rate_rules_rate_id ON public.rate_rules USING btree (rate_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_rate_rules_actions ON public.rate_rules USING GIN (actions) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_cargo_data_rec_id ON public.cargo_data USING btree (rec_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_cargo_data_orig_oe ON public.cargo_data USING btree (orig_oe) TABLESPACE pg_default;
@@ -332,15 +334,18 @@ INSERT INTO public.customer_rules (name, description, priority, conditions, acti
 ('SEARND', 'Route rule for SEARND', 10, '[{"field": "orig_oe", "operator": "equals", "value": "SEARND"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'BALT003') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']);
 
 -- Insert sample rate rules
-INSERT INTO public.rate_rules (name, description, priority, conditions, rate_id) VALUES
+INSERT INTO public.rate_rules (name, description, priority, conditions, actions, rate_id) VALUES
 ('EU Zone Standard Rate', 'Standard rate for EU destinations under 25kg', 1, 
- '[{"field": "route", "operator": "contains", "value": "FRANK,DEBER,CZPRG,ITFCO"}, {"field": "weight", "operator": "less_than", "value": "25"}, {"field": "mail_category", "operator": "equals", "value": "A"}]'::jsonb, 
+ '[{"field": "route", "operator": "contains", "value": "FRANK,DEBER,CZPRG,ITFCO"}, {"field": "weight", "operator": "less_than", "value": "25"}, {"field": "mail_category", "operator": "equals", "value": "A"}]'::jsonb,
+ '{"assignRate": "' || (SELECT id FROM public.rates WHERE name = 'EU Standard Rate') || '"}'::jsonb,
  (SELECT id FROM public.rates WHERE name = 'EU Standard Rate')),
 ('Nordic Express Premium', 'Premium rates for Nordic routes with priority handling', 2, 
- '[{"field": "route", "operator": "contains", "value": "SEARNK,NOKRS,DKAAR,FICPH"}, {"field": "mail_category", "operator": "equals", "value": "A"}, {"field": "weight", "operator": "greater_than", "value": "10"}]'::jsonb, 
+ '[{"field": "route", "operator": "contains", "value": "SEARNK,NOKRS,DKAAR,FICPH"}, {"field": "mail_category", "operator": "equals", "value": "A"}, {"field": "weight", "operator": "greater_than", "value": "10"}]'::jsonb,
+ '{"assignRate": "' || (SELECT id FROM public.rates WHERE name = 'Nordic Express Premium') || '"}'::jsonb,
  (SELECT id FROM public.rates WHERE name = 'Nordic Express Premium')),
 ('Heavy Cargo Discount', 'Discounted rates for heavy shipments over 50kg', 3, 
- '[{"field": "weight", "operator": "greater_than", "value": "50"}, {"field": "mail_category", "operator": "equals", "value": "B"}]'::jsonb, 
+ '[{"field": "weight", "operator": "greater_than", "value": "50"}, {"field": "mail_category", "operator": "equals", "value": "B"}]'::jsonb,
+ '{"assignRate": "' || (SELECT id FROM public.rates WHERE name = 'Heavy Cargo Discount') || '"}'::jsonb,
  (SELECT id FROM public.rates WHERE name = 'Heavy Cargo Discount'));
 
 -- Success message

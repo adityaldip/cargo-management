@@ -129,6 +129,10 @@ export async function POST(request: NextRequest) {
     // Process each rule in priority order (1 = highest priority)
     for (const rule of sortedRules as any[]) {
       console.log(`\n🎯 Processing Rate Rule: "${rule.name}" (Priority: ${rule.priority})`)
+      console.log(`   - Rule ID: ${rule.id}`)
+      console.log(`   - Rate ID: ${rule.rate_id}`)
+      console.log(`   - Conditions: ${JSON.stringify(rule.conditions)}`)
+      console.log(`   - Rate Info: ${rule.rates ? `${rule.rates.name} (${rule.rates.rate_type})` : 'NO RATE FOUND'}`)
       
       const ruleResult = {
         ruleId: rule.id,
@@ -158,7 +162,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if cargo matches rule conditions
-        const matches = rule.conditions.some((condition: any) => {
+        // Use .every() to ensure ALL conditions must match (more logical for rate rules)
+        const matches = rule.conditions.length > 0 && rule.conditions.every((condition: any) => {
           const fieldValue = String(cargo[condition.field] || '').toLowerCase()
           const conditionValue = condition.value.toLowerCase()
 
@@ -179,6 +184,7 @@ export async function POST(request: NextRequest) {
             case 'less_than':
               return parseFloat(fieldValue) < parseFloat(conditionValue)
             default:
+              console.warn(`Unknown operator: ${condition.operator}`)
               return false
           }
         })
@@ -189,7 +195,13 @@ export async function POST(request: NextRequest) {
           // Get the rate information
           const rate = rule.rates
           if (!rate) {
-            console.warn(`⚠️ No rate found for rule "${rule.name}"`)
+            console.warn(`⚠️ No rate found for rule "${rule.name}" (rule.rate_id: ${rule.rate_id})`)
+            continue
+          }
+
+          // Validate rate data
+          if (!rate.id) {
+            console.warn(`⚠️ Rate has no ID for rule "${rule.name}"`)
             continue
           }
 
@@ -251,31 +263,85 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Batch update cargo_data - update existing records only
-      const updatePromises = updates.map(update => 
-        supabaseAdmin
-          .from('cargo_data')
-          .update({
-            rate_id: update.rate_id,
-            rate_value: update.rate_value,
-            rate_currency: update.rate_currency,
-            assigned_at: update.assigned_at
-          })
-          .eq('id', update.id)
-      )
-      
-      const updateResults = await Promise.all(updatePromises)
-      const updateError = updateResults.find(result => result.error)?.error
+      // Process updates in smaller batches to avoid timeouts and improve reliability
+      const batchSize = 50 // Process 50 records at a time
+      let successfulUpdates = 0
+      let failedUpdates = 0
+      const errors: string[] = []
 
-      if (updateError) {
-        console.error('Error updating cargo data:', updateError)
-        return NextResponse.json(
-          { error: 'Failed to update cargo data', details: updateError.message },
-          { status: 500 }
-        )
+      for (let i = 0; i < updates.length; i += batchSize) {
+        const batch = updates.slice(i, i + batchSize)
+        console.log(`📝 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(updates.length / batchSize)} (${batch.length} records)`)
+        
+        try {
+          // Use individual updates within each batch for better error handling
+          const batchPromises = batch.map(async (update) => {
+            try {
+              const { error } = await supabaseAdmin
+                .from('cargo_data')
+                .update({
+                  rate_id: update.rate_id,
+                  rate_value: update.rate_value,
+                  rate_currency: update.rate_currency,
+                  assigned_at: update.assigned_at
+                })
+                .eq('id', update.id)
+              
+              if (error) {
+                console.error(`❌ Failed to update cargo record ${update.id}:`, error)
+                return { success: false, error: error.message, id: update.id }
+              }
+              
+              return { success: true, id: update.id }
+            } catch (err) {
+              const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+              console.error(`❌ Exception updating cargo record ${update.id}:`, errorMsg)
+              return { success: false, error: errorMsg, id: update.id }
+            }
+          })
+          
+          const batchResults = await Promise.all(batchPromises)
+          
+          // Count successes and failures
+          batchResults.forEach(result => {
+            if (result.success) {
+              successfulUpdates++
+            } else {
+              failedUpdates++
+              errors.push(`Record ${result.id}: ${result.error}`)
+            }
+          })
+          
+          console.log(`✅ Batch completed: ${batchResults.filter(r => r.success).length} successful, ${batchResults.filter(r => !r.success).length} failed`)
+          
+        } catch (batchError) {
+          console.error(`❌ Batch processing error:`, batchError)
+          failedUpdates += batch.length
+          errors.push(`Batch error: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`)
+        }
       }
 
-      console.log(`✅ Successfully updated ${updates.length} cargo records`)
+      console.log(`\n📊 Update Summary:`)
+      console.log(`- Total records to update: ${updates.length}`)
+      console.log(`- Successfully updated: ${successfulUpdates}`)
+      console.log(`- Failed updates: ${failedUpdates}`)
+      
+      if (failedUpdates > 0) {
+        console.error(`❌ ${failedUpdates} updates failed. First few errors:`)
+        errors.slice(0, 5).forEach(error => console.error(`  - ${error}`))
+        
+        // Don't fail the entire operation if some updates succeed
+        if (successfulUpdates === 0) {
+          return NextResponse.json(
+            { error: 'All cargo data updates failed', details: errors.slice(0, 10) },
+            { status: 500 }
+          )
+        } else {
+          console.warn(`⚠️ Partial success: ${successfulUpdates} updates succeeded, ${failedUpdates} failed`)
+        }
+      }
+
+      console.log(`✅ Successfully updated ${successfulUpdates} cargo records`)
     }
 
     // Calculate summary statistics
