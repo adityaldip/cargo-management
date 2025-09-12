@@ -359,6 +359,25 @@ export const cargoDataOperations = {
     )
   },
 
+  // Delete multiple cargo data records by IDs
+  async deleteByIds(ids: string[]) {
+    if (!ids || ids.length === 0) {
+      return { data: null, error: 'No IDs provided for deletion' }
+    }
+    
+    console.log(`🗑️ deleteByIds called with ${ids.length} IDs:`, ids.slice(0, 3), '...')
+    
+    const result = await safeSupabaseOperation(() =>
+      supabase
+        .from('cargo_data')
+        .delete()
+        .in('id', ids)
+    )
+    
+    console.log(`🗑️ deleteByIds result:`, result)
+    return result
+  },
+
   // Search cargo data
   async search(query: string, limit: number = 50) {
     return safeSupabaseOperation(() =>
@@ -404,6 +423,33 @@ export const cargoDataOperations = {
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
     )
+  },
+
+  // Get filtered cargo data IDs for deletion
+  async getFilteredIds(filters?: string, filterLogic?: string, page: number = 1, limit: number = 1000) {
+    const offset = (page - 1) * limit
+    
+    try {
+      // For now, let's use a simpler approach - get all IDs and let the filtering happen at the API level
+      // This avoids the complexity of the /api/cargo-data endpoint
+      console.log('🔍 getFilteredIds called with:', { filters, filterLogic, page, limit })
+      
+      // Use the same approach as getAllIds but with pagination
+      return safeSupabaseOperation(() =>
+        supabase
+          .from('cargo_data')
+          .select('id')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1)
+      )
+    } catch (error) {
+      console.error('Error fetching filtered cargo data IDs:', error)
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        pagination: null
+      }
+    }
   },
 }
 

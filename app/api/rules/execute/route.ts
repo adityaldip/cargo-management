@@ -281,8 +281,8 @@ export async function POST(request: NextRequest) {
     if (!dryRun && assignments.length > 0) {
       console.log(`Updating ${assignments.length} cargo records...`)
       
-      // Process in smaller batches to avoid timeout
-      const batchSize = 50
+      // Process in batches for better performance (optimized for 5MB payload limit)
+      const batchSize = 2000 // Conservative estimate: ~250 bytes per record = ~500KB per batch
       const batches = []
       for (let i = 0; i < assignments.length; i += batchSize) {
         batches.push(assignments.slice(i, i + batchSize))

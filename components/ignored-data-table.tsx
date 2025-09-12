@@ -222,8 +222,8 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
         return { success: false, error: "No valid records to save after conversion" }
       }
       
-      // Calculate batch information
-      const batchSize = 50
+      // Calculate batch information - optimized for 5MB payload limit
+      const batchSize = 2000 // Conservative estimate: ~250 bytes per record = ~500KB per batch
       const totalBatches = Math.ceil(supabaseData.length / batchSize)
       
       // Update progress with batch info

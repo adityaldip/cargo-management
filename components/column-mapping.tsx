@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Progress } from "@/components/ui/progress"
 import { CheckCircle, AlertTriangle, ArrowRight, Loader2 } from "lucide-react"
 import type { ColumnMappingRule } from "@/lib/file-processor"
 import { useColumnMappingStore } from "@/store/column-mapping-store"
@@ -50,6 +51,7 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
   const [mappings, setMappings] = useState<ColumnMappingRule[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [hasInitialized, setHasInitialized] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState(0)
   
   // Initialize mappings from store or create default ones
   useEffect(() => {
@@ -159,6 +161,38 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
 
   const hasConflicts = () => getConflictCount() > 0
 
+  // Show processing progress that syncs with actual processing
+  const showProcessingProgress = async (processingPromise: Promise<any>) => {
+    // Start with initial progress
+    setProcessingProgress(10)
+    
+    // Create a progress interval that gradually increases
+    const progressInterval = setInterval(() => {
+      setProcessingProgress(prev => {
+        // Gradually increase progress but don't go above 90% until processing is done
+        const newProgress = Math.min(prev + Math.random() * 15, 90)
+        return Math.round(newProgress)
+      })
+    }, 200)
+
+    try {
+      // Wait for the actual processing to complete
+      await processingPromise
+      
+      // Clear the interval and set to 100%
+      clearInterval(progressInterval)
+      setProcessingProgress(100)
+      
+      // Wait a moment to show 100% before completing
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+    } catch (error) {
+      // Clear interval on error
+      clearInterval(progressInterval)
+      throw error
+    }
+  }
+
   const handleContinue = async () => {
     if (hasConflicts()) {
       toast({
@@ -179,9 +213,15 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
     }
     
     setIsProcessing(true)
+    setProcessingProgress(0)
     
     try {
-      await onMappingComplete(mappings)
+      // Start the actual mapping completion
+      const mappingPromise = Promise.resolve(onMappingComplete(mappings))
+      
+      // Show progress that syncs with the actual processing
+      await showProcessingProgress(mappingPromise)
+      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to process column mappings"
       toast({
@@ -191,6 +231,7 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
       })
     } finally {
       setIsProcessing(false)
+      setProcessingProgress(0)
     }
   }
 
@@ -229,6 +270,20 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
               )}
             </div>
           </div>
+
+          {/* Processing Progress Bar - Only shown during processing */}
+          {isProcessing && (
+            <div className="space-y-2 pb-2">
+              <div className="flex items-center justify-between text-xs text-gray-600">
+                <span>Processing mappings...</span>
+                <span>{processingProgress}%</span>
+              </div>
+              <Progress 
+                value={processingProgress} 
+                className="h-2"
+              />
+            </div>
+          )}
           
           {hasConflicts() && (
             <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded">

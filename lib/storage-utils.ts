@@ -297,8 +297,8 @@ export async function saveMergedDataToSupabase(
       return { success: false, error: "No valid records to save after conversion" }
     }
     
-    // Save to Supabase in batches (Supabase has limits)
-    const batchSize = 50 // Reduced batch size for better reliability
+    // Save to Supabase in batches (optimized for 5MB payload limit)
+    const batchSize = 2000 // Conservative estimate: ~250 bytes per record = ~500KB per batch
     let totalSaved = 0
     
     for (let i = 0; i < supabaseData.length; i += batchSize) {
@@ -397,6 +397,131 @@ export function clearAllLocalStorage(): void {
 let lastSuccessfulDeletionCount = 0
 let lastDeletionTimestamp = 0
 
+// Clear filtered Supabase cargo data
+export async function clearFilteredSupabaseData(
+  filters?: string,
+  filterLogic?: string,
+  onProgress?: (progress: number, currentStep: string, stepIndex: number, totalSteps: number) => void,
+  shouldStop?: () => boolean
+): Promise<{ success: boolean; error?: string; deletedCount?: number; cancelled?: boolean }> {
+  try {
+    console.log('🗑️ Starting filtered Supabase data clearing process...')
+    console.log('🔍 clearFilteredSupabaseData called with filters:', filters, 'logic:', filterLogic)
+    
+    // Step 1: Get filtered IDs for batch deletion
+    onProgress?.(0, "Fetching filtered record IDs from database...", 0, 3)
+    
+    let allIds: string[] = []
+    let currentPage = 1
+    let hasMoreData = true
+    const fetchBatchSize = 1000 // Large batches for fetching IDs
+    
+    // Fetch all filtered IDs in large batches
+    while (hasMoreData) {
+      if (shouldStop?.()) {
+        return { success: false, error: "Process cancelled", cancelled: true }
+      }
+      
+      const result = await cargoDataOperations.getFilteredIds(filters, filterLogic, currentPage, fetchBatchSize)
+      
+      console.log(`🔍 getFilteredIds page ${currentPage}:`, result)
+      console.log(`🔍 getFilteredIds page ${currentPage} data length:`, result.data?.length)
+      
+      if (result.error) {
+        console.error('Error fetching filtered cargo data IDs:', result.error)
+        return { success: false, error: result.error }
+      }
+      
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+        const batchIds = result.data.map(item => item.id)
+        allIds = [...allIds, ...batchIds]
+        currentPage++
+        
+        // Update progress during ID fetching (0-20%)
+        const fetchProgress = Math.min(20, (allIds.length / 10000) * 20) // Estimate progress
+        onProgress?.(fetchProgress, `Fetching filtered IDs... Found ${allIds.length} records`, 0, 3)
+      } else {
+        hasMoreData = false
+      }
+      
+      // Safety check to prevent infinite loops
+      if (currentPage > 1000) {
+        console.warn('⚠️ Reached maximum page limit (1000), stopping ID fetch')
+        hasMoreData = false
+      }
+    }
+    
+    console.log(`🔍 Total filtered IDs to delete: ${allIds.length}`)
+    
+    if (allIds.length === 0) {
+      console.log('🔍 No filtered records found to delete')
+      return { success: true, deletedCount: 0 }
+    }
+    
+    // Step 2: Delete records in batches
+    onProgress?.(20, `Deleting ${allIds.length} filtered records in batches...`, 1, 3)
+    
+    const deleteBatchSize = 2000 // Optimized batch size for deletion (IDs are small)
+    let deletedCount = 0
+    let batchIndex = 0
+    
+    for (let i = 0; i < allIds.length; i += deleteBatchSize) {
+      if (shouldStop?.()) {
+        return { success: false, error: "Process cancelled", cancelled: true }
+      }
+      
+      const batch = allIds.slice(i, i + deleteBatchSize)
+      batchIndex++
+      
+      console.log(`🗑️ Deleting batch ${batchIndex} (${batch.length} records)...`)
+      
+      try {
+        console.log(`🗑️ Attempting to delete batch ${batchIndex} with ${batch.length} IDs:`, batch.slice(0, 3), '...')
+        const deleteResult = await cargoDataOperations.deleteByIds(batch)
+        
+        console.log(`🗑️ Delete result for batch ${batchIndex}:`, deleteResult)
+        
+        if (deleteResult.error) {
+          console.error(`❌ Error deleting batch ${batchIndex}:`, deleteResult.error)
+          console.error(`❌ Batch data:`, batch)
+          return { success: false, error: `Failed to delete batch ${batchIndex}: ${deleteResult.error}` }
+        }
+        
+        deletedCount += batch.length
+        
+        // Update progress (20-90%)
+        const deleteProgress = 20 + ((deletedCount / allIds.length) * 70)
+        onProgress?.(deleteProgress, `Deleted ${deletedCount}/${allIds.length} filtered records...`, 1, 3)
+        
+        // Small delay to prevent overwhelming the database
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+      } catch (error) {
+        console.error(`❌ Exception deleting batch ${batchIndex}:`, error)
+        return { success: false, error: `Exception deleting batch ${batchIndex}: ${error instanceof Error ? error.message : 'Unknown error'}` }
+      }
+    }
+    
+    // Step 3: Final verification
+    onProgress?.(90, "Verifying deletion...", 2, 3)
+    
+    // Wait a moment for database to update
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    onProgress?.(100, `Successfully deleted ${deletedCount} filtered records!`, 2, 3)
+    
+    console.log(`✅ Successfully deleted ${deletedCount} filtered records`)
+    return { success: true, deletedCount }
+    
+  } catch (error) {
+    console.error('❌ Error in clearFilteredSupabaseData:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+    }
+  }
+}
+
 // Clear Supabase cargo data (WARNING: This will delete ALL cargo data)
 export async function clearSupabaseData(
   onProgress?: (progress: number, currentStep: string, stepIndex: number, totalSteps: number) => void,
@@ -478,7 +603,7 @@ export async function clearSupabaseData(
     // Step 2: Delete in optimized batches using Supabase's IN operator
     onProgress?.(20, "Starting batch deletion...", 1, 3)
     let deletedCount = 0
-    const deleteBatchSize = 500 // Optimal batch size for Supabase deletion
+    const deleteBatchSize = 2000 // Optimal batch size for Supabase deletion (IDs are small)
     const totalBatches = Math.ceil(allIds.length / deleteBatchSize)
     
     console.log(`🔄 Starting batch deletion: ${totalBatches} batches of up to ${deleteBatchSize} records each`)

@@ -33,7 +33,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const { setIsClearingData, shouldStopProcess, setShouldStopProcess, isExporting: globalIsExporting, setIsExporting: setGlobalIsExporting, isBulkDeleting: globalIsBulkDeleting, setIsBulkDeleting: setGlobalIsBulkDeleting } = useWorkflowStore()
   
   // Data store
-  const { clearAllData } = useDataStore()
+  const { clearAllData, clearFilteredSupabaseData } = useDataStore()
   
   // Column config store
   const { columnConfigs } = useColumnConfigStore()
@@ -335,20 +335,84 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     setEstimatedTimeRemaining(estimatedTime)
     
     try {
-      const result = await clearAllData((progress, step, stepIndex, totalSteps) => {
-        setProgress(progress)
-        setCurrentStep(step)
-        setCurrentStepIndex(stepIndex)
-        setTotalSteps(totalSteps)
-        
-        // Update estimated time remaining
-        if (progress > 0) {
-          const remainingProgress = 100 - progress
-          const elapsedTime = estimatedTime * (progress / 100)
-          const newEstimatedTime = (remainingProgress / progress) * elapsedTime
-          setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
+      let result
+      
+      // Use filtered clearing if filters are active, otherwise clear all data
+      if (hasActiveFilters && filterConditions.length > 0) {
+        console.log('🔍 Using filtered clearing with filters:', filterConditions, 'logic:', filterLogic)
+        try {
+          result = await clearFilteredSupabaseData(
+            JSON.stringify(filterConditions),
+            filterLogic,
+            (progress, step, stepIndex, totalSteps) => {
+              setProgress(progress)
+              setCurrentStep(step)
+              setCurrentStepIndex(stepIndex)
+              setTotalSteps(totalSteps)
+              
+              // Update estimated time remaining
+              if (progress > 0) {
+                const remainingProgress = 100 - progress
+                const elapsedTime = estimatedTime * (progress / 100)
+                const newEstimatedTime = (remainingProgress / progress) * elapsedTime
+                setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
+              }
+            },
+            () => shouldStopProcess
+          )
+          
+          // If filtered clearing failed, fall back to full clearing
+          if (!result.success && result.error) {
+            console.warn('⚠️ Filtered clearing failed, falling back to full clearing:', result.error)
+            result = await clearAllData((progress, step, stepIndex, totalSteps) => {
+              setProgress(progress)
+              setCurrentStep(step)
+              setCurrentStepIndex(stepIndex)
+              setTotalSteps(totalSteps)
+              
+              // Update estimated time remaining
+              if (progress > 0) {
+                const remainingProgress = 100 - progress
+                const elapsedTime = estimatedTime * (progress / 100)
+                const newEstimatedTime = (remainingProgress / progress) * elapsedTime
+                setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
+              }
+            }, () => shouldStopProcess)
+          }
+        } catch (error) {
+          console.error('❌ Error in filtered clearing, falling back to full clearing:', error)
+          result = await clearAllData((progress, step, stepIndex, totalSteps) => {
+            setProgress(progress)
+            setCurrentStep(step)
+            setCurrentStepIndex(stepIndex)
+            setTotalSteps(totalSteps)
+            
+            // Update estimated time remaining
+            if (progress > 0) {
+              const remainingProgress = 100 - progress
+              const elapsedTime = estimatedTime * (progress / 100)
+              const newEstimatedTime = (remainingProgress / progress) * elapsedTime
+              setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
+            }
+          }, () => shouldStopProcess)
         }
-      }, () => shouldStopProcess)
+      } else {
+        console.log('🔍 Using full data clearing (no active filters)')
+        result = await clearAllData((progress, step, stepIndex, totalSteps) => {
+          setProgress(progress)
+          setCurrentStep(step)
+          setCurrentStepIndex(stepIndex)
+          setTotalSteps(totalSteps)
+          
+          // Update estimated time remaining
+          if (progress > 0) {
+            const remainingProgress = 100 - progress
+            const elapsedTime = estimatedTime * (progress / 100)
+            const newEstimatedTime = (remainingProgress / progress) * elapsedTime
+            setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
+          }
+        }, () => shouldStopProcess)
+      }
       
       if (result.success) {
         setDataCleared(true)
@@ -365,9 +429,10 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         console.log('🔍 supabaseDeletedCount:', result.supabaseDeletedCount)
         console.log('🔍 totalRecords before clear:', totalRecords)
         
+        const clearType = hasActiveFilters && filterConditions.length > 0 ? "filtered" : "all"
         toast({
-          title: "Data cleared successfully! ✅",
-          description: `${result.supabaseDeletedCount || 0} records deleted from database`,
+          title: `${clearType === "filtered" ? "Filtered data" : "All data"} cleared successfully! ✅`,
+          description: `${result.supabaseDeletedCount || 0} ${clearType} records deleted from database`,
           duration: 5000,
         })
         

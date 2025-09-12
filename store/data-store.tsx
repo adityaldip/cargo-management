@@ -5,7 +5,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ProcessedData, CargoData } from "@/types/cargo-data"
 import { cargoDataOperations } from "@/lib/supabase-operations"
 import { combineProcessedData } from "@/lib/file-processor"
-import { clearSupabaseData } from "@/lib/storage-utils"
+import { clearSupabaseData, clearFilteredSupabaseData } from "@/lib/storage-utils"
 
 // Types
 export interface StoredDataset {
@@ -299,8 +299,8 @@ export const useDataStore = create<DataState>()(
             return { success: false, error: "No valid records to save after conversion" }
           }
           
-          // Save to Supabase in batches
-          const batchSize = 50
+          // Save to Supabase in batches (optimized for 5MB payload limit)
+          const batchSize = 2000 // Conservative estimate: ~250 bytes per record = ~500KB per batch
           let totalSaved = 0
           
           for (let i = 0; i < supabaseData.length; i += batchSize) {
@@ -351,6 +351,11 @@ export const useDataStore = create<DataState>()(
       clearSupabaseData: async (onProgress, shouldStop) => {
         // Use the utility function from storage-utils
         return clearSupabaseData(onProgress, shouldStop)
+      },
+
+      clearFilteredSupabaseData: async (filters, filterLogic, onProgress, shouldStop) => {
+        // Use the utility function from storage-utils
+        return clearFilteredSupabaseData(filters, filterLogic, onProgress, shouldStop)
       },
       
       clearAllData: async (onProgress, shouldStop) => {
