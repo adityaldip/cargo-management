@@ -22,9 +22,10 @@ interface WorkflowNavigationProps {
   isClearingData?: boolean
   isExporting?: boolean
   isBulkDeleting?: boolean
+  isExecutingRules?: boolean
 }
 
-export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false, isBulkDeleting = false }: WorkflowNavigationProps) {
+export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false, isBulkDeleting = false, isExecutingRules = false }: WorkflowNavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
   
@@ -46,8 +47,8 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
   ]
 
   const handleStepChange = (stepId: WorkflowStep) => {
-    // Don't allow navigation when processing, clearing data, exporting, or bulk deleting
-    if (isProcessing || isClearingData || isExporting || isBulkDeleting) return
+    // Don't allow navigation when processing, clearing data, exporting, bulk deleting, or executing rules
+    if (isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules) return
     
     onStepChange(stepId)
     setIsMobileMenuOpen(false) // Close mobile menu when step is selected
@@ -120,7 +121,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                       <div
                         onClick={() => handleStepChange(step.id as WorkflowStep)}
                         className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
-                          isProcessing || isClearingData || isExporting || isBulkDeleting
+                          isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules
                             ? "cursor-not-allowed opacity-50 text-gray-400" 
                             : isActive 
                               ? "bg-black text-white cursor-pointer" 
@@ -129,7 +130,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                       >
                         <Icon className="h-4 w-4 flex-shrink-0" />
                         <span className="ml-3 text-sm font-medium truncate">{step.label}</span>
-                        {(isProcessing || isExporting) && (
+                        {(isProcessing || isExporting || isExecutingRules) && (
                           <div className="ml-auto">
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400"></div>
                           </div>
@@ -144,7 +145,9 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                             ? "Navigation is disabled - data is being cleared"
                             : isExporting
                               ? "Navigation is disabled - exporting data in progress"
-                              : step.tooltip
+                              : isExecutingRules
+                                ? "Navigation is disabled - rules are being executed"
+                                : step.tooltip
                         }
                       </p>
                     </TooltipContent>

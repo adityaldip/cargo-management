@@ -39,6 +39,7 @@ import { useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { SweetAlert } from "@/components/ui/sweet-alert"
+import { useWorkflowStore } from "@/store/workflow-store"
 
 // Customer Rules Configuration Component - Updated
 export function RulesConfiguration() {
@@ -103,6 +104,9 @@ export function RulesConfiguration() {
   const [recordCount, setRecordCount] = useState<{toProcess: number, total: number} | null>(null)
   const [isLoadingCount, setIsLoadingCount] = useState(false)
   const { toast } = useToast()
+  
+  // Workflow store for global execution state
+  const { isExecutingRules, setIsExecutingRules } = useWorkflowStore()
   
   // Sweet Alert state for delete confirmation
   const [showDeleteAlert, setShowDeleteAlert] = useState(false)
@@ -566,6 +570,7 @@ export function RulesConfiguration() {
     }
 
     setIsExecuting(true)
+    setIsExecutingRules(true) // Set global execution state
     setExecutionProgress(0)
     setExecutionStep("Starting rule execution...")
     setError(null)
@@ -659,6 +664,7 @@ export function RulesConfiguration() {
       })
     } finally {
       setIsExecuting(false)
+      setIsExecutingRules(false) // Clear global execution state
       setExecutionProgress(0)
       setExecutionStep("")
     }
@@ -735,7 +741,7 @@ export function RulesConfiguration() {
                   variant="outline" 
                   size="sm"
                   onClick={() => setIsCreateModalOpen(true)}
-                  disabled={isReordering}
+                  disabled={isReordering || isExecutingRules}
                   className="h-9 w-32"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -745,7 +751,7 @@ export function RulesConfiguration() {
                   variant="outline" 
                   size="sm"
                   onClick={refetch}
-                  disabled={isRefreshing}
+                  disabled={isRefreshing || isExecutingRules}
                   className="h-9 w-32"
                 >
                   {isRefreshing ? (
@@ -775,7 +781,7 @@ export function RulesConfiguration() {
                   <Button 
                     className="bg-black hover:bg-gray-800 text-white h-9 w-32"
                     onClick={handleExecuteRules}
-                    disabled={isExecuting || isReordering}
+                    disabled={isExecuting || isReordering || isExecutingRules}
                     title="Execute rules on ALL cargo data"
                   >
                     {isExecuting ? (
@@ -859,10 +865,10 @@ export function RulesConfiguration() {
             {paginationData.currentPageData.map((rule) => (
               <div key={rule.id} className="border rounded-lg">
                 <div
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, rule.id)}
+                  draggable={!isExecutingRules}
+                  onDragStart={(e) => !isExecutingRules && handleDragStart(e, rule.id)}
                   onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, rule.id)}
+                  onDrop={(e) => !isExecutingRules && handleDrop(e, rule.id)}
                   className={cn(
                     "flex items-center gap-1 p-1 transition-colors duration-150 cursor-pointer hover:bg-gray-50",
                     (rule as any).is_active ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
@@ -870,7 +876,7 @@ export function RulesConfiguration() {
                     (expandedRule === rule.id || expandingRuleId === rule.id) && "bg-gray-50",
                     isReordering && "pointer-events-none opacity-75"
                   )}
-                  onClick={() => handleEditRule(rule as any)}
+                  onClick={() => !isExecutingRules && handleEditRule(rule as any)}
                 >
                   {/* Drag Handle */}
                   <div className="cursor-grab hover:cursor-grabbing">
@@ -887,6 +893,7 @@ export function RulesConfiguration() {
                     checked={(rule as any).is_active}
                     onCheckedChange={() => toggleRule(rule.id)}
                     onClick={(e) => e.stopPropagation()}
+                    disabled={isExecutingRules}
                     className="scale-75"
                   />
                   
@@ -912,6 +919,7 @@ export function RulesConfiguration() {
                       e.stopPropagation()
                       handleDeleteRuleClick(rule as any)
                     }}
+                    disabled={isExecutingRules}
                     className="h-6 w-6 p-0 hover:text-red-600 hover:bg-red-50"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -1207,9 +1215,11 @@ export function RulesConfiguration() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Show</span>
                 <Select value={itemsPerPage.toString()} onValueChange={(value) => {
-                  setItemsPerPage(Number(value))
-                  setCurrentPage(1)
-                }}>
+                  if (!isExecutingRules) {
+                    setItemsPerPage(Number(value))
+                    setCurrentPage(1)
+                  }
+                }} disabled={isExecutingRules}>
                   <SelectTrigger className="w-20">
                     <SelectValue />
                   </SelectTrigger>
@@ -1232,7 +1242,7 @@ export function RulesConfiguration() {
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
+                    disabled={currentPage === 1 || isExecutingRules}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -1243,7 +1253,7 @@ export function RulesConfiguration() {
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(prev => Math.min(paginationData.totalPages, prev + 1))}
-                    disabled={currentPage >= paginationData.totalPages}
+                    disabled={currentPage >= paginationData.totalPages || isExecutingRules}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>

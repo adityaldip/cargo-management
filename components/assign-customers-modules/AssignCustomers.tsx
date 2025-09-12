@@ -6,6 +6,7 @@ import { RulesConfiguration } from "./RulesConfiguration"
 import { ExecuteRules } from "./ExecuteRules"
 import { AssignCustomersProps } from "./types"
 import { useAssignCustomersTabStore } from "@/store/assign-customers-tab-store"
+import { useWorkflowStore } from "@/store/workflow-store"
 
 export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityConditions }: AssignCustomersProps) {
   const { 
@@ -14,6 +15,8 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
     setActiveTab, 
     setCurrentView 
   } = useAssignCustomersTabStore()
+  
+  const { isExecutingRules } = useWorkflowStore()
 
   return (
     <div className="space-y-4 pt-2">
@@ -24,9 +27,12 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
             variant={activeTab === "customers" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              setActiveTab("customers")
-              setCurrentView("rules")
+              if (!isExecutingRules) {
+                setActiveTab("customers")
+                setCurrentView("rules")
+              }
             }}
+            disabled={isExecutingRules}
             className={
               activeTab === "customers"
                 ? "bg-black text-white hover:bg-gray-800"
@@ -39,9 +45,12 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
             variant={activeTab === "configure" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              setActiveTab("configure")
-              setCurrentView("rules")
+              if (!isExecutingRules) {
+                setActiveTab("configure")
+                setCurrentView("rules")
+              }
             }}
+            disabled={isExecutingRules}
             className={
               activeTab === "configure"
                 ? "bg-black text-white hover:bg-gray-800"
@@ -54,9 +63,12 @@ export function AssignCustomers({ data, savedPriorityConditions, onSavePriorityC
             variant={activeTab === "execute" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              setActiveTab("execute")
-              setCurrentView("rules")
+              if (!isExecutingRules) {
+                setActiveTab("execute")
+                setCurrentView("rules")
+              }
             }}
+            disabled={isExecutingRules}
             className={
               activeTab === "execute"
                 ? "bg-black text-white hover:bg-gray-800"
