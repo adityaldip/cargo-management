@@ -358,7 +358,8 @@ export const cargoDataOperations = {
     console.log(`🔄 bulkUpdate called with ${updates.length} records`)
     
     // Process in batches to avoid payload size limits
-    const batchSize = 50 // Smaller batch size for better reliability
+    // Use larger batches for better performance, smaller for very large datasets
+    const batchSize = updates.length > 10000 ? 2000 : 1000 // Adaptive batch sizing
     const results = []
     let totalUpdated = 0
     let totalFailed = 0
@@ -370,27 +371,11 @@ export const cargoDataOperations = {
       
       try {
         // Use individual updates within each batch for better error handling
-        // This avoids the upsert issue with null values and ensures we only update existing records
+        // Skip validation for better performance since we're only updating existing records
         const batchPromises = batch.map(async ({ id, updates: updateData }) => {
           try {
-            // First verify the record exists and has required fields
-            const { data: existingRecord, error: fetchError } = await supabase
-              .from('cargo_data')
-              .select('id, rec_id')
-              .eq('id', id)
-              .single()
-            
-            if (fetchError || !existingRecord) {
-              console.warn(`⚠️ Record ${id} not found or missing rec_id, skipping update`)
-              return { success: false, error: 'Record not found or invalid', id }
-            }
-            
-            if (!existingRecord.rec_id) {
-              console.warn(`⚠️ Record ${id} has null rec_id, skipping update`)
-              return { success: false, error: 'Record has null rec_id', id }
-            }
-
-            // Now perform the update
+            // Direct update without validation for maximum performance
+            // Since we're only processing existing records from our query, validation is redundant
             const { error } = await supabase
               .from('cargo_data')
               .update({
