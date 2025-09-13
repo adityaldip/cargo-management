@@ -42,22 +42,51 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
                   <h2 className="text-sm font-bold text-gray-800 mb-1">ISSUED TO:</h2>
                   <div className="text-sm text-gray-700">
                     <div className="font-semibold">{selectedInvoice.customer}</div>
-                    <div>123 Business Street</div>
-                    <div>Business City, BC 12345</div>
-                    {/* {(() => {
-                      const isCargoInvoice = 'itemsDetails' in selectedInvoice && selectedInvoice.itemsDetails
-                      if (isCargoInvoice && selectedInvoice.itemsDetails && selectedInvoice.itemsDetails.length > 0) {
-                        const totalItems = selectedInvoice.itemsDetails.length
-                        const totalWeight = selectedInvoice.itemsDetails.reduce((sum, item) => sum + item.weight, 0)
+                    {(() => {
+                      // Check if this is a CargoInvoice with customer details
+                      const isCargoInvoice = 'customer_address' in selectedInvoice
+                      
+                      if (isCargoInvoice) {
+                        const customer = selectedInvoice as CargoInvoice
                         return (
-                          <div className="mt-1 text-xs text-gray-600">
-                            <div>Total Items: {totalItems}</div>
-                            <div>Total Weight: {totalWeight.toFixed(1)} kg</div>
-                          </div>
+                          <>
+                            {customer.customer_address && <div>{customer.customer_address}</div>}
+                            {(customer.customer_city || customer.customer_state || customer.customer_postal_code) && (
+                              <div>
+                                {customer.customer_city && customer.customer_city}
+                                {customer.customer_city && customer.customer_state && ', '}
+                                {customer.customer_state && customer.customer_state}
+                                {customer.customer_postal_code && ` ${customer.customer_postal_code}`}
+                              </div>
+                            )}
+                            {customer.customer_country && <div>{customer.customer_country}</div>}
+                            {customer.customer_contact_person && (
+                              <div className="mt-1 text-xs text-gray-600">
+                                Contact: {customer.customer_contact_person}
+                              </div>
+                            )}
+                            {customer.customer_email && (
+                              <div className="text-xs text-gray-600">
+                                Email: {customer.customer_email}
+                              </div>
+                            )}
+                            {customer.customer_phone && (
+                              <div className="text-xs text-gray-600">
+                                Phone: {customer.customer_phone}
+                              </div>
+                            )}
+                          </>
+                        )
+                      } else {
+                        // Fallback to hardcoded values for non-cargo invoices
+                        return (
+                          <>
+                            <div>123 Business Street</div>
+                            <div>Business City, BC 12345</div>
+                          </>
                         )
                       }
-                      return null
-                    })()} */}
+                    })()}
                   </div>
                 </div>
                 <div>

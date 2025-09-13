@@ -6,10 +6,73 @@ DROP VIEW IF EXISTS invoice_detail_view;
 
 CREATE VIEW invoice_detail_view AS
 SELECT 
-    -- Invoice identification (for grouping) - must match summary view
-    COALESCE( 'INV-' || cd.assigned_customer::text || '-' || TO_CHAR(cd.created_at, 'YYYYMMDD') || '-' || TO_CHAR(cd.created_at, 'HH24MISS')) as invoice_id,
-    COALESCE( 'INV-' || TO_CHAR(cd.created_at, 'YYYYMMDD') || '-' || TO_CHAR(cd.created_at, 'HH24MISS')) as invoice_number,
+    -- Invoice identification (for grouping) - must match summary view exactly
+    COALESCE('INV-' || cd.assigned_customer::text || '-' || TO_CHAR(MIN(COALESCE(
+        CASE 
+            WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+            THEN cd.inb_flight_date::date 
+            ELSE NULL 
+        END,
+        cd.created_at
+    )) OVER (PARTITION BY cd.assigned_customer, cd.rate_id), 'YYYYMMDD') || '-' || CASE 
+        WHEN TO_CHAR(MIN(COALESCE(
+            CASE 
+                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+                THEN cd.inb_flight_date::date 
+                ELSE NULL 
+            END,
+            cd.created_at
+        )) OVER (PARTITION BY cd.assigned_customer, cd.rate_id), 'HH24MISS') = '000000'
+        THEN TO_CHAR(MIN(cd.created_at) OVER (PARTITION BY cd.assigned_customer, cd.rate_id), 'HH24MISS')
+        ELSE TO_CHAR(MIN(COALESCE(
+            CASE 
+                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+                THEN cd.inb_flight_date::date 
+                ELSE NULL 
+            END,
+            cd.created_at
+        )) OVER (PARTITION BY cd.assigned_customer, cd.rate_id), 'HH24MISS')
+    END) as invoice_id,
+    COALESCE('INV-' || TO_CHAR(MIN(COALESCE(
+        CASE 
+            WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+            THEN cd.inb_flight_date::date 
+            ELSE NULL 
+        END,
+        cd.created_at
+    )) OVER (PARTITION BY cd.assigned_customer, cd.rate_id), 'YYYYMMDD') || '-' || CASE 
+        WHEN TO_CHAR(MIN(COALESCE(
+            CASE 
+                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+                THEN cd.inb_flight_date::date 
+                ELSE NULL 
+            END,
+            cd.created_at
+        )) OVER (PARTITION BY cd.assigned_customer, cd.rate_id), 'HH24MISS') = '000000'
+        THEN TO_CHAR(MIN(cd.created_at) OVER (PARTITION BY cd.assigned_customer, cd.rate_id), 'HH24MISS')
+        ELSE TO_CHAR(MIN(COALESCE(
+            CASE 
+                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+                THEN cd.inb_flight_date::date 
+                ELSE NULL 
+            END,
+            cd.created_at
+        )) OVER (PARTITION BY cd.assigned_customer, cd.rate_id), 'HH24MISS')
+    END) as invoice_number,
     COALESCE(c.name, 'Unknown') as customer_name,
+    
+    -- Customer details from customers table
+    c.id as customer_id,
+    c.code as customer_code,
+    c.email as customer_email,
+    c.phone as customer_phone,
+    c.address as customer_address,
+    c.contact_person as customer_contact_person,
+    c.city as customer_city,
+    c.state as customer_state,
+    c.postal_code as customer_postal_code,
+    c.country as customer_country,
+    c.accounting_label as customer_accounting_label,
     
     -- Individual cargo item details (matching CargoInvoiceItem interface)
     cd.id as id,                                    -- CargoInvoiceItem.id

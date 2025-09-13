@@ -73,6 +73,18 @@ export interface CargoInvoice {
   currency: string
   paymentMethod?: string
   itemsDetails: CargoInvoiceItem[]
+  // Customer details from customers table
+  customer_id?: string
+  customer_code?: string
+  customer_email?: string
+  customer_phone?: string
+  customer_address?: string
+  customer_contact_person?: string
+  customer_city?: string
+  customer_state?: string
+  customer_postal_code?: string
+  customer_country?: string
+  customer_accounting_label?: string
 }
 
 export interface CargoInvoiceItem {

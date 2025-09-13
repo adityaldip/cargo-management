@@ -7,9 +7,73 @@ DROP VIEW IF EXISTS invoice_summary_view;
 CREATE VIEW invoice_summary_view AS
 SELECT 
     -- Generate consistent invoice ID and readable invoice number
-    COALESCE('INV-' || MAX(cd.assigned_customer::text) || '-' || TO_CHAR(MIN(cd.created_at), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS')) as invoice_id,
-    COALESCE('INV-' || TO_CHAR(MIN(cd.created_at), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS')) as invoice_number,
+    COALESCE('INV-' || MAX(cd.assigned_customer::text) || '-' || TO_CHAR(MIN(COALESCE(
+        CASE 
+            WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+            THEN cd.inb_flight_date::date 
+            ELSE NULL 
+        END,
+        cd.created_at
+    )), 'YYYYMMDD') || '-' || CASE 
+        WHEN TO_CHAR(MIN(COALESCE(
+            CASE 
+                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+                THEN cd.inb_flight_date::date 
+                ELSE NULL 
+            END,
+            cd.created_at
+        )), 'HH24MISS') = '000000'
+        THEN TO_CHAR(MIN(cd.created_at), 'HH24MISS')
+        ELSE TO_CHAR(MIN(COALESCE(
+            CASE 
+                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+                THEN cd.inb_flight_date::date 
+                ELSE NULL 
+            END,
+            cd.created_at
+        )), 'HH24MISS')
+    END) as invoice_id,
+    COALESCE('INV-' || TO_CHAR(MIN(COALESCE(
+        CASE 
+            WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+            THEN cd.inb_flight_date::date 
+            ELSE NULL 
+        END,
+        cd.created_at
+    )), 'YYYYMMDD') || '-' || CASE 
+        WHEN TO_CHAR(MIN(COALESCE(
+            CASE 
+                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+                THEN cd.inb_flight_date::date 
+                ELSE NULL 
+            END,
+            cd.created_at
+        )), 'HH24MISS') = '000000'
+        THEN TO_CHAR(MIN(cd.created_at), 'HH24MISS')
+        ELSE TO_CHAR(MIN(COALESCE(
+            CASE 
+                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
+                THEN cd.inb_flight_date::date 
+                ELSE NULL 
+            END,
+            cd.created_at
+        )), 'HH24MISS')
+    END) as invoice_number,
     COALESCE(c.name, 'Unknown') as customer_name,
+    
+    -- Customer details from customers table
+    c.id as customer_id,
+    c.code as customer_code,
+    c.email as customer_email,
+    c.phone as customer_phone,
+    c.address as customer_address,
+    c.contact_person as customer_contact_person,
+    c.city as customer_city,
+    c.state as customer_state,
+    c.postal_code as customer_postal_code,
+    c.country as customer_country,
+    c.accounting_label as customer_accounting_label,
+    
     -- Handle date field properly - inb_flight_date is VARCHAR, not date
     MIN(COALESCE(
         CASE 
