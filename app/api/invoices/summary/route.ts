@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = supabaseAdmin
     const { searchParams } = new URL(request.url)
     
     // Get query parameters
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
 // Get single invoice summary
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = supabaseAdmin
     const { invoiceId } = await request.json()
     
     if (!invoiceId) {
