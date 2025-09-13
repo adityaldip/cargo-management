@@ -321,12 +321,7 @@ export function SetupRates() {
 
                   {/* Rate Name Input */}
                   <div className="flex-1">
-                    <Input
-                      value={rate.name}
-                      onChange={(e) => updateRateName(rate.id, e.target.value)}
-                      className="text-sm h-8"
-                      placeholder="Rate name"
-                    />
+                    <p className="text-sm font-medium text-black">{rate.name}</p>
                   </div>
 
                   {/* Rate Info */}

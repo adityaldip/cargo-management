@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
 import { 
   Calculator,
   Plus, 
@@ -13,7 +14,8 @@ import {
   Pause,
   CheckCircle,
   Clock,
-  Settings
+  Settings,
+  Loader2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RateRule } from "@/types/rate-management"
@@ -40,7 +42,14 @@ export function ConfigureRates() {
     updateRateRulePriorities
   } = useRateRulesData()
   
-  const { rates } = useRatesData()
+  const { rates, loading: ratesLoading, error: ratesError, refetch: refetchRates } = useRatesData()
+  
+  // Debug rates loading
+  console.log('=== DEBUG: Rates Loading ===')
+  console.log('Rates:', rates)
+  console.log('Rates loading:', ratesLoading)
+  console.log('Rates error:', ratesError)
+  console.log('Rates count:', rates?.length || 0)
   
   // Get workflow store for managing execution state
   const { isExecutingRules, setIsExecutingRules } = useWorkflowStore()
@@ -86,6 +95,7 @@ export function ConfigureRates() {
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
   
   // State for expanded rule editing
+  const [editingRuleName, setEditingRuleName] = useState("")
   const [editingRuleConditions, setEditingRuleConditions] = useState<{
     field: string
     operator: string
@@ -103,6 +113,9 @@ export function ConfigureRates() {
   const [executionStep, setExecutionStep] = useState("")
   const [recordCount, setRecordCount] = useState<{toProcess: number, total: number} | null>(null)
   const [isLoadingCount, setIsLoadingCount] = useState(false)
+  
+  // Toggle loading state
+  const [togglingRules, setTogglingRules] = useState<Set<string>>(new Set())
   
   // Sweet Alert state
   const [sweetAlert, setSweetAlert] = useState({
@@ -152,18 +165,48 @@ export function ConfigureRates() {
   const filteredRules = displayRules
 
   const handleToggleRule = async (ruleId: string) => {
-    const result = await toggleRateRule(ruleId)
-    if (result.success) {
-      toast({
-        title: "Success",
-        description: "Rate rule status updated successfully",
-        variant: "default"
-      })
-    } else {
+    // Prevent multiple toggles on the same rule
+    if (togglingRules.has(ruleId)) {
+      return
+    }
+
+    const rule = displayRules.find(r => r.id === ruleId)
+    if (!rule) return
+
+    try {
+      // Add to toggling set
+      setTogglingRules(prev => new Set(prev).add(ruleId))
+      setError(null)
+      
+      const result = await toggleRateRule(ruleId)
+      
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Rate rule status updated successfully",
+          variant: "default"
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to update rate rule status",
+          variant: "destructive"
+        })
+      }
+    } catch (err) {
+      const errorMsg = `Failed to toggle rule: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
       toast({
         title: "Error",
-        description: result.error || "Failed to update rate rule status",
+        description: errorMsg,
         variant: "destructive"
+      })
+    } finally {
+      // Remove from toggling set
+      setTogglingRules(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(ruleId)
+        return newSet
       })
     }
   }
@@ -201,8 +244,11 @@ export function ConfigureRates() {
       setExpandedRule(null)
       setEditingRuleConditions([])
       setEditingRuleRateId("")
+      setEditingRuleName("")
     } else {
       setExpandedRule(rule.id)
+      // Initialize editing state with current rule data
+      setEditingRuleName(rule.name)
       // Initialize editing state with current rule conditions
       const initialConditions = rule.conditions.map(cond => ({
         field: cond.field,
@@ -298,6 +344,7 @@ export function ConfigureRates() {
     try {
       // Prepare update data
       const updateData = {
+        name: editingRuleName.trim(),
         conditions: editingRuleConditions.filter(cond => cond.value.trim()),
         rate_id: editingRuleRateId
       }
@@ -323,6 +370,7 @@ export function ConfigureRates() {
         setExpandedRule(null)
         setEditingRuleConditions([])
         setEditingRuleRateId("")
+        setEditingRuleName("")
       } else {
         const errorMsg = result.error || "Failed to save rule"
         setError(errorMsg)
@@ -469,33 +517,31 @@ export function ConfigureRates() {
   // Show loading state
   if (loading) {
     return (
-      <Card className="bg-white border-gray-200 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-black flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Rate Assignment Rules
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="border rounded-lg p-3 animate-pulse">
-                <div className="flex items-center gap-4">
-                  <div className="w-6 h-6 bg-gray-200 rounded-full"></div>
-                  <div className="w-8 h-4 bg-gray-200 rounded"></div>
-                  <div className="flex-1 h-4 bg-gray-200 rounded"></div>
-                  <div className="w-16 h-4 bg-gray-200 rounded"></div>
-                  <div className="flex gap-1">
-                    <div className="w-6 h-6 bg-gray-200 rounded"></div>
-                    <div className="w-6 h-6 bg-gray-200 rounded"></div>
+      <div className="max-w-4xl mx-auto">
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-black flex items-center gap-2">
+              <Calculator className="h-5 w-5" />
+              Rate Assignment Rules
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="border rounded-lg p-1 animate-pulse">
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                    <div className="w-5 h-5 bg-gray-200 rounded-full"></div>
+                    <div className="w-6 h-4 bg-gray-200 rounded scale-75"></div>
+                    <div className="flex-1 h-4 bg-gray-200 rounded"></div>
                     <div className="w-6 h-6 bg-gray-200 rounded"></div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
@@ -645,9 +691,10 @@ export function ConfigureRates() {
                   rule.isActive ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
                   draggedRule === rule.id && "opacity-50",
                   expandedRule === rule.id && "bg-gray-50",
-                  isExecutingRules && "cursor-not-allowed opacity-50"
+                  isExecutingRules && "cursor-not-allowed opacity-50",
+                  togglingRules.has(rule.id) && "bg-blue-50 border-blue-200"
                 )}
-                onClick={() => !isExecutingRules && handleEditRule(rule)}
+                onClick={() => !isExecutingRules && !togglingRules.has(rule.id) && handleEditRule(rule)}
               >
                 {/* Drag Handle */}
                 <div className="cursor-grab hover:cursor-grabbing">
@@ -660,17 +707,33 @@ export function ConfigureRates() {
                 </div>
 
                 {/* Toggle Switch */}
-                <Switch
-                  checked={rule.isActive}
-                  onCheckedChange={() => handleToggleRule(rule.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  disabled={isExecutingRules}
-                  className="scale-75"
-                />
+                <div className="flex items-center relative">
+                  <Switch
+                    checked={rule.isActive}
+                    onCheckedChange={() => handleToggleRule(rule.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={isExecutingRules || togglingRules.has(rule.id)}
+                    className="scale-75"
+                  />
+                  {togglingRules.has(rule.id) && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                    </div>
+                  )}
+                </div>
                 
                 {/* Rule Info */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-black text-sm">{rule.name}</h3>
+                  {expandedRule === rule.id ? (
+                    <Input
+                      value={editingRuleName}
+                      onChange={(e) => setEditingRuleName(e.target.value)}
+                      className="max-w-64 bg-gray"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <h3 className="font-medium text-black text-sm">{rule.name}</h3>
+                  )}
                 </div>
 
 
@@ -693,7 +756,7 @@ export function ConfigureRates() {
               {expandedRule === rule.id && (
                 <RateRuleEditor
                   rule={rule}
-                  rates={rates}
+                  rates={rates || []}
                   isSaving={isSaving}
                   isExecutingRules={isExecutingRules}
                   editingRuleConditions={editingRuleConditions}
@@ -711,6 +774,8 @@ export function ConfigureRates() {
                   onUpdateCondition={updateEditingRuleCondition}
                   onSave={handleSaveChanges}
                   onCancel={() => setExpandedRule(null)}
+                  isSaveDisabled={!editingRuleName.trim()}
+                  onRetryRates={refetchRates}
                 />
               )}
             </div>

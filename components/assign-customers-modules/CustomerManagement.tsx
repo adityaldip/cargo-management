@@ -17,7 +17,8 @@ import {
   Plus, 
   Edit,
   Trash2,
-  X
+  X,
+  Loader2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCustomerData } from "./hooks"
@@ -65,7 +66,7 @@ export function CustomerManagement() {
   })
   const [customerCodes, setCustomerCodes] = useState<Array<{product: string}>>([{product: ""}])
   const [isCreating, setIsCreating] = useState(false)
-  const [togglingCustomer, setTogglingCustomer] = useState<string | null>(null)
+  const [togglingCustomers, setTogglingCustomers] = useState<Set<string>>(new Set())
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
@@ -114,11 +115,27 @@ export function CustomerManagement() {
   const hasMoreItems = filteredCustomers.length > itemsPerPage
 
   const handleToggleCustomer = async (customerId: string) => {
-    setTogglingCustomer(customerId)
+    // Prevent multiple toggles on the same customer
+    if (togglingCustomers.has(customerId)) {
+      return
+    }
+
     try {
+      // Add to toggling set
+      setTogglingCustomers(prev => new Set(prev).add(customerId))
+      setError(null)
+      
       await toggleCustomer(customerId)
+    } catch (err) {
+      const errorMsg = `Failed to toggle customer: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
     } finally {
-      setTogglingCustomer(null)
+      // Remove from toggling set
+      setTogglingCustomers(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(customerId)
+        return newSet
+      })
     }
   }
 
@@ -483,12 +500,19 @@ export function CustomerManagement() {
                   <TableRow key={customer.id} className="">
                     <TableCell className="py-1 px-1">
                       <div className="flex items-center gap-1">
-                        <Switch
-                          checked={customer.is_active}
-                          onCheckedChange={() => handleToggleCustomer(customer.id)}
-                          disabled={togglingCustomer === customer.id}
-                          className="scale-75"
-                        />
+                        <div className="relative">
+                          <Switch
+                            checked={customer.is_active}
+                            onCheckedChange={() => handleToggleCustomer(customer.id)}
+                            disabled={togglingCustomers.has(customer.id)}
+                            className="scale-75"
+                          />
+                          {togglingCustomers.has(customer.id) && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                            </div>
+                          )}
+                        </div>
                         <span className={cn(
                           "text-xs font-medium",
                           customer.is_active ? "text-green-600" : "text-gray-400"

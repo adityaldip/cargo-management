@@ -36,6 +36,8 @@ interface RateRuleEditorProps {
   onUpdateCondition: (index: number, updates: Partial<ConditionType>) => void
   onSave: () => void
   onCancel: () => void
+  isSaveDisabled?: boolean // Controls whether save button should be disabled
+  onRetryRates?: () => void // Optional retry function for rates
 }
 
 // Available field options from cargo_data columns
@@ -76,10 +78,16 @@ export function RateRuleEditor({
   onRemoveCondition,
   onUpdateCondition,
   onSave,
-  onCancel
+  onCancel,
+  isSaveDisabled = false,
+  onRetryRates
 }: RateRuleEditorProps) {
+  console.log('=== DEBUG: RateRuleEditor ===')
   console.log('RateRuleEditor - editingRuleRateId:', editingRuleRateId)
-  console.log('RateRuleEditor - available rates:', rates.map(r => ({ id: r.id, name: r.name, is_active: r.is_active })))
+  console.log('RateRuleEditor - rates array:', rates)
+  console.log('RateRuleEditor - rates length:', rates?.length || 0)
+  console.log('RateRuleEditor - rates type:', typeof rates)
+  console.log('RateRuleEditor - available rates:', rates?.map(r => ({ id: r.id, name: r.name, is_active: r.is_active })) || [])
   return (
     <div className="border-t bg-gray-50 p-3">
       <div className="space-y-3">
@@ -249,22 +257,46 @@ export function RateRuleEditor({
             {/* Rate Assignment Row */}
             <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-3 pt-3">
               <span className="text-xs font-medium text-gray-700 min-w-6">Rate</span>
-              {console.log('Select value being set to:', editingRuleRateId)}
               <Select value={editingRuleRateId} onValueChange={onUpdateRateId}>
                 <SelectTrigger className="h-6 text-xs border-gray-200 flex-1 min-w-40 max-w-64" disabled={isExecutingRules}>
-                  <SelectValue placeholder="Select rate" />
+                  <SelectValue placeholder={
+                    !rates || rates.length === 0 
+                      ? "Loading rates..." 
+                      : "Select rate"
+                  } />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
-                  {rates.filter(rate => rate.is_active !== false).map((rate) => (
-                    <SelectItem key={rate.id} value={rate.id}>
-                      <div className="flex items-center justify-between w-full">
-                        <span>{rate.name || rate.description || `Rate ${rate.id}`}</span>
-                        <span className="ml-2 text-xs text-gray-500">
-                          {rate.currency || 'EUR'} {(rate.base_rate || 0).toFixed(2)}
-                        </span>
+                  {!rates || rates.length === 0 ? (
+                    <div className="p-2 text-xs text-gray-500 text-center">
+                      <div className="mb-2">
+                        {!rates ? "Loading rates..." : "No rates available"}
                       </div>
-                    </SelectItem>
-                  ))}
+                      {onRetryRates && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onRetryRates()
+                          }}
+                          className="h-6 text-xs"
+                        >
+                          Retry
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    rates.filter(rate => rate.is_active !== false).map((rate) => (
+                      <SelectItem key={rate.id} value={rate.id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{rate.name || rate.description || `Rate ${rate.id}`}</span>
+                          <span className="ml-2 text-xs text-gray-500">
+                            {rate.currency || 'EUR'} {(rate.base_rate || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -285,7 +317,7 @@ export function RateRuleEditor({
           <Button 
             size="sm"
             onClick={onSave}
-            disabled={isSaving || isExecutingRules || !editingRuleRateId}
+            disabled={isSaving || isExecutingRules || !editingRuleRateId || isSaveDisabled}
             className="bg-black hover:bg-gray-800 text-white h-6 text-xs px-3"
           >
             {isSaving ? (
