@@ -18,440 +18,9 @@ import {
 import { WarningBanner } from "@/components/ui/status-banner"
 import { cn } from "@/lib/utils"
 import type { ProcessedData } from "@/types/cargo-data"
+import { useReportingData } from "@/hooks/use-reporting-data"
+import type { ReportData } from "@/types/reporting"
 
-interface ReportData {
-  rowLabel: string
-  jan: number | null
-  feb: number | null
-  mar: number | null
-  apr: number | null
-  may: number | null
-  jun: number | null
-  jul: number | null
-  total: number
-  revenue: number
-  weight: number
-}
-
-// Sample data for demonstration - based on the table format shown
-const SAMPLE_DATA: ReportData[] = [
-  {
-    rowLabel: "Airmail Ltd",
-    jan: 1234,
-    feb: 1456,
-    mar: 1678,
-    apr: 1890,
-    may: 2102,
-    jun: 2314,
-    jul: 2526,
-    total: 13200,
-    revenue: 13200,
-    weight: 1320
-  },
-  {
-    rowLabel: "Armenia",
-    jan: 567,
-    feb: 678,
-    mar: 789,
-    apr: 890,
-    may: 901,
-    jun: 1012,
-    jul: 1123,
-    total: 5960,
-    revenue: 5960,
-    weight: 596
-  },
-  {
-    rowLabel: "Asendia FRA",
-    jan: 1325,
-    feb: 1456,
-    mar: 1587,
-    apr: 1718,
-    may: 1849,
-    jun: 1980,
-    jul: 2111,
-    total: 12026,
-    revenue: 12026,
-    weight: 1203
-  },
-  {
-    rowLabel: "ASENDIA LHR",
-    jan: 2345,
-    feb: 2567,
-    mar: 2789,
-    apr: 3011,
-    may: 3233,
-    jun: 3455,
-    jul: 3677,
-    total: 21077,
-    revenue: 21077,
-    weight: 2108
-  },
-  {
-    rowLabel: "Austria",
-    jan: 890,
-    feb: 1001,
-    mar: 1112,
-    apr: 1223,
-    may: 1334,
-    jun: 1445,
-    jul: 1556,
-    total: 8561,
-    revenue: 8561,
-    weight: 856
-  },
-  {
-    rowLabel: "Belarus",
-    jan: 456,
-    feb: 567,
-    mar: 678,
-    apr: 789,
-    may: 890,
-    jun: 901,
-    jul: 1012,
-    total: 5293,
-    revenue: 5293,
-    weight: 529
-  },
-  {
-    rowLabel: "Belgium",
-    jan: 1789,
-    feb: 1900,
-    mar: 2011,
-    apr: 2122,
-    may: 2233,
-    jun: 2344,
-    jul: 2455,
-    total: 14854,
-    revenue: 14854,
-    weight: 1485
-  },
-  {
-    rowLabel: "Croatia Airlines",
-    jan: 234,
-    feb: 345,
-    mar: 456,
-    apr: 567,
-    may: 678,
-    jun: 789,
-    jul: 890,
-    total: 3959,
-    revenue: 3959,
-    weight: 396
-  },
-  {
-    rowLabel: "CYRPUS GSA",
-    jan: 2,
-    feb: 5,
-    mar: 8,
-    apr: 11,
-    may: 14,
-    jun: 17,
-    jul: 20,
-    total: 77,
-    revenue: 77,
-    weight: 8
-  },
-  {
-    rowLabel: "Czech",
-    jan: 1234,
-    feb: 1345,
-    mar: 1456,
-    apr: 1567,
-    may: 1678,
-    jun: 1789,
-    jul: 1900,
-    total: 10969,
-    revenue: 10969,
-    weight: 1097
-  },
-  {
-    rowLabel: "Deutsche Post AG",
-    jan: 4567,
-    feb: 4678,
-    mar: 4789,
-    apr: 4900,
-    may: 5011,
-    jun: 5122,
-    jul: 5233,
-    total: 34300,
-    revenue: 34300,
-    weight: 3430
-  },
-  {
-    rowLabel: "DHL GLOBAL MAIL",
-    jan: 3456,
-    feb: 3567,
-    mar: 3678,
-    apr: 3789,
-    may: 3900,
-    jun: 4011,
-    jul: 4122,
-    total: 26523,
-    revenue: 26523,
-    weight: 2652
-  },
-  {
-    rowLabel: "Estonia",
-    jan: 123,
-    feb: 234,
-    mar: 345,
-    apr: 456,
-    may: 567,
-    jun: 678,
-    jul: 789,
-    total: 3192,
-    revenue: 3192,
-    weight: 319
-  },
-  {
-    rowLabel: "EVRI LEEDS",
-    jan: 890,
-    feb: 1001,
-    mar: 1112,
-    apr: 1223,
-    may: 1334,
-    jun: 1445,
-    jul: 1556,
-    total: 8561,
-    revenue: 8561,
-    weight: 856
-  },
-  {
-    rowLabel: "Finland",
-    jan: 2345,
-    feb: 2456,
-    mar: 2567,
-    apr: 2678,
-    may: 2789,
-    jun: 2900,
-    jul: 3011,
-    total: 18746,
-    revenue: 18746,
-    weight: 1875
-  },
-  {
-    rowLabel: "France",
-    jan: 5678,
-    feb: 5789,
-    mar: 5900,
-    apr: 6011,
-    may: 6122,
-    jun: 6233,
-    jul: 6344,
-    total: 42077,
-    revenue: 42077,
-    weight: 4208
-  },
-  {
-    rowLabel: "Georgia",
-    jan: null,
-    feb: null,
-    mar: null,
-    apr: 123,
-    may: 234,
-    jun: 345,
-    jul: 456,
-    total: 1158,
-    revenue: 1158,
-    weight: 116
-  },
-  {
-    rowLabel: "GLOBESPEED SWISS AG",
-    jan: 456,
-    feb: 567,
-    mar: 678,
-    apr: 789,
-    may: 890,
-    jun: 901,
-    jul: 1012,
-    total: 5293,
-    revenue: 5293,
-    weight: 529
-  },
-  {
-    rowLabel: "Hungary",
-    jan: null,
-    feb: null,
-    mar: null,
-    apr: null,
-    may: 123,
-    jun: 234,
-    jul: 345,
-    total: 702,
-    revenue: 702,
-    weight: 70
-  },
-  {
-    rowLabel: "Israel",
-    jan: null,
-    feb: null,
-    mar: null,
-    apr: null,
-    may: 456,
-    jun: 567,
-    jul: 678,
-    total: 1701,
-    revenue: 1701,
-    weight: 170
-  },
-  {
-    rowLabel: "Italy",
-    jan: 3456,
-    feb: 3567,
-    mar: 3678,
-    apr: 3789,
-    may: 3900,
-    jun: 4011,
-    jul: 4122,
-    total: 26523,
-    revenue: 26523,
-    weight: 2652
-  },
-  {
-    rowLabel: "LANDMARK (BPOST)",
-    jan: 1234,
-    feb: 1345,
-    mar: 1456,
-    apr: 1567,
-    may: 1678,
-    jun: 1789,
-    jul: 1900,
-    total: 10969,
-    revenue: 10969,
-    weight: 1097
-  },
-  {
-    rowLabel: "Latvia",
-    jan: 57849,
-    feb: 58960,
-    mar: 60071,
-    apr: 61182,
-    may: 62293,
-    jun: 63404,
-    jul: 64515,
-    total: 428274,
-    revenue: 428274,
-    weight: 42827
-  },
-  {
-    rowLabel: "Lithuania",
-    jan: 2345,
-    feb: 2456,
-    mar: 2567,
-    apr: 2678,
-    may: 2789,
-    jun: 2900,
-    jul: 3011,
-    total: 18746,
-    revenue: 18746,
-    weight: 1875
-  },
-  {
-    rowLabel: "Malta",
-    jan: 123,
-    feb: 234,
-    mar: 345,
-    apr: 456,
-    may: 567,
-    jun: 678,
-    jul: 789,
-    total: 3192,
-    revenue: 3192,
-    weight: 319
-  },
-  {
-    rowLabel: "Moldova",
-    jan: 89,
-    feb: 100,
-    mar: 111,
-    apr: 122,
-    may: 133,
-    jun: 144,
-    jul: 155,
-    total: 854,
-    revenue: 854,
-    weight: 85
-  },
-  {
-    rowLabel: "Netherlands",
-    jan: 4567,
-    feb: 4678,
-    mar: 4789,
-    apr: 4900,
-    may: 5011,
-    jun: 5122,
-    jul: 5233,
-    total: 34300,
-    revenue: 34300,
-    weight: 3430
-  },
-  {
-    rowLabel: "Norway",
-    jan: 2345,
-    feb: 2456,
-    mar: 2567,
-    apr: 2678,
-    may: 2789,
-    jun: 2900,
-    jul: 3011,
-    total: 18746,
-    revenue: 18746,
-    weight: 1875
-  },
-  {
-    rowLabel: "Poland",
-    jan: 3456,
-    feb: 3567,
-    mar: 3678,
-    apr: 3789,
-    may: 3900,
-    jun: 4011,
-    jul: 4122,
-    total: 26523,
-    revenue: 26523,
-    weight: 2652
-  },
-  {
-    rowLabel: "Portugal",
-    jan: 1234,
-    feb: 1345,
-    mar: 1456,
-    apr: 1567,
-    may: 1678,
-    jun: 1789,
-    jul: 1900,
-    total: 10969,
-    revenue: 10969,
-    weight: 1097
-  },
-  {
-    rowLabel: "PostNord/DK",
-    jan: 2345,
-    feb: 2456,
-    mar: 2567,
-    apr: 2678,
-    may: 2789,
-    jun: 2900,
-    jul: 3011,
-    total: 18746,
-    revenue: 18746,
-    weight: 1875
-  },
-  {
-    rowLabel: "POSTPLUS GROUP BV",
-    jan: 890,
-    feb: 1001,
-    mar: 1112,
-    apr: 1223,
-    may: 1334,
-    jun: 1445,
-    jul: 1556,
-    total: 8561,
-    revenue: 8561,
-    weight: 856
-  }
-]
 
 interface ReportingProps {
   data?: ProcessedData | null
@@ -461,17 +30,46 @@ export function Reporting({ data }: ReportingProps) {
   const [viewBy, setViewBy] = useState<"revenue" | "weight">("revenue")
   const [viewPeriod, setViewPeriod] = useState<"total" | "week" | "month">("total")
   const [dateRange, setDateRange] = useState<{from: string, to: string}>({
-    from: "2025-01-01",
-    to: "2025-07-31"
+    from: "2024-01-01",
+    to: "2025-12-31"
   })
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
-
-  // Use sample data for now
-  const reportData = SAMPLE_DATA
+  // Fetch real data from API
+  const { 
+    data: reportData, 
+    summary, 
+    loading, 
+    error, 
+    refetch 
+  } = useReportingData({
+    dateFrom: dateRange.from,
+    dateTo: dateRange.to,
+    viewBy,
+    viewPeriod
+  })
 
   // Use all data (no filtering for now)
   const filteredData = reportData
+
+  // Debug: Log what data we're getting
+  console.log('Reporting component data:', {
+    reportDataLength: reportData?.length || 0,
+    loading,
+    error,
+    sampleData: reportData?.[0] ? {
+      rowLabel: reportData[0].rowLabel,
+      total: reportData[0].total,
+      revenue: reportData[0].revenue,
+      weekKeys: Object.keys(reportData[0]).filter(key => key.startsWith('week')),
+      sampleWeeks: {
+        week1: reportData[0].week1,
+        week2: reportData[0].week2,
+        week3: reportData[0].week3,
+        week4: reportData[0].week4
+      }
+    } : null
+  })
 
   // Sort data based on viewBy and viewPeriod
   const sortedData = useMemo(() => {
@@ -508,14 +106,14 @@ export function Reporting({ data }: ReportingProps) {
   }, [filteredData, viewBy, viewPeriod])
 
   // Pagination
-  const totalPages = Math.ceil(sortedData.length / itemsPerPage)
+  const totalPages = Math.ceil((sortedData?.length || 0) / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedData = sortedData.slice(startIndex, startIndex + itemsPerPage)
+  const paginatedData = sortedData?.slice(startIndex, startIndex + itemsPerPage) || []
 
   // Calculate summary statistics based on viewBy and viewPeriod
-  const totalRevenue = filteredData.reduce((sum, item) => sum + item.revenue, 0)
-  const totalWeight = filteredData.reduce((sum, item) => sum + item.weight, 0)
-  const totalRecords = filteredData.length
+  const totalRevenue = summary?.totalRevenue ?? (filteredData?.reduce((sum, item) => sum + item.revenue, 0) || 0)
+  const totalWeight = summary?.totalWeight ?? (filteredData?.reduce((sum, item) => sum + item.weight, 0) || 0)
+  const totalRecords = summary?.totalRecords ?? (filteredData?.length || 0)
   
   // Calculate view-specific values
   const getViewSpecificValue = (item: ReportData) => {
@@ -533,9 +131,9 @@ export function Reporting({ data }: ReportingProps) {
     }
   }
   
-  const viewSpecificTotal = filteredData.reduce((sum, item) => sum + getViewSpecificValue(item), 0)
+  const viewSpecificTotal = filteredData?.reduce((sum, item) => sum + getViewSpecificValue(item), 0) || 0
   const viewSpecificAverage = totalRecords > 0 ? viewSpecificTotal / totalRecords : 0
-  const viewSpecificMax = Math.max(...filteredData.map(item => getViewSpecificValue(item)))
+  const viewSpecificMax = filteredData && filteredData.length > 0 ? Math.max(...filteredData.map(item => getViewSpecificValue(item))) : 0
 
   const formatNumber = (value: number | null) => {
     if (value === null) return "-"
@@ -551,24 +149,35 @@ export function Reporting({ data }: ReportingProps) {
           { key: "total", label: viewBy === "revenue" ? "Total (EUR)" : "Total (kg)", width: "w-32" }
         ]
       case "week":
+        // Generate columns for all 52 weeks with better spacing
+        const weekColumns = []
+        for (let week = 1; week <= 52; week++) {
+          weekColumns.push({
+            key: `week${week}`,
+            label: `W${week}`,
+            width: "w-20"
+          })
+        }
         return [
           { key: "rowLabel", label: "Row Labels", width: "w-48" },
-          { key: "week1", label: "Week 1", width: "w-24" },
-          { key: "week2", label: "Week 2", width: "w-24" },
-          { key: "week3", label: "Week 3", width: "w-24" },
-          { key: "week4", label: "Week 4", width: "w-24" },
+          ...weekColumns,
           { key: "total", label: viewBy === "revenue" ? "Total (EUR)" : "Total (kg)", width: "w-32" }
         ]
       case "month":
         return [
           { key: "rowLabel", label: "Row Labels", width: "w-48" },
-          { key: "jan", label: "JAN", width: "w-24" },
-          { key: "feb", label: "FEB", width: "w-24" },
-          { key: "mar", label: "MAR", width: "w-24" },
-          { key: "apr", label: "APR", width: "w-24" },
-          { key: "may", label: "MAY", width: "w-24" },
-          { key: "jun", label: "JUN", width: "w-24" },
-          { key: "jul", label: "JUL", width: "w-24" },
+          { key: "jan", label: "JAN", width: "w-20" },
+          { key: "feb", label: "FEB", width: "w-20" },
+          { key: "mar", label: "MAR", width: "w-20" },
+          { key: "apr", label: "APR", width: "w-20" },
+          { key: "may", label: "MAY", width: "w-20" },
+          { key: "jun", label: "JUN", width: "w-20" },
+          { key: "jul", label: "JUL", width: "w-20" },
+          { key: "aug", label: "AUG", width: "w-20" },
+          { key: "sep", label: "SEP", width: "w-20" },
+          { key: "oct", label: "OCT", width: "w-20" },
+          { key: "nov", label: "NOV", width: "w-20" },
+          { key: "dec", label: "DEC", width: "w-20" },
           { key: "total", label: viewBy === "revenue" ? "Total (EUR)" : "Total (kg)", width: "w-32" }
         ]
       default:
@@ -587,12 +196,31 @@ export function Reporting({ data }: ReportingProps) {
       return formatNumber(baseValue)
     }
     
-    // For week columns, calculate weekly values
+    // For week columns, use the actual weekly data from API
     if (columnKey.startsWith("week")) {
-      const weekNumber = parseInt(columnKey.replace("week", ""))
-      const baseValue = viewBy === "revenue" ? item.revenue : item.weight
-      const weeklyValue = (baseValue / 7) * 4 // Average weekly value
-      return formatNumber(Math.round(weeklyValue))
+      const weekValue = item[columnKey as keyof ReportData]
+      
+      // Debug logging for weekly data
+      if (columnKey === "week1" || columnKey === "week2") {
+        console.log(`Weekly data for ${item.rowLabel} - ${columnKey}:`, {
+          weekValue,
+          type: typeof weekValue,
+          itemKeys: Object.keys(item).filter(key => key.startsWith('week')),
+          sampleWeekData: {
+            week1: item.week1,
+            week2: item.week2,
+            week3: item.week3
+          }
+        })
+      }
+      
+      if (typeof weekValue === "number") {
+        return formatNumber(weekValue)
+      }
+      if (weekValue === null) {
+        return formatNumber(null)
+      }
+      return "-"
     }
     
     // For month columns, use the actual month data
@@ -611,6 +239,11 @@ export function Reporting({ data }: ReportingProps) {
   }
 
   const handleExport = () => {
+    if (!filteredData || filteredData.length === 0) {
+      alert("No data to export")
+      return
+    }
+
     const csvData = filteredData.map(item => ({
       "Row Labels": item.rowLabel,
       "JAN": item.jan || "",
@@ -620,6 +253,11 @@ export function Reporting({ data }: ReportingProps) {
       "MAY": item.may || "",
       "JUN": item.jun || "",
       "JUL": item.jul || "",
+      "AUG": item.aug || "",
+      "SEP": item.sep || "",
+      "OCT": item.oct || "",
+      "NOV": item.nov || "",
+      "DEC": item.dec || "",
       "TOTAL": item.total
     }))
 
@@ -642,11 +280,13 @@ export function Reporting({ data }: ReportingProps) {
 
   return (
     <div className="space-y-4 pt-2">
-      {/* Sample Data Banner */}
-      <WarningBanner 
-        message="This is sample data and not connected to the database yet"
-        className="mb-4"
-      />
+      {/* Error Banner */}
+      {error && (
+        <WarningBanner 
+          message={`Error loading data: ${error}`}
+          className="mb-4 bg-red-50 border-red-200 text-red-800"
+        />
+      )}
 
       {/* Header with Filters */}
       <Card className="bg-white border-gray-200 shadow-sm">
@@ -661,8 +301,13 @@ export function Reporting({ data }: ReportingProps) {
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
               </Button>
-              <Button variant="outline" size="sm">
-                <RefreshCw className="h-4 w-4 mr-2" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={refetch}
+                disabled={loading}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
             </div>
@@ -740,10 +385,15 @@ export function Reporting({ data }: ReportingProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="total">View by Total</SelectItem>
-                  <SelectItem value="week">View by Week</SelectItem>
+                  <SelectItem value="week">View by Week (52 weeks)</SelectItem>
                   <SelectItem value="month">View by Month</SelectItem>
                 </SelectContent>
               </Select>
+              {viewPeriod === "week" && (
+                <p className="text-xs text-gray-500">
+                  Showing all 52 weeks of the year. Scroll horizontally to view all weeks.
+                </p>
+              )}
             </div>
           </div>
 
@@ -798,6 +448,101 @@ export function Reporting({ data }: ReportingProps) {
       {/* Data Table */}
       <Card className="bg-white border-gray-200 shadow-sm">
         <CardContent className="p-0">
+        {viewPeriod === "week" ? (
+          // Weekly view with single scroll container
+          <div className="overflow-auto max-h-96">
+            <Table className="min-w-full">
+              <TableHeader className="sticky top-0 bg-white z-10">
+                <TableRow>
+                  {getTableColumns().map((column) => (
+                    <TableHead 
+                      key={column.key} 
+                      className={`${column.width} ${column.key === "total" ? "text-right font-bold" : column.key !== "rowLabel" ? "text-right" : ""} text-xs`}
+                    >
+                      {column.label}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedData.map((item, index) => (
+                  <TableRow key={item.rowLabel} className="hover:bg-gray-50">
+                    {getTableColumns().map((column) => (
+                      <TableCell 
+                        key={column.key}
+                        className={`text-xs font-mono ${
+                          column.key === "rowLabel" 
+                            ? "font-medium" 
+                            : "text-right"
+                        } ${
+                          column.key === "total" 
+                            ? "font-bold bg-gray-50" 
+                            : ""
+                        } ${
+                          column.key.startsWith("week")
+                            ? "min-w-16"
+                            : ""
+                        }`}
+                      >
+                        {getCellValue(item, column.key)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+                
+                {/* Total Row - integrated into the same table */}
+                {filteredData && filteredData.length > 0 && (
+                  <TableRow className="font-bold border-t-2 border-gray-300 bg-gray-50">
+                    {getTableColumns().map((column) => (
+                      <TableCell 
+                        key={column.key}
+                        className={`text-xs font-mono ${
+                          column.key === "rowLabel" 
+                            ? "font-bold" 
+                            : "text-right"
+                        } ${
+                          column.key === "total" 
+                            ? "bg-gray-100" 
+                            : ""
+                        } ${
+                          column.key.startsWith("week")
+                            ? "min-w-16"
+                            : ""
+                        }`}
+                      >
+                        {column.key === "rowLabel" 
+                          ? "TOTAL" 
+                          : column.key === "total"
+                          ? formatNumber(Math.round(viewSpecificTotal))
+                          : column.key.startsWith("week")
+                          ? (() => {
+                              // Sum actual weekly data for the specific week
+                              const weekTotal = filteredData?.reduce((sum, item) => {
+                                const weekValue = item[column.key as keyof ReportData]
+                                return sum + (typeof weekValue === "number" ? weekValue : 0)
+                              }, 0) || 0
+                              return formatNumber(Math.round(weekTotal))
+                            })()
+                          : column.key in { jan: 1, feb: 1, mar: 1, apr: 1, may: 1, jun: 1, jul: 1, aug: 1, sep: 1, oct: 1, nov: 1, dec: 1 }
+                          ? (() => {
+                              // Sum actual monthly data for the specific month
+                              const monthTotal = filteredData?.reduce((sum, item) => {
+                                const monthValue = item[column.key as keyof ReportData]
+                                return sum + (typeof monthValue === "number" ? monthValue : 0)
+                              }, 0) || 0
+                              return formatNumber(Math.round(monthTotal))
+                            })()
+                          : "-"
+                        }
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          // Regular view (total/month) with normal layout
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -837,7 +582,7 @@ export function Reporting({ data }: ReportingProps) {
             </Table>
             
             {/* Total Row */}
-            {filteredData.length > 0 && (
+            {filteredData && filteredData.length > 0 && (
               <div className="border-t bg-gray-50">
                 <Table>
                   <TableBody>
@@ -860,9 +605,23 @@ export function Reporting({ data }: ReportingProps) {
                             : column.key === "total"
                             ? formatNumber(Math.round(viewSpecificTotal))
                             : column.key.startsWith("week")
-                            ? formatNumber(Math.round(viewSpecificTotal / 4))
-                            : column.key in { jan: 1, feb: 1, mar: 1, apr: 1, may: 1, jun: 1, jul: 1 }
-                            ? formatNumber(Math.round(viewSpecificTotal / 7))
+                            ? (() => {
+                                // Sum actual weekly data for the specific week
+                                const weekTotal = filteredData?.reduce((sum, item) => {
+                                  const weekValue = item[column.key as keyof ReportData]
+                                  return sum + (typeof weekValue === "number" ? weekValue : 0)
+                                }, 0) || 0
+                                return formatNumber(Math.round(weekTotal))
+                              })()
+                            : column.key in { jan: 1, feb: 1, mar: 1, apr: 1, may: 1, jun: 1, jul: 1, aug: 1, sep: 1, oct: 1, nov: 1, dec: 1 }
+                            ? (() => {
+                                // Sum actual monthly data for the specific month
+                                const monthTotal = filteredData?.reduce((sum, item) => {
+                                  const monthValue = item[column.key as keyof ReportData]
+                                  return sum + (typeof monthValue === "number" ? monthValue : 0)
+                                }, 0) || 0
+                                return formatNumber(Math.round(monthTotal))
+                              })()
                             : "-"
                           }
                         </TableCell>
@@ -873,16 +632,22 @@ export function Reporting({ data }: ReportingProps) {
               </div>
             )}
           </div>
+        )}
 
-          {filteredData.length === 0 && (
+          {loading ? (
+            <div className="text-center py-8">
+              <RefreshCw className="h-12 w-12 mx-auto text-gray-400 mb-4 animate-spin" />
+              <p className="text-gray-500">Loading reporting data...</p>
+            </div>
+          ) : filteredData.length === 0 ? (
             <div className="text-center py-8">
               <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <p className="text-gray-500">No reports found matching your criteria</p>
             </div>
-          )}
+          ) : null}
 
           {/* Pagination */}
-          {filteredData.length > 0 && (
+          {filteredData && filteredData.length > 0 && (
             <div className="flex items-center justify-between p-4 border-t">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Show</span>
@@ -905,7 +670,7 @@ export function Reporting({ data }: ReportingProps) {
               
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">
-                  Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredData.length)} of {filteredData.length} entries
+                  Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredData?.length || 0)} of {filteredData?.length || 0} entries
                 </span>
                 <div className="flex items-center gap-1">
                   <Button

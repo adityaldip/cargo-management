@@ -279,10 +279,131 @@ export function ExecuteRates() {
     fetchCargoData()
   }, [])
 
-  const calculateTotalRevenue = () => {
-    return cargoData.reduce((total, record) => {
-      return total + (parseFloat(record.calculated_rate_value) || 0)
-    }, 0)
+  // Calculate total revenue when component loads or filters change
+  useEffect(() => {
+    if (!loading && totalRecords > 0) {
+      calculateTotalRevenue()
+    }
+  }, [loading, totalRecords, filterConditions, filterLogic])
+
+  // State for total revenue calculation
+  const [totalRevenue, setTotalRevenue] = useState(0)
+  const [isCalculatingTotal, setIsCalculatingTotal] = useState(false)
+
+  // Calculate total revenue across ALL records (not just current page)
+  const calculateTotalRevenue = async () => {
+    if (isCalculatingTotal) return totalRevenue
+    
+    setIsCalculatingTotal(true)
+    try {
+      console.log('💰 Calculating total revenue across all records...')
+      
+      // Build query to get ALL records with assigned rates
+      let dataQuery = supabase
+        .from('cargo_data')
+        .select('*')
+        .not('rate_id', 'is', null)
+      
+      // Apply same filters as current view
+      if (hasActiveFilters && filterConditions.length > 0) {
+        filterConditions.forEach((condition) => {
+          const { field, operator, value } = condition
+          
+          if (value && value.trim() !== '') {
+            switch (operator) {
+              case 'equals':
+                dataQuery = dataQuery.eq(field, value)
+                break
+              case 'contains':
+                dataQuery = dataQuery.ilike(field, `%${value}%`)
+                break
+              case 'starts_with':
+                dataQuery = dataQuery.ilike(field, `${value}%`)
+                break
+              case 'ends_with':
+                dataQuery = dataQuery.ilike(field, `%${value}`)
+                break
+              case 'greater_than':
+                const numValue = parseFloat(value)
+                if (!isNaN(numValue)) {
+                  dataQuery = dataQuery.gt(field, numValue)
+                }
+                break
+              case 'less_than':
+                const numValue2 = parseFloat(value)
+                if (!isNaN(numValue2)) {
+                  dataQuery = dataQuery.lt(field, numValue2)
+                }
+                break
+              case 'not_empty':
+                dataQuery = dataQuery.not(field, 'is', null).neq(field, '')
+                break
+              case 'is_empty':
+                dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
+                break
+            }
+          }
+        })
+      }
+      
+      // Fetch ALL records (no pagination)
+      const { data: allCargoData, error } = await dataQuery
+      
+      if (error) {
+        console.error('Error fetching all cargo data for revenue calculation:', error)
+        return 0
+      }
+      
+      if (!allCargoData || allCargoData.length === 0) {
+        setTotalRevenue(0)
+        return 0
+      }
+      
+      // Get unique rate IDs from all data
+      const rateIds = [...new Set(allCargoData.map((record: any) => record.rate_id).filter(Boolean))]
+      
+      // Fetch rates data
+      const { data: ratesData } = await supabase
+        .from('rates')
+        .select('id, name, description, rate_type, base_rate, currency, multiplier')
+        .in('id', rateIds)
+      
+      // Calculate total revenue using same logic as current page
+      let total = 0
+      allCargoData.forEach((record: any) => {
+        const rate: any = ratesData?.find((r: any) => r.id === record.rate_id)
+        let calculatedRateValue = record.rate_value || 0
+        
+        // Same calculation logic as current page
+        if ((record.rate_value === 0 || record.rate_value === null || record.rate_value === '0.00' || parseFloat(record.rate_value) === 0) && rate) {
+          if (rate.rate_type === 'per_kg') {
+            calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0)
+          } else if (rate.rate_type === 'fixed') {
+            calculatedRateValue = rate.base_rate || 0
+          } else if (rate.rate_type === 'multiplier') {
+            calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0) * (rate.multiplier || 1)
+          }
+          calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
+        } else if ((record.rate_value === 0 || record.rate_value === null || record.rate_value === '0.00' || parseFloat(record.rate_value) === 0) && !rate) {
+          // Fallback calculation
+          const defaultRate = record.rate_currency === 'USD' ? 2.5 : 2.5
+          calculatedRateValue = (record.total_kg || 0) * defaultRate
+          calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
+        }
+        
+        total += calculatedRateValue
+      })
+      
+      console.log(`💰 Total revenue calculated: €${total.toFixed(2)} across ${allCargoData.length} records`)
+      setTotalRevenue(total)
+      return total
+      
+    } catch (error) {
+      console.error('Error calculating total revenue:', error)
+      return 0
+    } finally {
+      setIsCalculatingTotal(false)
+    }
   }
 
   // Filter handlers
@@ -698,7 +819,16 @@ export function ExecuteRates() {
             )}
             <span>Total Weight: <strong className="text-black">{totalWeight.toFixed(1)} kg</strong></span>
             <span>Avg Weight: <strong className="text-black">{avgWeight.toFixed(1)} kg</strong></span>
-            <span>Total Revenue: <strong className="text-black">€{calculateTotalRevenue().toFixed(2)}</strong></span>
+            <span>Total Revenue: <strong className="text-black">
+              {isCalculatingTotal ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Calculating...
+                </span>
+              ) : (
+                `€${totalRevenue.toFixed(2)}`
+              )}
+            </strong></span>
           </div>
         </div>
       </CardHeader>
