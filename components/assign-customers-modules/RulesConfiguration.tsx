@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
@@ -14,16 +13,9 @@ import { Input } from "@/components/ui/input"
 import { 
   Settings, 
   Plus, 
-  Search, 
   GripVertical,
-  Edit,
   Trash2,
-  Copy,
   Play,
-  Pause,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
   UserCheck,
   ChevronDown,
   ChevronLeft,
@@ -35,11 +27,11 @@ import { rulesAPI } from "@/lib/api-client"
 import { CustomerRuleExtended } from "./types"
 import { SAMPLE_CUSTOMER_RULES } from "@/lib/sample-rules"
 import { CreateCustomerRuleModal } from "./CreateCustomerRuleModal"
-import { useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { SweetAlert } from "@/components/ui/sweet-alert"
 import { useWorkflowStore } from "@/store/workflow-store"
+import { useAssignCustomersTabStore } from "@/store/assign-customers-tab-store"
 
 // Customer Rules Configuration Component - Updated
 export function RulesConfiguration() {
@@ -59,20 +51,8 @@ export function RulesConfiguration() {
   } = useCustomerRules()
 
   // Local state for UI components
-  const [searchTerm, setSearchTerm] = useState("")
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
-  const [selectedRule, setSelectedRule] = useState<CustomerRuleExtended | null>(null)
-  const [isRuleEditorOpen, setIsRuleEditorOpen] = useState(false)
   const [draggedRule, setDraggedRule] = useState<string | null>(null)
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
-  // Filter state
-  const [showFilters, setShowFilters] = useState(false)
-  const [filterLogic, setFilterLogic] = useState<"AND" | "OR">("OR")
-  const [filterConditions, setFilterConditions] = useState<{
-    field: string
-    operator: string
-    value: string
-  }[]>([{ field: "orig_oe", operator: "equals", value: "" }])
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -108,6 +88,10 @@ export function RulesConfiguration() {
   // Workflow store for global execution state
   const { isExecutingRules, setIsExecutingRules } = useWorkflowStore()
   
+  // Assign customers tab store for navigation within the section
+  const { setActiveTab, setCurrentView } = useAssignCustomersTabStore()
+  
+  
   // Sweet Alert state for delete confirmation
   const [showDeleteAlert, setShowDeleteAlert] = useState(false)
   const [ruleToDelete, setRuleToDelete] = useState<CustomerRuleExtended | null>(null)
@@ -133,14 +117,6 @@ export function RulesConfiguration() {
     { key: 'assigned_rate', label: 'Rate' }
   ]
 
-  // Debounce search term
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm)
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [searchTerm])
 
   // Load record count
   const loadRecordCount = async () => {
@@ -168,6 +144,7 @@ export function RulesConfiguration() {
   useEffect(() => {
     loadRecordCount()
   }, [])
+  
 
   // Load customers from Supabase with their active codes
   useEffect(() => {
@@ -232,52 +209,8 @@ export function RulesConfiguration() {
   // Memoized filtered rules for better performance
   const filteredRules = useMemo(() => {
     if (!Array.isArray(rules)) return []
-    return rules.filter(rule => {
-      // First apply search filter
-      const matchesSearch = !debouncedSearchTerm || (
-        rule.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        rule.description?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        (rule as any).actions?.assignTo?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-      )
-      
-      if (!matchesSearch) return false
-      
-      // Then apply condition filters if any are set
-      if (!showFilters || filterConditions.every(cond => !cond.value)) return true
-      
-      const activeConditions = filterConditions.filter(cond => cond.value.trim())
-      if (activeConditions.length === 0) return true
-      
-      const conditionResults = activeConditions.map((filterCond) => {
-        const ruleConditions = rule.conditions || []
-        return ruleConditions.some(ruleCond => {
-          const fieldMatch = ruleCond.field === filterCond.field
-          
-          if (!fieldMatch) return false
-          
-          const ruleValue = ruleCond.value.toLowerCase()
-          const filterValue = filterCond.value.toLowerCase()
-          
-          switch (filterCond.operator) {
-            case "contains":
-              return ruleValue.includes(filterValue)
-            case "equals":
-              return ruleValue === filterValue
-            case "starts_with":
-              return ruleValue.startsWith(filterValue)
-            case "ends_with":
-              return ruleValue.endsWith(filterValue)
-            default:
-              return false
-          }
-        })
-      })
-      
-      return filterLogic === "OR" 
-        ? conditionResults.some(result => result)
-        : conditionResults.every(result => result)
-    })
-  }, [rules, debouncedSearchTerm, showFilters, filterConditions, filterLogic])
+    return rules
+  }, [rules])
 
   // Memoized pagination logic
   const paginationData = useMemo(() => {
@@ -396,41 +329,12 @@ export function RulesConfiguration() {
     }
   }
 
-  const clearFilters = () => {
-    setFilterConditions([{ field: cargoDataFields[0]?.key || "orig_oe", operator: "equals", value: "" }])
-    setFilterLogic("OR")
-    setShowFilters(false)
-    setCurrentPage(1) // Reset to first page when clearing filters
-  }
 
-  // Memoized field values for better performance
-  const allFieldValues = useMemo(() => {
-    const allValues = SAMPLE_CUSTOMER_RULES.flatMap(rule => 
-      rule.conditions.map(cond => cond.value)
-    )
-    return [...new Set(allValues)].sort()
-  }, [])
-
-  // Memoized where options for better performance  
-  const whereOptions = useMemo(() => {
-    const allWhereOptions = SAMPLE_CUSTOMER_RULES.flatMap(rule => rule.where)
-    const uniqueOptions = [...new Set(allWhereOptions)].sort()
-    
-    return uniqueOptions.map(option => ({
-      label: option,
-      value: option.toLowerCase().replace(/\s+/g, '_').replace(/\./g, '')
-    }))
-  }, [])
 
   // Memoized customers for better performance
   const memoizedCustomers = useMemo(() => {
     return customers.sort((a, b) => a.name.localeCompare(b.name))
   }, [customers])
-
-  // Fast field values lookup (no computation during render)
-  const getFieldValues = (fieldType: string) => {
-    return allFieldValues
-  }
 
   // Helper functions for editing rule conditions
   const addEditingRuleCondition = () => {
@@ -622,9 +526,6 @@ export function RulesConfiguration() {
     }
 
     const activeRules = rules.filter(rule => (rule as any).is_active)
-    console.log('Total rules:', rules.length)
-    console.log('Active rules:', activeRules.length)
-    console.log('Active rules details:', activeRules.map(r => ({ id: r.id, name: r.name, is_active: (r as any).is_active })))
     
     if (activeRules.length === 0) {
       setError("No active rules found. Please activate at least one rule before executing.")
@@ -666,9 +567,7 @@ export function RulesConfiguration() {
         })
       }, 2000)
 
-      console.log('Calling rulesAPI.executeRules()...')
       const { data, error } = await rulesAPI.executeRules()
-      console.log('API Response:', { data, error })
       
       // Clear intervals and set final progress
       clearInterval(progressInterval)
@@ -707,7 +606,11 @@ export function RulesConfiguration() {
         // }, 1000)
         
         // Refresh rules to get updated match counts
-        await refetch()
+        // await refetch()
+        
+        // Navigate to execute tab after successful execution
+        setActiveTab("execute")
+        setCurrentView("rules")
       } else {
         setError("Failed to execute rules: Unknown error")
         toast({
@@ -729,6 +632,8 @@ export function RulesConfiguration() {
       setIsExecutingRules(false) // Clear global execution state
       setExecutionProgress(0)
       setExecutionStep("")
+      setActiveTab("execute")
+      setCurrentView("rules")
     }
   }
 
@@ -900,25 +805,22 @@ export function RulesConfiguration() {
           )}
 
           <CardContent>
-          {/* Filter Section - Notion Style */}
-          <div className="mb-4 space-y-2">
+          {/* Record Count Display */}
+          <div className="mb-4">
             <div className="flex items-center justify-between">
               <div className="text-xs text-gray-500">
                 {paginationData.totalItems} of {rules.length} rules
               </div>
-              <div className="flex items-center gap-4">
-                {/* Record Count Display */}
-                <div className="flex items-center gap-2 text-xs text-gray-600">
-                  {isLoadingCount ? (
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
-                  ) : recordCount ? (
-                    <>
-                      <span>Total records:</span>
-                      <span className="font-semibold text-blue-600">{recordCount.total.toLocaleString()}</span>
-                      <span className="text-gray-400">(all data will be processed)</span>
-                    </>
-                  ) : null}
-                </div>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                {isLoadingCount ? (
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                ) : recordCount ? (
+                  <>
+                    <span>Total records:</span>
+                    <span className="font-semibold text-blue-600">{recordCount.total.toLocaleString()}</span>
+                    <span className="text-gray-400">(all data will be processed)</span>
+                  </>
+                ) : null}
               </div>
             </div>
           </div>

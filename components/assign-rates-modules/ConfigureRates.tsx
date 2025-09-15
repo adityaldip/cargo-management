@@ -26,6 +26,7 @@ import { SweetAlert } from "@/components/ui/sweet-alert"
 import { useToast } from "@/hooks/use-toast"
 import { rateRulesAPI } from "@/lib/api-client"
 import { useWorkflowStore } from "@/store/workflow-store"
+import { useAssignRatesTabStore } from "@/store/assign-rates-tab-store"
 
 export function ConfigureRates() {
   const {
@@ -53,6 +54,9 @@ export function ConfigureRates() {
   
   // Get workflow store for managing execution state
   const { isExecutingRules, setIsExecutingRules } = useWorkflowStore()
+  
+  // Get assign rates tab store for navigation
+  const { setActiveTab } = useAssignRatesTabStore()
   
   const [localRules, setLocalRules] = useState<RateRule[]>([])
 
@@ -511,6 +515,7 @@ export function ConfigureRates() {
       setIsExecutingRules(false)
       setExecutionProgress(0)
       setExecutionStep("")
+      setActiveTab("execute")
     }
   }
 

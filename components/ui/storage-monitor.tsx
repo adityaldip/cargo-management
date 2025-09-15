@@ -104,11 +104,11 @@ export function StorageMonitor({ showDetails = false, onCleanupComplete }: Stora
           const result = await performProgressiveCleanup()
           
           if (result.success) {
-            toast({
-              title: "Storage Automatically Cleaned",
-              description: `Freed up space using ${result.strategiesUsed.length} cleanup strategies. ${result.totalItemsRemoved} items removed to prevent storage issues.`,
-              duration: 5000,
-            })
+            // toast({
+            //   title: "Storage Automatically Cleaned",
+            //   description: `Freed up space using ${result.strategiesUsed.length} cleanup strategies. ${result.totalItemsRemoved} items removed to prevent storage issues.`,
+            //   duration: 5000,
+            // })
             
             // Refresh storage info after cleanup
             refreshStorageInfo()
@@ -116,23 +116,23 @@ export function StorageMonitor({ showDetails = false, onCleanupComplete }: Stora
           } else {
             // Only show warning if cleanup failed completely
             if (storageInfo.isFull) {
-              toast({
-                title: "Storage Full",
-                description: "Automatic cleanup couldn't free enough space. Some features may be limited until space is available.",
-                variant: "destructive",
-                duration: 7000,
-              })
+              // toast({
+              //   title: "Storage Full",
+              //   description: "Automatic cleanup couldn't free enough space. Some features may be limited until space is available.",
+              //   variant: "destructive",
+              //   duration: 7000,
+              // })
             }
           }
         } catch (error) {
           console.error('Auto cleanup error:', error)
           if (storageInfo.isFull) {
-            toast({
-              title: "Storage Issue",
-              description: "Storage is full and automatic cleanup failed. Some features may not work properly.",
-              variant: "destructive",
-              duration: 7000,
-            })
+            // toast({
+            //   title: "Storage Issue",
+            //   description: "Storage is full and automatic cleanup failed. Some features may not work properly.",
+            //   variant: "destructive",
+            //   duration: 7000,
+            // })
           }
         }
       }
