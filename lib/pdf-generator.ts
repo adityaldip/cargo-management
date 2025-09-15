@@ -15,6 +15,18 @@ export interface Invoice {
   paymentMethod?: string
   currency?: string
   itemsDetails?: CargoInvoiceItem[]
+  // Customer details from database
+  customer_id?: string
+  customer_code?: string
+  customer_email?: string
+  customer_phone?: string
+  customer_address?: string
+  customer_contact_person?: string
+  customer_city?: string
+  customer_state?: string
+  customer_postal_code?: string
+  customer_country?: string
+  customer_accounting_label?: string
 }
 
 export const generateInvoicePDF = (invoice: Invoice) => {
@@ -29,16 +41,16 @@ export const generateInvoicePDF = (invoice: Invoice) => {
   // Set font
   doc.setFont('helvetica')
   
-  // Invoice details (right side) - moved closer to edge
+  // Invoice details (right side) - better positioned
   doc.setFontSize(12)
   doc.setFont('helvetica', 'bold')
-  doc.text('INVOICE', 160, 10)
+  doc.text('INVOICE', 140, 10)
   
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text('INVOICE NO:', 160, 17)
+  doc.text('INVOICE NO:', 140, 17)
   doc.setFont('helvetica', 'bold')
-  doc.text(String(invoice.invoiceNumber || 'N/A'), 180, 17)
+  doc.text(String(invoice.invoiceNumber || 'N/A'), 160, 17)
   
   // Issued to section - moved closer to edge
   doc.setFontSize(9)
@@ -48,22 +60,46 @@ export const generateInvoicePDF = (invoice: Invoice) => {
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
   doc.text(String(invoice.customer || 'Unknown Customer'), 10, 16)
-  doc.text('123 Business Street', 10, 21)
-  doc.text('Business City, BC 12345', 10, 26)
+  
+  // Use real customer address data if available
+  if (invoice.customer_address) {
+    doc.text(String(invoice.customer_address), 10, 21)
+  } else {
+    doc.text('123 Business Street', 10, 21)
+  }
+  
+  // Build city, state, postal code line
+  let cityStatePostal = ''
+  if (invoice.customer_city) cityStatePostal += invoice.customer_city
+  if (invoice.customer_city && invoice.customer_state) cityStatePostal += ', '
+  if (invoice.customer_state) cityStatePostal += invoice.customer_state
+  if (invoice.customer_postal_code) cityStatePostal += ` ${invoice.customer_postal_code}`
+  
+  if (cityStatePostal) {
+    doc.text(cityStatePostal, 10, 26)
+  } else {
+    doc.text('Business City, BC 12345', 10, 26)
+  }
+  
+  // Add country if available
+  if (invoice.customer_country) {
+    doc.text(String(invoice.customer_country), 10, 31)
+  }
   
   // Pay to section - moved closer to edge
+  const payToY = invoice.customer_country ? 37 : 32
   doc.setFontSize(9)
   doc.setFont('helvetica', 'bold')
-  doc.text('PAY TO:', 10, 32)
+  doc.text('PAY TO:', 10, payToY)
   
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text('Cargo Management Ltd', 10, 38)
-  doc.text('Account Name: Cargo Management', 10, 43)
-  doc.text('Account No.: 1234 5678 9012', 10, 48)
+  doc.text('AirBaltic', 10, payToY + 6)
+  doc.text('Account Name: AirBaltic', 10, payToY + 11)
+  doc.text('Account No.: 1234 5678 9012', 10, payToY + 16)
   
   // Cargo Shipment Details Table
-  const startY = 60
+  const startY = invoice.customer_country ? 65 : 60
   const lineHeight = 4
   const maxRowsPerPage = 45 // Maximum rows that can fit on one page
   
@@ -97,13 +133,13 @@ export const generateInvoicePDF = (invoice: Invoice) => {
       // Add page header for subsequent pages
       doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
-      doc.text('INVOICE', 160, 10)
+      doc.text('INVOICE', 140, 10)
       
       doc.setFontSize(8)
       doc.setFont('helvetica', 'normal')
-      doc.text('INVOICE NO:', 160, 17)
+      doc.text('INVOICE NO:', 140, 17)
       doc.setFont('helvetica', 'bold')
-      doc.text(String(invoice.invoiceNumber || 'N/A'), 180, 17)
+      doc.text(String(invoice.invoiceNumber || 'N/A'), 160, 17)
       
       doc.setFontSize(8)
       doc.setFont('helvetica', 'normal')
@@ -118,17 +154,17 @@ export const generateInvoicePDF = (invoice: Invoice) => {
     // Use different Y position for first page vs subsequent pages
     const tableStartY = page === 0 ? startY : 25
     
-    // Table headers (only draw once per page)
+    // Table headers (only draw once per page) - expanded width
     doc.setFontSize(9)
     doc.setFont('helvetica', 'bold')
     doc.text('SECTOR', 10, tableStartY)
-    doc.text('MAIL CAT.', 45, tableStartY)
-    doc.text('TOTAL KG', 75, tableStartY)
-    doc.text('RATE', 110, tableStartY)
-    doc.text(`TOTAL ${invoice.currency || 'EUR'}`, 150, tableStartY)
+    doc.text('MAIL CAT.', 50, tableStartY)
+    doc.text('TOTAL KG', 85, tableStartY)
+    doc.text('RATE', 125, tableStartY)
+    doc.text(`TOTAL ${invoice.currency || 'EUR'}`, 170, tableStartY)
     
-    // Draw line under headers
-    doc.line(10, tableStartY + 1, 200, tableStartY + 1)
+    // Draw line under headers - extended to use more width
+    doc.line(10, tableStartY + 1, 210, tableStartY + 1)
     
     // Line items
     doc.setFont('helvetica', 'normal')
@@ -137,15 +173,15 @@ export const generateInvoicePDF = (invoice: Invoice) => {
     
     pageData.forEach(item => {
       doc.text(String(item.sector || 'N/A'), 10, currentY)
-      doc.text(String(item.mailCat || 'N/A'), 45, currentY)
-      doc.text(`${Number(item.totalKg || 0).toFixed(1)} kg`, 75, currentY)
-      doc.text(`${invoice.currency || '€'}${Number(item.rate || 0).toFixed(2)}`, 110, currentY)
-      doc.text(`${invoice.currency || '€'}${Number(item.totalEur || 0).toFixed(2)}`, 150, currentY)
+      doc.text(String(item.mailCat || 'N/A'), 50, currentY)
+      doc.text(`${Number(item.totalKg || 0).toFixed(1)} kg`, 85, currentY)
+      doc.text(`${invoice.currency || '€'}${Number(item.rate || 0).toFixed(2)}`, 125, currentY)
+      doc.text(`${invoice.currency || '€'}${Number(item.totalEur || 0).toFixed(2)}`, 170, currentY)
       currentY += lineHeight
     })
     
-    // Draw line under items
-    doc.line(10, currentY + 1, 200, currentY + 1)
+    // Draw line under items - extended width
+    doc.line(10, currentY + 1, 210, currentY + 1)
     
     // Summary section (only on last page)
     if (page === totalPages - 1) {
@@ -153,10 +189,10 @@ export const generateInvoicePDF = (invoice: Invoice) => {
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.text('TOTAL', 10, currentY)
-      doc.text('', 45, currentY) // Empty for mail cat
-      doc.text(`${totalKg.toFixed(1)} kg`, 75, currentY)
-      doc.text('', 110, currentY) // Empty for rate
-      doc.text(`${invoice.currency || '€'}${totalEur.toFixed(2)}`, 150, currentY)
+      doc.text('', 50, currentY) // Empty for mail cat
+      doc.text(`${totalKg.toFixed(1)} kg`, 85, currentY)
+      doc.text('', 125, currentY) // Empty for rate
+      doc.text(`${invoice.currency || '€'}${totalEur.toFixed(2)}`, 170, currentY)
       
       // Add summary note
       currentY += 5

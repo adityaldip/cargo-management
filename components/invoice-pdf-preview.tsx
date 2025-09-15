@@ -92,8 +92,8 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
                 <div>
                   <h2 className="text-sm font-bold text-gray-800 mb-1">PAY TO:</h2>
                   <div className="text-sm text-gray-700">
-                    <div>Cargo Management Ltd</div>
-                    <div>Account Name: Cargo Management</div>
+                    <div>AirBaltic</div>
+                    <div>Account Name: AirBaltic</div>
                     <div>Account No.: 1234 5678 9012</div>
                   </div>
                 </div>

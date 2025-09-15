@@ -45,7 +45,7 @@ export async function GET(
       )
     }
     
-    // Format the complete invoice data
+    // Format the complete invoice data with all customer details
     const invoice = {
       id: invoiceSummary.invoice_id || `invoice-${Date.now()}`,
       invoiceNumber: invoiceSummary.invoice_number,
@@ -58,6 +58,18 @@ export async function GET(
       totalWeight: invoiceSummary.total_weight,
       route: `${invoiceSummary.unique_routes} routes`,
       currency: invoiceSummary.currency,
+      // Include all customer details from the database view
+      customer_id: invoiceSummary.customer_id,
+      customer_code: invoiceSummary.customer_code,
+      customer_email: invoiceSummary.customer_email,
+      customer_phone: invoiceSummary.customer_phone,
+      customer_address: invoiceSummary.customer_address,
+      customer_contact_person: invoiceSummary.customer_contact_person,
+      customer_city: invoiceSummary.customer_city,
+      customer_state: invoiceSummary.customer_state,
+      customer_postal_code: invoiceSummary.customer_postal_code,
+      customer_country: invoiceSummary.customer_country,
+      customer_accounting_label: invoiceSummary.customer_accounting_label,
       itemsDetails: (invoiceDetails || []).map((item: any, index: number) => ({
         id: item.id || `item-${index}-${Date.now()}`,
         recId: item.recId,

@@ -56,6 +56,7 @@ export interface AssignRatesProps {
   data: any | null
   savedRateConditions?: any[]
   onSaveRateConditions?: (conditions: any[]) => void
+  onContinue?: () => void
 }
 
 export type ViewType = "setup" | "configure" | "execute"

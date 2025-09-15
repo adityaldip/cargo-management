@@ -9,14 +9,14 @@ import { ExecuteRates } from "./ExecuteRates"
 import { useAssignRatesTabStore } from "@/store/assign-rates-tab-store"
 import { useWorkflowStore } from "@/store/workflow-store"
 
-export function AssignRates({ data, savedRateConditions, onSaveRateConditions }: AssignRatesProps) {
+export function AssignRates({ data, savedRateConditions, onSaveRateConditions, onContinue }: AssignRatesProps) {
   const { activeTab, setActiveTab } = useAssignRatesTabStore()
-  const { isExecutingRules } = useWorkflowStore()
+  const { isExecutingRules, isClearingData, isExporting, isBulkDeleting } = useWorkflowStore()
 
   return (
     <div className="space-y-4 pt-2">
-      {/* Tabs */}
-      <div className="flex justify-start">
+      {/* Header Navigation */}
+      <div className="flex justify-between items-center">
         <div className="inline-flex bg-gray-100 rounded-lg p-1">
           <Button
             variant={activeTab === "setup" ? "default" : "ghost"}
@@ -59,6 +59,17 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions }:
             Execute Rules
           </Button>
         </div>
+
+        {/* Continue Button */}
+        {onContinue && (
+          <Button 
+            className="bg-black hover:bg-gray-800 text-white"
+            onClick={onContinue}
+            disabled={isExecutingRules || isClearingData || isExporting || isBulkDeleting}
+          >
+            Continue to Review Rates
+          </Button>
+        )}
       </div>
 
       {/* Tab Content */}

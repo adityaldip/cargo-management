@@ -6,33 +6,20 @@ DROP VIEW IF EXISTS invoice_summary_view;
 
 CREATE VIEW invoice_summary_view AS
 SELECT 
-    -- Generate consistent invoice ID and readable invoice number
-    COALESCE('INV-' || MAX(cd.assigned_customer::text) || '-' || TO_CHAR(MIN(COALESCE(
-        CASE 
-            WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
-            THEN cd.inb_flight_date::date 
-            ELSE NULL 
-        END,
-        cd.created_at
-    )), 'YYYYMMDD') || '-' || CASE 
-        WHEN TO_CHAR(MIN(COALESCE(
+    -- Generate unique invoice ID as UUID and readable invoice number
+    -- Use deterministic UUID based on customer, rate, and date for consistency
+    extensions.uuid_generate_v5(
+        '6ba7b810-9dad-11d1-80b4-00c04fd430c8'::uuid,
+        MAX(cd.assigned_customer::text) || '-' || MAX(cd.rate_id::text) || '-' || TO_CHAR(MIN(COALESCE(
             CASE 
                 WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
                 THEN cd.inb_flight_date::date 
                 ELSE NULL 
             END,
             cd.created_at
-        )), 'HH24MISS') = '000000'
-        THEN TO_CHAR(MIN(cd.created_at), 'HH24MISS')
-        ELSE TO_CHAR(MIN(COALESCE(
-            CASE 
-                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
-                THEN cd.inb_flight_date::date 
-                ELSE NULL 
-            END,
-            cd.created_at
-        )), 'HH24MISS')
-    END) as invoice_id,
+        )), 'YYYYMMDD')
+    ) as invoice_id,
+    -- Use flight date and created_at time for readable invoice number with sequence
     COALESCE('INV-' || TO_CHAR(MIN(COALESCE(
         CASE 
             WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
@@ -40,25 +27,9 @@ SELECT
             ELSE NULL 
         END,
         cd.created_at
-    )), 'YYYYMMDD') || '-' || CASE 
-        WHEN TO_CHAR(MIN(COALESCE(
-            CASE 
-                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
-                THEN cd.inb_flight_date::date 
-                ELSE NULL 
-            END,
-            cd.created_at
-        )), 'HH24MISS') = '000000'
-        THEN TO_CHAR(MIN(cd.created_at), 'HH24MISS')
-        ELSE TO_CHAR(MIN(COALESCE(
-            CASE 
-                WHEN cd.inb_flight_date IS NOT NULL AND cd.inb_flight_date != '' 
-                THEN cd.inb_flight_date::date 
-                ELSE NULL 
-            END,
-            cd.created_at
-        )), 'HH24MISS')
-    END) as invoice_number,
+    )), 'YYYYMMDD') || '-' || TO_CHAR(MIN(cd.created_at), 'HH24MISS') || '-' || 
+    -- Add sequence number based on rate_id to ensure uniqueness
+    SUBSTRING(MAX(cd.rate_id::text), 1, 4)) as invoice_number,
     COALESCE(c.name, 'Unknown') as customer_name,
     
     -- Customer details from customers table
@@ -132,6 +103,7 @@ GROUP BY
     cd.rate_currency,
     cd.rate_id,
     r.name,
+    c.id,
     r.rate_type,
     c.name;
 

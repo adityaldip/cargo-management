@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
       return acc
     }, {})
     
-    // Format invoices for the frontend
+    // Format invoices for the frontend with all customer details
     const invoices = invoiceSummaries.map((summary: any, index: number) => {
       const itemsDetails = detailsByInvoice[summary.invoice_id] || []
       
@@ -102,6 +102,18 @@ export async function GET(request: NextRequest) {
         totalWeight: summary.total_weight,
         route: `${summary.unique_routes} routes`,
         currency: summary.currency,
+        // Include all customer details from the database view
+        customer_id: summary.customer_id,
+        customer_code: summary.customer_code,
+        customer_email: summary.customer_email,
+        customer_phone: summary.customer_phone,
+        customer_address: summary.customer_address,
+        customer_contact_person: summary.customer_contact_person,
+        customer_city: summary.customer_city,
+        customer_state: summary.customer_state,
+        customer_postal_code: summary.customer_postal_code,
+        customer_country: summary.customer_country,
+        customer_accounting_label: summary.customer_accounting_label,
         itemsDetails: itemsDetails.map((item: any, itemIndex: number) => ({
           id: item.id || `item-${index}-${itemIndex}-${Date.now()}`,
           recId: item.recId,
