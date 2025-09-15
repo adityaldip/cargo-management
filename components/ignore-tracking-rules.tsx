@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { 
   Settings, 
@@ -19,7 +17,6 @@ import {
   CheckCircle,
   ChevronDown,
   Check,
-  ChevronsUpDown,
   X,
   Info
 } from "lucide-react"
@@ -29,6 +26,7 @@ import type { ProcessedData } from "@/types/cargo-data"
 import { useIgnoreRulesStore } from "@/store/ignore-rules-store"
 import { DisabledBanner } from "@/components/ui/status-banner"
 import { useToast } from "@/hooks/use-toast"
+import { applyIgnoreRulesWithConditions } from "@/lib/ignore-rules-utils"
 
 interface IgnoreTrackingRulesProps {
   onRulesChange?: (rules: IgnoreRule[]) => void
@@ -67,7 +65,7 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
   const [editingRuleLogic, setEditingRuleLogic] = useState<"AND" | "OR">("AND")
   const [editingRuleAction, setEditingRuleAction] = useState<"ignore" | "remove">("ignore")
   const [isSaving, setIsSaving] = useState(false)
-  const [openSelects, setOpenSelects] = useState<Record<number, boolean>>({})
+  const [isApplyingRules, setIsApplyingRules] = useState(false)
   
   // Zustand store
   const {
@@ -263,6 +261,50 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
     }, 500)
   }
 
+  const handleApplyRules = async () => {
+    if (!uploadedData?.data) {
+      toast({
+        title: "No data available",
+        description: "Please upload data first before applying rules.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsApplyingRules(true)
+
+    try {
+      // Get persisted conditions from Zustand store
+      const persistedConditions = getConditionsForDataSource(dataSource)
+      
+      // Apply ignore rules to get filtered data (excluding ignored records)
+      const filteredData = applyIgnoreRulesWithConditions(uploadedData.data, rules, persistedConditions)
+      
+      const originalCount = uploadedData.data.length
+      const filteredCount = filteredData.length
+      const ignoredCount = originalCount - filteredCount
+
+      // Show success toast with statistics
+      toast({
+        title: "Rules applied successfully",
+        description: `${ignoredCount} records ignored, ${filteredCount} records remaining.`,
+      })
+
+      // Trigger the rules applied callback to continue workflow
+      onRulesApplied?.()
+
+    } catch (error) {
+      console.error('Error applying rules:', error)
+      toast({
+        title: "Error applying rules",
+        description: "An error occurred while applying the ignore rules. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsApplyingRules(false)
+    }
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       {/* Disabled Banner */}
@@ -294,21 +336,20 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
               </Button>
               <Button 
                 className="bg-black hover:bg-gray-800 text-white"
-                onClick={() => {
-                  // Show temporary disabled toast notification
-                  toast({
-                    title: (
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <span>This button is temporarily disabled</span>
-                      </div>
-                    ),
-                    className: "border-amber-200 bg-amber-50 text-amber-900",
-                  })
-                }}
+                onClick={handleApplyRules}
+                disabled={isApplyingRules || !uploadedData?.data}
               >
-                <Play className="h-4 w-4 mr-2" />
-                Apply Rules
+                {isApplyingRules ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Applying...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Apply Rules
+                  </>
+                )}
               </Button>
             </div>
           </div>          
@@ -474,69 +515,12 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
                                 </SelectContent>
                               </Select>
 
-                              <Popover 
-                                open={openSelects[index] || false} 
-                                onOpenChange={(open) => setOpenSelects(prev => ({ ...prev, [index]: open }))}
-                              >
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    aria-expanded={openSelects[index] || false}
-                                    className="h-7 text-xs border-gray-200 flex-1 min-w-32 justify-between"
-                                  >
-                                    {condition.value || "Select value..."}
-                                    <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0" align="start">
-                                  <Command>
-                                    <CommandInput placeholder="Search flight numbers..." className="h-8" />
-                                    <CommandList className="max-h-48">
-                                      <CommandEmpty>
-                                        {uploadedData ? 'No flight numbers found' : 'Upload data first to see options'}
-                                      </CommandEmpty>
-                                      <CommandGroup>
-                                        {getFieldOptions(condition.field).map((option) => (
-                                          <CommandItem
-                                            key={option}
-                                            value={option}
-                                            onSelect={(currentValue) => {
-                                              updateEditingRuleCondition(index, { value: currentValue })
-                                              setOpenSelects(prev => ({ ...prev, [index]: false }))
-                                            }}
-                                            className="text-xs"
-                                          >
-                                            <Check
-                                              className={cn(
-                                                "mr-2 h-3 w-3",
-                                                condition.value === option ? "opacity-100" : "opacity-0"
-                                              )}
-                                            />
-                                            {option}
-                                          </CommandItem>
-                                        ))}
-                                        {getFieldOptions(condition.field).length > 0 && (
-                                          <CommandItem
-                                            value="__custom__"
-                                            onSelect={() => {
-                                              const customValue = prompt("Enter custom flight number:")
-                                              if (customValue && customValue.trim()) {
-                                                updateEditingRuleCondition(index, { value: customValue.trim() })
-                                              }
-                                              setOpenSelects(prev => ({ ...prev, [index]: false }))
-                                            }}
-                                            className="text-xs text-blue-600"
-                                          >
-                                            <Plus className="mr-2 h-3 w-3" />
-                                            Add custom value...
-                                          </CommandItem>
-                                        )}
-                                      </CommandGroup>
-                                    </CommandList>
-                                  </Command>
-                                </PopoverContent>
-                              </Popover>
+                              <Input
+                                value={condition.value}
+                                onChange={(e) => updateEditingRuleCondition(index, { value: e.target.value })}
+                                placeholder="Enter flight number..."
+                                className="h-7 text-xs border-gray-200 flex-1 min-w-32"
+                              />
 
                               {condition.value && (
                                 <Button

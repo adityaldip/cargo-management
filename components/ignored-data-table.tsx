@@ -108,6 +108,7 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
   const [showDetails, setShowDetails] = useState(false)
   const [isSavingToSupabase, setIsSavingToSupabase] = useState(false)
   const [useDummyData, setUseDummyData] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState({ percentage: 0, processed: 0, total: 0 })
   
   // Progress tracking state
   const [saveProgress, setSaveProgress] = useState({
@@ -524,17 +525,156 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
     }
   }, [saveProgress.status, onSavingStateChange])
 
-  // Always show dummy data for now
+  // Calculate ignored data from original data and rules with performance optimization
   useEffect(() => {
+    if (!originalData?.data) {
+      setIgnoredData([])
+      setFilteredData([])
+      setUseDummyData(false)
+      return
+    }
+
     setIsLoading(true)
     
-    // Always use dummy data
-    setUseDummyData(true)
-    setIgnoredData(dummyIgnoredData)
-    setFilteredData(dummyIgnoredData)
-    setCurrentPage(1) // Reset to first page when data changes
-    setIsLoading(false)
-  }, [])
+    // Performance optimization: Use requestIdleCallback for large datasets
+    const processData = () => {
+      try {
+        // Get persisted conditions from Zustand store
+        const persistedConditions = getConditionsForDataSource(dataSource)
+        
+        // For large datasets (>5000 records), process in chunks to avoid blocking UI
+        const isLargeDataset = originalData.data.length > 5000
+        const chunkSize = isLargeDataset ? 1000 : originalData.data.length
+        
+        let ignoredRecords: CargoData[] = []
+        let filteredRecords: CargoData[] = []
+        let processedCount = 0
+        
+        const processChunk = (startIndex: number) => {
+          const endIndex = Math.min(startIndex + chunkSize, originalData.data.length)
+          const chunk = originalData.data.slice(startIndex, endIndex)
+          
+          chunk.forEach(record => {
+            let shouldIgnore = false
+            
+            // Check persisted conditions first
+            if (persistedConditions.length > 0) {
+              shouldIgnore = persistedConditions.some(condition => {
+                const recordValue = getFieldValue(record, condition.field)
+                const conditionValues = condition.value.split(',').map(v => v.trim())
+                
+                switch (condition.operator) {
+                  case 'equals':
+                    return conditionValues.includes(String(recordValue))
+                  case 'contains':
+                    return conditionValues.some(v => String(recordValue).includes(v))
+                  case 'starts_with':
+                    return conditionValues.some(v => String(recordValue).startsWith(v))
+                  case 'ends_with':
+                    return conditionValues.some(v => String(recordValue).endsWith(v))
+                  default:
+                    return false
+                }
+              })
+            } else {
+              // Fallback to checking rules
+              shouldIgnore = ignoreRules.some(rule => {
+                if (!rule.is_active) return false
+                
+                const recordValue = getFieldValue(record, rule.field)
+                const ruleValues = rule.value.split(',').map(v => v.trim())
+                
+                switch (rule.operator) {
+                  case 'equals':
+                    return ruleValues.includes(String(recordValue))
+                  case 'contains':
+                    return ruleValues.some(v => String(recordValue).includes(v))
+                  case 'starts_with':
+                    return ruleValues.some(v => String(recordValue).startsWith(v))
+                  case 'ends_with':
+                    return ruleValues.some(v => String(recordValue).endsWith(v))
+                  default:
+                    return false
+                }
+              })
+            }
+            
+            if (shouldIgnore) {
+              ignoredRecords.push(record)
+            } else {
+              filteredRecords.push(record)
+            }
+          })
+          
+          processedCount += chunk.length
+          
+          // Update progress for large datasets
+          if (isLargeDataset) {
+            const progress = Math.round((processedCount / originalData.data.length) * 100)
+            setProcessingProgress({ percentage: progress, processed: processedCount, total: originalData.data.length })
+            console.log(`📊 Processing ignored data: ${progress}% (${processedCount}/${originalData.data.length})`)
+          }
+          
+          // Continue processing next chunk if there's more data
+          if (endIndex < originalData.data.length) {
+            if (isLargeDataset && 'requestIdleCallback' in window) {
+              // Use requestIdleCallback to avoid blocking UI
+              requestIdleCallback(() => processChunk(endIndex))
+            } else {
+              // Fallback for browsers without requestIdleCallback
+              setTimeout(() => processChunk(endIndex), 0)
+            }
+          } else {
+            // Processing complete
+            setIgnoredData(ignoredRecords)
+            setFilteredData(ignoredRecords) // Show ignored records in the table
+            setUseDummyData(false)
+            setCurrentPage(1) // Reset to first page when data changes
+            setIsLoading(false)
+            
+            console.log(`📊 Ignored data calculation complete: ${ignoredRecords.length} ignored, ${filteredRecords.length} remaining from ${originalData.data.length} total`)
+          }
+        }
+        
+        // Start processing from the beginning
+        processChunk(0)
+        
+      } catch (error) {
+        console.error('Error calculating ignored data:', error)
+        // Fallback to dummy data on error
+        setUseDummyData(true)
+        setIgnoredData(dummyIgnoredData)
+        setFilteredData(dummyIgnoredData)
+        setIsLoading(false)
+      }
+    }
+    
+    // Use requestIdleCallback for better performance, fallback to immediate execution
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(processData)
+    } else {
+      processData()
+    }
+  }, [originalData, ignoreRules, dataSource, getConditionsForDataSource])
+
+  // Helper function to get field value from record
+  const getFieldValue = (record: CargoData, fieldKey: string): any => {
+    const fieldMapping: Record<string, string> = {
+      'inb_flight_no': 'inbFlightNo',
+      'outb_flight_no': 'outbFlightNo',
+      'orig_oe': 'origOE',
+      'dest_oe': 'destOE',
+      'mail_cat': 'mailCat',
+      'mail_class': 'mailClass',
+      'total_kg': 'totalKg',
+      'customer': 'customer',
+      'date': 'date',
+      'invoice': 'invoiceExtend'
+    }
+    
+    const mappedField = fieldMapping[fieldKey] || fieldKey
+    return (record as any)[mappedField]
+  }
 
   const getIgnoredReason = (record: any): string => {
     // For dummy data, return a sample reason
@@ -546,27 +686,27 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
     const persistedConditions = getConditionsForDataSource(dataSource)
     if (persistedConditions.length > 0) {
         for (const condition of persistedConditions) {
-          const recordValue = record.inbFlightNo || ''
+          const recordValue = getFieldValue(record, condition.field)
           const conditionValues = condition.value.split(',').map((v: string) => v.trim())
           
           switch (condition.operator) {
             case 'equals':
-              if (conditionValues.includes(recordValue)) {
+              if (conditionValues.includes(String(recordValue))) {
                 return `Matched condition: ${condition.field} ${condition.operator} "${condition.value}"`
               }
               break
             case 'contains':
-              if (conditionValues.some((v: string) => recordValue.includes(v))) {
+              if (conditionValues.some((v: string) => String(recordValue).includes(v))) {
                 return `Matched condition: ${condition.field} ${condition.operator} "${condition.value}"`
               }
               break
             case 'starts_with':
-              if (conditionValues.some((v: string) => recordValue.startsWith(v))) {
+              if (conditionValues.some((v: string) => String(recordValue).startsWith(v))) {
                 return `Matched condition: ${condition.field} ${condition.operator} "${condition.value}"`
               }
               break
             case 'ends_with':
-              if (conditionValues.some((v: string) => recordValue.endsWith(v))) {
+              if (conditionValues.some((v: string) => String(recordValue).endsWith(v))) {
                 return `Matched condition: ${condition.field} ${condition.operator} "${condition.value}"`
               }
               break
@@ -578,27 +718,27 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
     for (const rule of ignoreRules) {
       if (!rule.is_active) continue
       
-      const recordValue = record.inbFlightNo || ''
+      const recordValue = getFieldValue(record, rule.field)
       const ruleValues = rule.value.split(',').map(v => v.trim())
       
       switch (rule.operator) {
         case 'equals':
-          if (ruleValues.includes(recordValue)) {
+          if (ruleValues.includes(String(recordValue))) {
             return `Matched rule: "${rule.name}" (${rule.field} ${rule.operator} "${rule.value}")`
           }
           break
         case 'contains':
-          if (ruleValues.some(v => recordValue.includes(v))) {
+          if (ruleValues.some(v => String(recordValue).includes(v))) {
             return `Matched rule: "${rule.name}" (${rule.field} ${rule.operator} "${rule.value}")`
           }
           break
         case 'starts_with':
-          if (ruleValues.some(v => recordValue.startsWith(v))) {
+          if (ruleValues.some(v => String(recordValue).startsWith(v))) {
             return `Matched rule: "${rule.name}" (${rule.field} ${rule.operator} "${rule.value}")`
           }
           break
         case 'ends_with':
-          if (ruleValues.some(v => recordValue.endsWith(v))) {
+          if (ruleValues.some(v => String(recordValue).endsWith(v))) {
             return `Matched rule: "${rule.name}" (${rule.field} ${rule.operator} "${rule.value}")`
           }
           break
@@ -637,14 +777,32 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Dummy Data Banner - Top of Card */}
-      {useDummyData && (
+      {/* Data Status Banner */}
+      {useDummyData ? (
         <WarningBanner 
           message="This is sample data and not connected to the database yet"
           className="mb-4"
         />
+      ) : ignoredData.length > 0 ? (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center gap-2 text-blue-800">
+            <EyeOff className="h-4 w-4" />
+            <span className="text-sm font-medium">
+              {ignoredData.length.toLocaleString()} records will be ignored based on your rules
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center gap-2 text-green-800">
+            <CheckCircle className="h-4 w-4" />
+            <span className="text-sm font-medium">
+              No records match your ignore rules - all data will be processed
+            </span>
+          </div>
+        </div>
       )}   
-      <Card className="bg-white border-gray-200 shadow-sm" style={{ padding:"12px 0px 12px 0px" }}>
+      <Card className="bg-white border-gray-200 shadow-sm p-3">
         <CardContent>
           <div className="flex items-center justify-between pb-2">
             <CardTitle className="text-black flex items-center gap-2">
@@ -653,11 +811,27 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
               {isLoading && (
                 <div className="flex items-center gap-2 text-sm text-gray-600 ml-4">
                   <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
-                  <span className="text-xs">Calculating...</span>
+                  <span className="text-xs">
+                    {processingProgress.total > 0 ? 
+                      `Processing ${processingProgress.processed.toLocaleString()}/${processingProgress.total.toLocaleString()} records...` : 
+                      'Calculating...'
+                    }
+                  </span>
                 </div>
               )}
             </CardTitle>
             <div className="flex flex-wrap gap-2">
+              {!useDummyData && filteredData.length > 0 && (
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDetails(!showDetails)}
+                  className="h-8 text-xs"
+                >
+                  {showDetails ? <Eye className="h-3 w-3 mr-1" /> : <EyeOff className="h-3 w-3 mr-1" />}
+                  {showDetails ? 'Hide' : 'Show'} Reasons
+                </Button>
+              )}
               {onContinue && (
                 <Button 
                   className="bg-black hover:bg-gray-800 text-white"
@@ -677,6 +851,38 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
               )}
             </div>
           </div>
+          
+          {/* Processing Progress Bar - Show when processing large datasets */}
+          {isLoading && processingProgress.total > 5000 && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-blue-700">
+                  Processing large dataset...
+                </span>
+                <span className="text-sm text-blue-600">
+                  {processingProgress.percentage}%
+                </span>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${processingProgress.percentage}%` }}
+                ></div>
+              </div>
+              
+              {/* Progress Details */}
+              <div className="flex justify-between text-xs text-blue-600 mt-1">
+                <span>
+                  {processingProgress.processed.toLocaleString()} / {processingProgress.total.toLocaleString()} records
+                </span>
+                <span>
+                  Calculating ignored records...
+                </span>
+              </div>
+            </div>
+          )}
           
           {/* Progress Bar - Show only when saving */}
           {isSavingToSupabase && (
