@@ -308,7 +308,7 @@ export function IgnoreTrackingRules({ onRulesChange, uploadedData, onRulesApplie
   return (
     <div className="max-w-4xl mx-auto">
       {/* Disabled Banner */}
-      <DisabledBanner className="mb-4" />
+      {/* <DisabledBanner className="mb-4" /> */}
       
       <Card className="bg-white border-gray-200 shadow-sm" style={{ padding:"12px 0px 12px 0px" }}>
         <CardContent>

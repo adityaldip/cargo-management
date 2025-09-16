@@ -4,15 +4,13 @@ import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertTriangle, RefreshCw, Download, Filter, Loader2, Trash2, X } from "lucide-react"
+import { RefreshCw, Download, Filter, Loader2, Trash2 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cargoDataOperations } from "@/lib/supabase-operations"
 import type { CargoData } from "@/types/cargo-data"
 import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
-import { applyFilters } from "@/lib/filter-utils"
-import { generateCSV, prepareReportData, downloadFile, generateFilename, type ExportOptions } from "@/lib/export-utils"
+import { downloadFile } from "@/lib/export-utils"
 import { useToast } from "@/hooks/use-toast"
 import { usePageFilters } from "@/store/filter-store"
 import { useWorkflowStore } from "@/store/workflow-store"
@@ -38,14 +36,13 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   // Column config store
   const { columnConfigs } = useColumnConfigStore()
   const [realData, setRealData] = useState<CargoData[]>([])
-  const [unfilteredData, setUnfilteredData] = useState<CargoData[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [dataSource, setDataSource] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1)
   const [recordsPerPage, setRecordsPerPage] = useState(50)
   
-  // Server-side pagination state
   const [totalRecords, setTotalRecords] = useState(0)
+  // Server-side pagination state☻
   const [totalPages, setTotalPages] = useState(0)
   const [hasNextPage, setHasNextPage] = useState(false)
   const [hasPrevPage, setHasPrevPage] = useState(false)
@@ -77,7 +74,6 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const [currentStep, setCurrentStep] = useState("")
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [totalSteps, setTotalSteps] = useState(0)
-  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number | undefined>()
   const [clearError, setClearError] = useState<string | undefined>()
   // shouldStopProcess is now managed by workflow store
   const [isStopping, setIsStopping] = useState(false)
@@ -175,7 +171,6 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         
         // For server-side pagination, store the data directly
         setRealData(convertedData)
-        setUnfilteredData(convertedData)
         setDataSource(`Database (${result.pagination?.total || 0} total records)`)
         setDataCleared(false)
         
@@ -188,7 +183,6 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
       } else {
         console.error('Error loading data from database:', result.error)
         setRealData([])
-        setUnfilteredData([])
         setDataSource("Error loading from database")
         setTotalRecords(0)
         setTotalPages(0)
@@ -198,7 +192,6 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     } catch (error) {
       console.error('Error loading real data:', error)
       setRealData([])
-      setUnfilteredData([])
       setDataSource("Error loading data")
       setTotalRecords(0)
       setTotalPages(0)
@@ -330,9 +323,6 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     setShouldStopProcess(false)
     setIsStopping(false)
     
-    // Estimate time based on total records (rough estimate: 0.1 seconds per record)
-    const estimatedTime = Math.max(5, totalRecords * 0.1)
-    setEstimatedTimeRemaining(estimatedTime)
     
     try {
       let result
@@ -344,19 +334,12 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
           result = await clearFilteredSupabaseData(
             JSON.stringify(filterConditions),
             filterLogic,
-            (progress, step, stepIndex, totalSteps) => {
+            (progress: number, step: string, stepIndex: number, totalSteps: number) => {
               setProgress(progress)
               setCurrentStep(step)
               setCurrentStepIndex(stepIndex)
               setTotalSteps(totalSteps)
               
-              // Update estimated time remaining
-              if (progress > 0) {
-                const remainingProgress = 100 - progress
-                const elapsedTime = estimatedTime * (progress / 100)
-                const newEstimatedTime = (remainingProgress / progress) * elapsedTime
-                setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
-              }
             },
             () => shouldStopProcess
           )
@@ -364,60 +347,38 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
           // If filtered clearing failed, fall back to full clearing
           if (!result.success && result.error) {
             console.warn('⚠️ Filtered clearing failed, falling back to full clearing:', result.error)
-            result = await clearAllData((progress, step, stepIndex, totalSteps) => {
+            result = await clearAllData((progress: number, step: string, stepIndex: number, totalSteps: number) => {
               setProgress(progress)
               setCurrentStep(step)
               setCurrentStepIndex(stepIndex)
               setTotalSteps(totalSteps)
               
-              // Update estimated time remaining
-              if (progress > 0) {
-                const remainingProgress = 100 - progress
-                const elapsedTime = estimatedTime * (progress / 100)
-                const newEstimatedTime = (remainingProgress / progress) * elapsedTime
-                setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
-              }
             }, () => shouldStopProcess)
           }
         } catch (error) {
           console.error('❌ Error in filtered clearing, falling back to full clearing:', error)
-          result = await clearAllData((progress, step, stepIndex, totalSteps) => {
+          result = await clearAllData((progress: number, step: string, stepIndex: number, totalSteps: number) => {
             setProgress(progress)
             setCurrentStep(step)
             setCurrentStepIndex(stepIndex)
             setTotalSteps(totalSteps)
             
-            // Update estimated time remaining
-            if (progress > 0) {
-              const remainingProgress = 100 - progress
-              const elapsedTime = estimatedTime * (progress / 100)
-              const newEstimatedTime = (remainingProgress / progress) * elapsedTime
-              setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
-            }
           }, () => shouldStopProcess)
         }
       } else {
         console.log('🔍 Using full data clearing (no active filters)')
-        result = await clearAllData((progress, step, stepIndex, totalSteps) => {
+        result = await clearAllData((progress: number, step: string, stepIndex: number, totalSteps: number) => {
           setProgress(progress)
           setCurrentStep(step)
           setCurrentStepIndex(stepIndex)
           setTotalSteps(totalSteps)
           
-          // Update estimated time remaining
-          if (progress > 0) {
-            const remainingProgress = 100 - progress
-            const elapsedTime = estimatedTime * (progress / 100)
-            const newEstimatedTime = (remainingProgress / progress) * elapsedTime
-            setEstimatedTimeRemaining(Math.max(0, newEstimatedTime))
-          }
         }, () => shouldStopProcess)
       }
       
       if (result.success) {
         setDataCleared(true)
         setRealData([])
-        setUnfilteredData([])
         setDataSource("")
         setTotalRecords(0)
         setTotalPages(0)
@@ -426,13 +387,15 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         
         // Show success toast with only database count
         console.log('🔍 Clear data result:', result)
-        console.log('🔍 supabaseDeletedCount:', result.supabaseDeletedCount)
+        const resultAny = result as any
+        console.log('🔍 deletedCount:', resultAny.supabaseDeletedCount || resultAny.deletedCount)
         console.log('🔍 totalRecords before clear:', totalRecords)
         
         const clearType = hasActiveFilters && filterConditions.length > 0 ? "filtered" : "all"
+        const deletedCount = resultAny.supabaseDeletedCount || resultAny.deletedCount || 0
         toast({
           title: `${clearType === "filtered" ? "Filtered data" : "All data"} cleared successfully! ✅`,
-          description: `${result.supabaseDeletedCount || 0} ${clearType} records deleted from database`,
+          description: `${deletedCount} ${clearType} records deleted from database`,
           duration: 5000,
         })
         

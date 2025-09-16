@@ -83,6 +83,13 @@ interface DataState {
     shouldStop?: () => boolean
   ) => Promise<{ success: boolean; error?: string; deletedCount?: number; cancelled?: boolean }>
   
+  clearFilteredSupabaseData: (
+    filters?: string,
+    filterLogic?: string,
+    onProgress?: (progress: number, currentStep: string, stepIndex: number, totalSteps: number) => void,
+    shouldStop?: () => boolean
+  ) => Promise<{ success: boolean; error?: string; deletedCount?: number; cancelled?: boolean }>
+  
   clearAllData: (
     onProgress?: (progress: number, currentStep: string, stepIndex: number, totalSteps: number) => void,
     shouldStop?: () => boolean
