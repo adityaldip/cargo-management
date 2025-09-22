@@ -95,6 +95,7 @@ export function MailProcessingDashboard() {
             data={mergedData}
             savedRateConditions={savedPriorityConditions}
             onSaveRateConditions={setSavedPriorityConditions}
+            onContinue={() => setActiveStep("review-invoices")}
           />
         )
       case "review-rates":

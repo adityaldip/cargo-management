@@ -3,8 +3,6 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('Testing Supabase connection...')
-    
     // Test basic connection
     const { data, error } = await supabase
       .from('cargo_data')
@@ -21,7 +19,6 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
     
-    console.log('Connection test successful, total records:', data)
     
     // Test assigned customers query
     const { count: assignedCount, error: assignedError } = await supabase
@@ -31,7 +28,6 @@ export async function GET(request: NextRequest) {
       .neq('assigned_customer', '')
     
     if (assignedError) {
-      console.error('Assigned customers query failed:', assignedError)
       return NextResponse.json({
         success: false,
         error: 'Assigned customers query failed',

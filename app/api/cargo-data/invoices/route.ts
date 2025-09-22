@@ -48,8 +48,6 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       )
     }
-
-    console.log('Fetched invoice summaries:', invoiceSummaries?.length || 0, 'records')
     
     // If no invoice summaries, return empty result
     if (!invoiceSummaries || invoiceSummaries.length === 0) {

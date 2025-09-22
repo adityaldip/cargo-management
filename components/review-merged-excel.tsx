@@ -125,6 +125,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
       </div>
 
         {/* Continue Button */}
+        {onContinue && (
           <Button 
             className="bg-black hover:bg-gray-800 text-white"
             onClick={onContinue}
@@ -132,6 +133,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           >
             Continue to Assign Customers
           </Button>
+        )}
         </div>
 
       <div className="space-y-2">

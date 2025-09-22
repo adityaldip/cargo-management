@@ -60,16 +60,16 @@ export function AssignRates({ data, savedRateConditions, onSaveRateConditions, o
           </Button>
         </div>
 
-        {/* Continue Button */}
-        {onContinue && (
-          <Button 
-            className="bg-black hover:bg-gray-800 text-white"
-            onClick={onContinue}
-            disabled={isExecutingRules || isClearingData || isExporting || isBulkDeleting}
-          >
-            Continue to Review Rates
-          </Button>
-        )}
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+            <Button 
+              className="bg-black hover:bg-gray-800 text-white"
+              onClick={onContinue}
+              disabled={isExecutingRules || isClearingData || isExporting || isBulkDeleting}
+            >
+              Continue to Review Invoice
+            </Button>
+        </div>
       </div>
 
       {/* Tab Content */}

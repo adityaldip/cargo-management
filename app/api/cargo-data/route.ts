@@ -51,7 +51,6 @@ export async function GET(request: NextRequest) {
     if (filters) {
       try {
         const filterConditions = JSON.parse(filters)
-        console.log('🔍 Applying filters:', filterConditions, 'with logic:', filterLogic)
         
         // Apply filter conditions based on logic
         if (filterLogic === 'OR') {
@@ -307,9 +306,7 @@ export async function GET(request: NextRequest) {
     if (enrichedData.length > 0) {
       // Get unique customer codes from the cargo data
       const customerCodes = [...new Set(enrichedData.map((item: any) => item.assigned_customer).filter(Boolean))]
-      
-      console.log('🔍 Customer codes found in cargo data:', customerCodes)
-      
+            
       if (customerCodes.length > 0) {
         // The assigned_customer field contains customer IDs (UUIDs), not codes
         // So we need to match by customer ID
@@ -317,30 +314,22 @@ export async function GET(request: NextRequest) {
           .from('customers')
           .select('id, name, code')
           .in('id', customerCodes)
-        
-        console.log('🔍 Customer query by ID result:', { customersById, customerError })
-        
+                
         let customerMap = new Map()
         
         if (!customerError && customersById && customersById.length > 0) {
           // Create a map for quick lookup by ID
           customerMap = new Map(customersById.map((c: any) => [c.id, c.name]))
-          console.log('🔍 Customer map by ID created:', Object.fromEntries(customerMap))
-        } else {
-          console.log('❌ No customers found by ID, trying by code as fallback...')
-          
+        } else {          
           // If no matches by ID, try to match by code as fallback
           const { data: customersByCode, error: codeError } = await supabaseAdmin
             .from('customers')
             .select('id, name, code')
             .in('code', customerCodes)
-          
-          console.log('🔍 Customer query by code result:', { customersByCode, codeError })
-          
+                   
           if (!codeError && customersByCode && customersByCode.length > 0) {
             // Create a map for quick lookup by code
             customerMap = new Map(customersByCode.map((c: any) => [c.code, c.name]))
-            console.log('🔍 Customer map by code created:', Object.fromEntries(customerMap))
           }
         }
         
@@ -353,14 +342,11 @@ export async function GET(request: NextRequest) {
             customerName = customerMap.get(item.assigned_customer)
           }
           
-          console.log(`🔍 Mapping customer: ${item.assigned_customer} -> ${customerName}`)
           return {
             ...item,
             customer_name: customerName
           }
         })
-      } else {
-        console.log('❌ No customer codes found in cargo data')
       }
     }
     
