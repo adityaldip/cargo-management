@@ -91,6 +91,8 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
   }, [excelColumns, sampleData, dataSource, isHydrated, isLoaded])
 
   const handleMappingChange = (excelColumn: string, finalColumn: string) => {
+    // DISABLED: Mapping functionality
+    /*
     setMappings((prev) => {
       const newMappings = prev.map((mapping) => {
         if (mapping.excelColumn === excelColumn) {
@@ -145,6 +147,7 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
       
       return newMappings
     })
+    */
   }
   
   // Update store and localStorage when mappings change
@@ -194,6 +197,8 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
   }
 
   const handleContinue = async () => {
+    // DISABLED: Mapping validation and processing
+    /*
     if (hasConflicts()) {
       toast({
         title: "Mapping Conflicts Detected",
@@ -226,6 +231,30 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
       const errorMessage = error instanceof Error ? error.message : "Failed to process column mappings"
       toast({
         title: "Processing Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessing(false)
+      setProcessingProgress(0)
+    }
+    */
+    
+    // Navigate to Rules tab without mapping processing
+    setIsProcessing(true)
+    setProcessingProgress(0)
+    
+    try {
+      // Show progress animation
+      await showProcessingProgress(Promise.resolve())
+      
+      // Call the mapping complete callback with empty mappings to proceed to Rules tab
+      onMappingComplete([])
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to continue"
+      toast({
+        title: "Error",
         description: errorMessage,
         variant: "destructive",
       })
@@ -323,13 +352,9 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
             </div>
             <Button 
               size="sm" 
-              className={`${
-                hasConflicts() 
-                  ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed" 
-                  : "bg-black hover:bg-gray-800"
-              } text-white`}
+              className="bg-black hover:bg-gray-800 text-white"
               onClick={handleContinue}
-              disabled={isProcessing || hasConflicts()}
+              disabled={isProcessing}
             >
               {isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {isProcessing ? 'Processing...' : 'Continue to Next Step'}
@@ -371,15 +396,16 @@ export function ColumnMapping({ excelColumns, sampleData, onMappingComplete, onC
                     <Select
                       value={mapping.mappedTo || "unmapped"}
                       onValueChange={(value) => handleMappingChange(mapping.excelColumn, value)}
+                      disabled={true}
                     >
                       <SelectTrigger 
-                        className={`w-full h-6 text-xs ${
+                        className={`w-full h-6 text-xs bg-gray-100 cursor-not-allowed ${
                           mapping.status === "warning" 
                             ? "border-red-300 focus:border-red-500" 
                             : ""
                         }`}
                       >
-                        <SelectValue placeholder="Select mapping" />
+                        <SelectValue placeholder="Mapping disabled" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="unmapped">

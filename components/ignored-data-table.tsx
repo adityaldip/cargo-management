@@ -363,8 +363,8 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
 
   // Handle saving filtered data to Supabase with progress tracking
   const handleContinueToReview = async () => {
-    if (!originalData?.data) return
-
+    // DISABLED: Supabase processing functionality
+    /*
     setIsSavingToSupabase(true)
     setGlobalProcessing(true)
     
@@ -502,6 +502,42 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
         }
       }
     }
+    */
+    
+    // Simple continue without Supabase processing
+    setIsSavingToSupabase(true)
+    setGlobalProcessing(true)
+    
+    // Notify parent component about saving state change
+    onSavingStateChange?.(true)
+    
+    // Show starting toast
+    toast({
+      title: "Processing Complete",
+      description: "Data processing completed successfully.",
+      duration: 3000,
+    })
+    
+    // Simulate processing delay
+    setTimeout(() => {
+      // Show success message
+      toast({
+        title: "Processing Complete! 🎉",
+        description: `Data processing completed. ${ignoredData.length.toLocaleString()} records ignored according to rules.`,
+        duration: 5000,
+      })
+      
+      // Reset persist data only for the current data source
+      clearUploadSession(dataSource)
+      
+      // Call the continue callback
+      onContinue?.()
+      
+      // Reset states
+      setIsSavingToSupabase(false)
+      setGlobalProcessing(false)
+      onSavingStateChange?.(false)
+    }, 1500)
   }
 
   // Handle cleanup after completion
@@ -836,13 +872,13 @@ export function IgnoredDataTable({ originalData, ignoreRules, onRefresh, onConti
                 <Button 
                   className="bg-black hover:bg-gray-800 text-white"
                   onClick={handleContinueToReview}
-                  disabled={isSavingToSupabase || !originalData || isBulkDeleting}
+                  disabled={isSavingToSupabase || isBulkDeleting}
                   data-continue-button
                 >
                   {isSavingToSupabase ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving to Database...
+                      Processing...
                     </>
                   ) : (
                     'Continue to Review'

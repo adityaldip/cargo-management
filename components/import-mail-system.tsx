@@ -164,16 +164,18 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
-    setIsDragOver(true)
+    // DISABLED: setIsDragOver(true)
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
-    setIsDragOver(false)
+    // DISABLED: setIsDragOver(false)
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    // DISABLED: File processing functionality
+    /*
     setIsDragOver(false)
     const files = Array.from(e.dataTransfer.files)
     if (files.length > 0) {
@@ -193,9 +195,13 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       setShowIgnoreRules(false)
       setIsMappingComplete(false)
     }
+    */
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // DISABLED: File processing functionality
+    e.preventDefault()
+    /*
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
       setUploadedFile(file)
@@ -287,9 +293,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
         // Don't reset progress here - let auto-hide handle it
       }
     }
+    */
   }
 
   const handleProcess = async () => {
+    // DISABLED: File processing functionality
+    /*
     if (!uploadedFile) return
 
     setIsProcessing(true)
@@ -341,9 +350,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       setIsProcessing(false)
       setGlobalProcessing(false)
     }
+    */
   }
 
   const handleMappingComplete = async (mappings: ColumnMappingRule[]) => {
+    // DISABLED: Mapping processing functionality
+    /*
     if (!uploadedFile) {
       toast({
         title: "File Required",
@@ -459,9 +471,37 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
       setIsProcessing(false)
       setGlobalProcessing(false)
     }
+    */
+    
+    // Simple navigation to Rules tab
+    setShowColumnMapping(false)
+    setIsMappingComplete(true)
+    setActiveStep("ignore")
+    setShowIgnoreRules(true)
+    
+    // Show success toast
+    toast({
+      title: "Mapping Complete",
+      description: "Proceeding to ignore rules configuration.",
+      variant: "default",
+    })
+    
+    // Update session to persist the current step
+    const sessionData = {
+      fileName: uploadedFile?.name || null,
+      processedData,
+      excelColumns,
+      sampleData,
+      activeStep: "ignore" as const,
+      ignoreRules,
+      timestamp: Date.now()
+    }
+    saveUploadSession("mail-system", sessionData)
   }
 
   const removeFile = () => {
+    // DISABLED: File removal functionality
+    /*
     setUploadedFile(null)
     setProcessedData(null)
     setError(null)
@@ -494,9 +534,12 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     
     // Clear upload session
     clearUploadSession("mail-system")
+    */
   }
 
   const handleCancelMapping = () => {
+    // DISABLED: Mapping cancellation functionality
+    /*
     // Reset all upload state and go back to upload tab
     setUploadedFile(null)
     setProcessedData(null)
@@ -530,6 +573,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
     
     // Clear upload session
     clearUploadSession("mail-system")
+    */
   }
 
 
@@ -545,11 +589,8 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "upload" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveStep("upload")}
-            disabled={isSavingToDatabase}
             className={
-              isSavingToDatabase
-                ? "cursor-not-allowed opacity-50 text-gray-400"
-                : activeStep === "upload"
+              activeStep === "upload"
                 ? "bg-white shadow-sm text-black hover:bg-white"
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
@@ -561,16 +602,11 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "map" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (uploadedFile && excelColumns.length > 0 && !isSavingToDatabase) {
-                setActiveStep("map")
-                setShowColumnMapping(true)
-              }
+              setActiveStep("map")
+              setShowColumnMapping(true)
             }}
-            disabled={!uploadedFile || excelColumns.length === 0 || isSavingToDatabase}
             className={
-              isSavingToDatabase || !uploadedFile || excelColumns.length === 0
-                ? "cursor-not-allowed opacity-50 text-gray-400"
-                : activeStep === "map"
+              activeStep === "map"
                 ? "bg-white shadow-sm text-black hover:bg-white"
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
@@ -582,16 +618,11 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "ignore" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData && isMappingComplete && !isSavingToDatabase) {
-                setActiveStep("ignore")
-                setShowIgnoreRules(true)
-              }
+              setActiveStep("ignore")
+              setShowIgnoreRules(true)
             }}
-            disabled={!processedData || !isMappingComplete || isSavingToDatabase}
             className={
-              isSavingToDatabase || !processedData || !isMappingComplete
-                ? "cursor-not-allowed opacity-50 text-gray-400"
-                : activeStep === "ignore"
+              activeStep === "ignore"
                 ? "bg-white shadow-sm text-black hover:bg-white"
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
@@ -603,16 +634,11 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             variant={activeStep === "ignored" ? "default" : "ghost"}
             size="sm"
             onClick={() => {
-              if (processedData && isMappingComplete && !isSavingToDatabase) {
-                setActiveStep("ignored")
-                setShowIgnoreRules(false)
-              }
+              setActiveStep("ignored")
+              setShowIgnoreRules(false)
             }}
-            disabled={!processedData || !isMappingComplete || isSavingToDatabase}
             className={
-              isSavingToDatabase || !processedData || !isMappingComplete
-                ? "cursor-not-allowed opacity-50 text-gray-400"
-                : activeStep === "ignored"
+              activeStep === "ignored"
                 ? "bg-white shadow-sm text-black hover:bg-white"
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
@@ -621,6 +647,16 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
             Ignored
           </Button>
 
+        </div>
+      </div>
+
+      {/* Disabled Alert */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="flex items-center">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 mr-3" />
+          <div>
+            <p className="text-sm text-yellow-700 mt-1">Please note that this page has been disabled.</p>
+          </div>
         </div>
       </div>
 
@@ -653,6 +689,7 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
               onChange={handleFileSelect}
               className="hidden"
               id="mail-system-upload"
+              disabled
             />
             <label htmlFor="mail-system-upload">
               <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-white" asChild>
@@ -671,14 +708,13 @@ export function ImportMailSystem({ onDataProcessed, onContinue }: ImportMailSyst
                   <p className="text-xs text-gray-500">{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB</p>
                 </div>
                 <Button
-                  className="bg-black hover:bg-gray-800 text-white"
+                  className="bg-gray-400 text-white cursor-not-allowed"
                   onClick={handleProcess}
-                  disabled={isProcessing}
+                  disabled={true}
                 >
-                  {isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Process File
+                  Process File (Disabled)
                 </Button>
-                <Button variant="ghost" size="sm" onClick={removeFile} className="text-gray-400 hover:text-black">
+                <Button variant="ghost" size="sm" onClick={removeFile} className="text-gray-400 cursor-not-allowed" disabled>
                   ×
                 </Button>
               </div>
