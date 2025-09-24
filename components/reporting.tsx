@@ -280,6 +280,12 @@ export function Reporting({ data }: ReportingProps) {
 
   return (
     <div className="space-y-4 pt-2">
+      {/* Disabled Page Alert */}
+      <WarningBanner 
+        message="Please note that this page has been disabled"
+        className="mb-4 bg-yellow-50 border-yellow-200 text-yellow-800"
+      />
+
       {/* Error Banner */}
       {error && (
         <WarningBanner 

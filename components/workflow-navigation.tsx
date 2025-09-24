@@ -35,15 +35,15 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
   }, [])
   
   const steps = [
-    { id: "import-mail-agent", label: "Import Mail Agent", icon: FileUp, tooltip: "Upload and verify mail agent Excel files for processing" },
-    { id: "import-mail-system", label: "Import Mail System", icon: FileUp, tooltip: "Upload and verify mail system Excel files for processing" },
+    { id: "import-mail-agent", label: "Import Mail Agent", icon: FileUp, tooltip: "Upload and verify mail agent Excel files for processing", lighterColor: true },
+    { id: "import-mail-system", label: "Import Mail System", icon: FileUp, tooltip: "Upload and verify mail system Excel files for processing", lighterColor: true },
     { id: "review-merged-excel", label: "Review Merged Data", icon: FileSpreadsheet, tooltip: "Combine and review data from available sources" },
     // { id: "review-customers", label: "Review Customers", icon: Users, tooltip: "Analyze customer performance and individual data breakdown" },
     { id: "assign-customers", label: "Assign Contractees", icon: UserCheck, tooltip: "Configure automated rules for cargo processing and team assignment" },
     { id: "assign-rates", label: "Assign Rates", icon: Calculator, tooltip: "Configure automated rate assignment rules and pricing calculations" },
     // { id: "review-rates", label: "Review Rates", icon: DollarSign, tooltip: "Configure pricing for your routes and manage rate plans." },
     { id: "review-invoices", label: "Review Invoices", icon: Receipt, tooltip: "Review and manage generated invoices from processed cargo data" },
-    { id: "reporting", label: "Reporting", icon: BarChart3, tooltip: "View comprehensive reports and analytics for cargo data" },
+    { id: "reporting", label: "Reporting", icon: BarChart3, tooltip: "View comprehensive reports and analytics for cargo data", lighterColor: true },
   ]
 
   const handleStepChange = (stepId: WorkflowStep) => {
@@ -115,6 +115,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                 const Icon = step.icon
                 // Prevent hydration mismatch by ensuring consistent initial state
                 const isActive = isHydrated && activeStep === step.id
+                const hasLighterColor = step.lighterColor
                 return (
                   <Tooltip key={step.id}>
                     <TooltipTrigger asChild>
@@ -125,7 +126,9 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                             ? "cursor-not-allowed opacity-50 text-gray-400" 
                             : isActive 
                               ? "bg-black text-white cursor-pointer" 
-                              : "text-gray-600 hover:text-black hover:bg-gray-50 cursor-pointer"
+                              : hasLighterColor
+                                ? "text-gray-400 hover:text-gray-600 hover:bg-gray-50 cursor-pointer"
+                                : "text-gray-600 hover:text-black hover:bg-gray-50 cursor-pointer"
                         }`}
                       >
                         <Icon className="h-4 w-4 flex-shrink-0" />
