@@ -353,13 +353,6 @@ export function ConfigureRates() {
         rate_id: editingRuleRateId
       }
 
-      console.log('=== DEBUG: Saving rate rule ===')
-      console.log('Current rule:', currentRule)
-      console.log('Rule ID:', currentRule.id)
-      console.log('Rule ID type:', typeof currentRule.id)
-      console.log('Update data:', updateData)
-      console.log('Expanded rule ID:', expandedRule)
-      console.log('All display rules:', displayRules.map(r => ({ id: r.id, name: r.name })))
       
       const result = await updateRateRule(currentRule.id, updateData)
       console.log('Save result:', result)

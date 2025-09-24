@@ -256,7 +256,7 @@ export function RateRuleEditor({
 
             {/* Rate Assignment Row */}
             <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-3 pt-3">
-              <span className="text-xs font-medium text-gray-700 min-w-6">Rate</span>
+              <span className="text-xs font-medium text-gray-700 w-16">Rate</span>
               <Select value={editingRuleRateId} onValueChange={onUpdateRateId}>
                 <SelectTrigger className="h-6 text-xs border-gray-200 flex-1 min-w-40 max-w-64" disabled={isExecutingRules}>
                   <SelectValue placeholder={

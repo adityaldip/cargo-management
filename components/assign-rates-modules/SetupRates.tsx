@@ -423,32 +423,17 @@ export function SetupRates() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="base-rate">Base Rate</Label>
-                <Input
-                  id="base-rate"
-                  type="number"
-                  step="0.01"
-                  value={newRateData.base_rate}
-                  onChange={(e) => setNewRateData(prev => ({ ...prev, base_rate: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0.00"
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="multiplier">Multiplier</Label>
-                <Input
-                  id="multiplier"
-                  type="number"
-                  step="0.01"
-                  value={newRateData.multiplier}
-                  onChange={(e) => setNewRateData(prev => ({ ...prev, multiplier: parseFloat(e.target.value) || 1.0 }))}
-                  placeholder="1.00"
-                  className="mt-1"
-                />
-              </div>
+            <div>
+              <Label htmlFor="base-rate">Base Rate</Label>
+              <Input
+                id="base-rate"
+                type="number"
+                step="0.01"
+                value={newRateData.base_rate}
+                onChange={(e) => setNewRateData(prev => ({ ...prev, base_rate: parseFloat(e.target.value) || 0 }))}
+                placeholder="0.00"
+                className="mt-1"
+              />
             </div>
 
             <div className="flex items-center space-x-2">
@@ -551,32 +536,17 @@ export function SetupRates() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-base-rate">Base Rate</Label>
-                <Input
-                  id="edit-base-rate"
-                  type="number"
-                  step="0.01"
-                  value={editRateData.base_rate}
-                  onChange={(e) => setEditRateData(prev => ({ ...prev, base_rate: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0.00"
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="edit-multiplier">Multiplier</Label>
-                <Input
-                  id="edit-multiplier"
-                  type="number"
-                  step="0.01"
-                  value={editRateData.multiplier}
-                  onChange={(e) => setEditRateData(prev => ({ ...prev, multiplier: parseFloat(e.target.value) || 1.0 }))}
-                  placeholder="1.00"
-                  className="mt-1"
-                />
-              </div>
+            <div>
+              <Label htmlFor="edit-base-rate">Base Rate</Label>
+              <Input
+                id="edit-base-rate"
+                type="number"
+                step="0.01"
+                value={editRateData.base_rate}
+                onChange={(e) => setEditRateData(prev => ({ ...prev, base_rate: parseFloat(e.target.value) || 0 }))}
+                placeholder="0.00"
+                className="mt-1"
+              />
             </div>
 
             <div className="flex items-center space-x-2">
