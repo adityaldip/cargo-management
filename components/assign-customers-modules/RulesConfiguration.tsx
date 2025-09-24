@@ -1082,14 +1082,14 @@ export function RulesConfiguration() {
 
                           {/* Contractee Code Assignment Row */}
                           <div className="flex flex-wrap items-center gap-2 p-2 rounded-md hover:bg-gray-50 group border-t border-gray-100 mt-4 pt-4">
-                            <span className="text-xs font-medium text-gray-700 w-12 flex-shrink-0">Assign To</span>
+                            <span className="text-xs font-medium text-gray-700 w-18 flex-shrink-0">Assign To</span>
                             <Popover open={openCustomerCodeSelect} onOpenChange={setOpenCustomerCodeSelect}>
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
                                   role="combobox"
                                   aria-expanded={openCustomerCodeSelect}
-                                  className="h-7 text-xs border-gray-200 flex-1 min-w-32 max-w-48 justify-between font-normal"
+                                  className="h-7 text-xs border-gray-200 flex-1 w-1/2 justify-between font-normal"
                                   disabled={loadingCustomers}
                                 >
                                   <span className="truncate">
@@ -1111,13 +1111,13 @@ export function RulesConfiguration() {
                                   <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-80 p-0">
+                              <PopoverContent className="w-[28rem] p-0" side="bottom" align="start">
                                 <Command>
                                   <CommandInput placeholder="Search contractee products..." className="h-8 text-xs" />
                                   <CommandEmpty>
                                     {loadingCustomers ? "Loading..." : "No contractee products found."}
                                   </CommandEmpty>
-                                  <CommandGroup className="max-h-48 overflow-auto">
+                                  <CommandGroup className="max-h-64 overflow-auto">
                                     {memoizedCustomers.map((customer) => {
                                       const activeCodes = customer.codes.filter(code => code.is_active)
                                       return activeCodes.map((code) => (
@@ -1136,9 +1136,9 @@ export function RulesConfiguration() {
                                               editingRuleAssignTo === code.id ? "opacity-100" : "opacity-0"
                                             )}
                                           />
-                                          <div className="flex flex-col">
-                                            <span className="font-medium">{code.product}</span>
-                                            <span className="text-gray-500">{customer.name} ({customer.code})</span>
+                                          <div className="flex items-center justify-between min-w-0 flex-1">
+                                            <span className="font-medium text-sm">{code.product}</span>
+                                            <span className="text-gray-500 text-xs">{customer.name} ({customer.code})</span>
                                           </div>
                                         </CommandItem>
                                       ))
