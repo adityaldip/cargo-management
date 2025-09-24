@@ -526,7 +526,10 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
 
         {/* Configure Columns section */}
         {activeTab === "configure" && (
-          <ConfigureColumns onSwitchToPreview={() => setActiveTab("preview")} />
+          <ConfigureColumns 
+            onSwitchToPreview={() => setActiveTab("preview")} 
+            isImportMergeFlow={true}
+          />
         )}
 
         {/* Database Preview section */}

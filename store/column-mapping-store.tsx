@@ -100,7 +100,8 @@ export const useColumnMappingStore = create<ColumnMappingStoreState>()(
       // Update only the mappings (preserve excelColumns and sampleData)
       updateMappings: (dataSource, mappings) => {
         set((state) => {
-          const currentMapping = state[dataSource === 'mail-agent' ? 'mailAgentMapping' : 'mailSystemMapping']
+          const currentMapping = state[dataSource === 'mail-agent' ? 'mailAgentMapping' : 
+                                       dataSource === 'mail-system' ? 'mailSystemMapping' : 'uploadExcelMapping']
           if (!currentMapping) {
             return state
           }
@@ -159,7 +160,8 @@ export const useColumnMappingStore = create<ColumnMappingStoreState>()(
       partialize: (state) => {
         return {
           mailAgentMapping: state.mailAgentMapping,
-          mailSystemMapping: state.mailSystemMapping
+          mailSystemMapping: state.mailSystemMapping,
+          uploadExcelMapping: state.uploadExcelMapping
         }
       }
     }

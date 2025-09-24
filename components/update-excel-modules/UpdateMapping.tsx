@@ -1,4 +1,5 @@
 "use client"
+import { useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -24,6 +25,7 @@ interface UpdateMappingProps {
 }
 
 export function UpdateMapping({ excelColumns, sampleData, onMappingComplete, onCancel, dataSource, totalRows, onSupabaseProgress }: UpdateMappingProps) {
+  console.log('🔄 UpdateMapping component rendered/remounted')
   const { toast } = useToast()
   
   // Custom hooks for modular functionality
@@ -37,7 +39,8 @@ export function UpdateMapping({ excelColumns, sampleData, onMappingComplete, onC
     getTotalCount,
     getConflictCount,
     hasConflicts,
-    clearAllData
+    clearAllData,
+    resetClearedState
   } = useColumnMappingLogic({ excelColumns, sampleData, dataSource })
   
   const {
@@ -52,14 +55,37 @@ export function UpdateMapping({ excelColumns, sampleData, onMappingComplete, onC
   
   const { clearAllStores, setMappingAndSaving } = useStoreManagement()
   
+  // Reset cleared state only when component mounts with new data (not on every change)
+  useEffect(() => {
+    // Only reset if we have new data and we're not in a cleared state
+    if (excelColumns.length > 0 && !isCompleted) {
+      resetClearedState()
+    }
+  }, [excelColumns.length, isCompleted])
+  
   // Progress handler for mapping completion
   const { setupProgressHandler, cleanupProgressHandler } = useMappingProgressHandler({
     dataSource,
-    onSupabaseProgress,
+    onSupabaseProgress: (progress: any) => {
+      // Update internal progress state
+      updateSupabaseProgress(progress)
+      // Also call external callback if provided
+      if (onSupabaseProgress) {
+        onSupabaseProgress(progress)
+      }
+    },
     onComplete: () => {
+      console.log('🎯 onComplete called - starting clearing process')
+      
+      // Clear all data first (same as cancel button)
       clearAllData()
-      resetProgress()
-      setIsCompleted(true)
+      cleanupProgressHandler()
+      setMappingAndSaving(false)
+      
+      console.log('✅ onComplete finished - all clearing done')
+      
+      // Don't call setIsCompleted(true) here as it might trigger re-initialization
+      // The clearAllData() already sets isCompleted to true internally
     },
     onError: () => {
       resetProgress()
@@ -151,9 +177,11 @@ export function UpdateMapping({ excelColumns, sampleData, onMappingComplete, onC
   }
 
   const handleCancel = () => {
+    console.log('🚫 Cancel button clicked - starting clearing process')
     clearAllData()
     cleanupProgressHandler()
     setMappingAndSaving(false)
+    console.log('✅ Cancel button - all clearing done')
     onCancel?.()
   }
 
@@ -186,7 +214,7 @@ export function UpdateMapping({ excelColumns, sampleData, onMappingComplete, onC
               {onCancel && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" disabled={isProcessing}>
                       Cancel
                     </Button>
                   </AlertDialogTrigger>

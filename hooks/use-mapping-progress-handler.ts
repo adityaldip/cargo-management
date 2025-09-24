@@ -27,6 +27,16 @@ export function useMappingProgressHandler({
         return
       }
       
+      // Update progress during database save operations
+      if (progress.status === 'saving' || progress.status === 'preparing') {
+        console.log('Supabase progress update:', progress)
+        // Call the onSupabaseProgress callback to update the UI
+        if (onSupabaseProgress) {
+          onSupabaseProgress(progress)
+        }
+        return
+      }
+      
       // Handle database save completion
       if (progress.status === 'completed' && progress.currentCount > 0) {
         toast({
@@ -34,9 +44,6 @@ export function useMappingProgressHandler({
           description: `Successfully saved ${progress.currentCount.toLocaleString()} records to database.`,
           variant: "default",
         })
-        
-        // Clear all stores and data
-        clearAllStores(dataSource)
         
         // Clean up global progress handler
         if ((window as any).supabaseProgressHandler) {
@@ -46,6 +53,7 @@ export function useMappingProgressHandler({
         // Clear global mapping and saving state
         setMappingAndSaving(false)
         
+        // Let the component handle clearing all data via onComplete
         onComplete()
       }
       

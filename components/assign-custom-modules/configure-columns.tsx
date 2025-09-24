@@ -6,16 +6,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { GripVertical, Eye, Loader2 } from "lucide-react"
 import { useColumnConfigStore, type ColumnConfig } from "@/store/column-config-store"
+import { useColumnMappingStore } from "@/store/column-mapping-store"
+import { useDataStore } from "@/store/data-store"
 
 
 interface ConfigureColumnsProps {
   onSwitchToPreview: () => void
+  isImportMergeFlow?: boolean // Add prop to identify import merge flow
 }
 
 
-export function ConfigureColumns({ onSwitchToPreview }: ConfigureColumnsProps) {
+export function ConfigureColumns({ onSwitchToPreview, isImportMergeFlow = false }: ConfigureColumnsProps) {
   // Use Zustand store for column configurations
   const { columnConfigs, setColumnConfigs, updateColumnConfig, resetToDefault } = useColumnConfigStore()
+  const { clearAllColumnMappings } = useColumnMappingStore()
+  const { clearAllUploadSessions, clearCurrentSession, clearUploadSession } = useDataStore()
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
   const [isConfigLoading, setIsConfigLoading] = useState(false)
 
@@ -26,6 +31,41 @@ export function ConfigureColumns({ onSwitchToPreview }: ConfigureColumnsProps) {
 
   const updateColumnLabel = (key: string, label: string) => {
     updateColumnConfig(key, { label })
+  }
+
+  // Handle Review Data button click with optional clearing for import merge flow
+  const handleReviewData = () => {
+    if (isImportMergeFlow) {
+      console.log('🧹 Clearing mapping store data for import merge flow...')
+      
+      // Clear all column mappings
+      clearAllColumnMappings()
+      
+      // Clear all upload sessions
+      clearAllUploadSessions()
+      
+      // Clear current session
+      clearCurrentSession()
+      
+      // Clear specific upload-excel session
+      clearUploadSession("upload-excel")
+      
+      // Clear localStorage
+      try {
+        localStorage.removeItem('column-mapping-storage')
+        localStorage.removeItem('cargo-upload-sessions')
+        localStorage.removeItem('cargo-data-storage')
+        localStorage.removeItem('file-storage')
+        console.log('✅ localStorage cleared for import merge flow')
+      } catch (error) {
+        console.error('❌ Error clearing localStorage:', error)
+      }
+      
+      console.log('✅ Mapping store data cleared for import merge flow')
+    }
+    
+    // Proceed to preview
+    onSwitchToPreview()
   }
 
   // Drag and drop handlers
@@ -87,7 +127,7 @@ export function ConfigureColumns({ onSwitchToPreview }: ConfigureColumnsProps) {
                 <Button 
                   variant="outline"
                   size="sm"
-                  onClick={onSwitchToPreview}
+                  onClick={handleReviewData}
                   disabled={isConfigLoading}
                 >
                   {isConfigLoading ? (

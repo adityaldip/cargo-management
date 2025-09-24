@@ -47,10 +47,28 @@ export function useColumnMappingLogic({ excelColumns, sampleData, dataSource }: 
   const [mappings, setMappings] = useState<ColumnMappingRule[]>([])
   const [hasInitialized, setHasInitialized] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [isCleared, setIsCleared] = useState(false)
 
   // Initialize mappings from store or create default ones
   useEffect(() => {
-    if (!isHydrated || !isLoaded || excelColumns.length === 0 || isCompleted) {
+    console.log('🔍 Initialization useEffect triggered:', {
+      isHydrated,
+      isLoaded,
+      excelColumnsLength: excelColumns.length,
+      isCompleted,
+      isCleared
+    })
+    
+    if (!isHydrated || !isLoaded || excelColumns.length === 0 || isCompleted || isCleared) {
+      console.log('⏭️ Skipping initialization due to conditions')
+      return
+    }
+    
+    // If cleared, don't try to load from store
+    if (isCleared) {
+      console.log('🚫 Component is cleared, not loading from store')
+      setMappings([])
+      setHasInitialized(false)
       return
     }
     
@@ -73,7 +91,7 @@ export function useColumnMappingLogic({ excelColumns, sampleData, dataSource }: 
     }
     
     setHasInitialized(true)
-  }, [excelColumns, sampleData, dataSource, isHydrated, isLoaded, isCompleted])
+  }, [excelColumns, sampleData, dataSource, isHydrated, isLoaded, isCompleted, isCleared])
 
   // Update store and localStorage when mappings change
   useEffect(() => {
@@ -83,30 +101,7 @@ export function useColumnMappingLogic({ excelColumns, sampleData, dataSource }: 
     }
   }, [mappings, dataSource, hasInitialized])
 
-  // Force clear all data when completed
-  useEffect(() => {
-    if (isCompleted) {
-      clearColumnMapping(dataSource)
-      clearMapping()
-      clearUploadSession(dataSource)
-      
-      const { clearAllColumnMappings } = useColumnMappingStore.getState()
-      const { clearAllUploadSessions, clearCurrentSession } = useDataStore.getState()
-      
-      clearAllColumnMappings()
-      clearAllUploadSessions()
-      clearCurrentSession()
-      
-      try {
-        localStorage.removeItem('column-mapping-storage')
-        localStorage.removeItem('cargo-upload-sessions')
-        localStorage.removeItem('cargo-data-storage')
-        localStorage.removeItem('file-storage')
-      } catch (error) {
-        // Silent error handling
-      }
-    }
-  }, [isCompleted, dataSource])
+  // This useEffect is removed to prevent conflicts with clearAllData()
 
   const handleMappingChange = (excelColumn: string, finalColumn: string) => {
     setMappings((prev) => {
@@ -167,6 +162,16 @@ export function useColumnMappingLogic({ excelColumns, sampleData, dataSource }: 
   const hasConflicts = () => getConflictCount() > 0
 
   const clearAllData = () => {
+    console.log('🧹 Clearing all data...')
+    
+    // Clear component state FIRST to prevent re-initialization
+    setMappings([])
+    setHasInitialized(false)
+    setIsCompleted(true)
+    setIsCleared(true)
+    setIsMappingAndSaving(false)
+    
+    // Clear store states
     clearColumnMapping(dataSource)
     clearMapping()
     clearUploadSession(dataSource)
@@ -178,19 +183,31 @@ export function useColumnMappingLogic({ excelColumns, sampleData, dataSource }: 
     clearAllUploadSessions()
     clearCurrentSession()
     
+    // Clear localStorage
     try {
       localStorage.removeItem('column-mapping-storage')
       localStorage.removeItem('cargo-upload-sessions')
       localStorage.removeItem('cargo-data-storage')
       localStorage.removeItem('file-storage')
+      console.log('✅ localStorage cleared')
     } catch (error) {
-      // Silent error handling
+      console.error('❌ Error clearing localStorage:', error)
     }
     
-    setMappings([])
-    setHasInitialized(false)
-    setIsCompleted(true)
-    setIsMappingAndSaving(false)
+    // Force multiple re-renders to ensure state is updated
+    setTimeout(() => {
+      setMappings([])
+      console.log('🔄 Forced re-render - mappings cleared')
+    }, 0)
+    
+    setTimeout(() => {
+      setMappings([])
+      console.log('🔄 Second forced re-render - mappings cleared')
+    }, 50)
+  }
+
+  const resetClearedState = () => {
+    setIsCleared(false)
   }
 
   return {
@@ -205,6 +222,7 @@ export function useColumnMappingLogic({ excelColumns, sampleData, dataSource }: 
     getConflictCount,
     hasConflicts,
     clearAllData,
+    resetClearedState,
     FINAL_EXPORT_COLUMNS
   }
 }
