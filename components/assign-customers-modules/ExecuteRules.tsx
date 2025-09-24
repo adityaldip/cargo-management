@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Play, ArrowLeft, Filter, RefreshCw, Download } from "lucide-react"
+import { Loader2, Play, ArrowLeft, Filter, RefreshCw, Download, ChevronDown } from "lucide-react"
 import { WarningBanner } from "@/components/ui/status-banner"
 import { useCustomerRules } from "./hooks"
 import { FilterPopup } from "@/components/ui/filter-popup"
@@ -13,7 +13,8 @@ import { usePageFilters } from "@/store/filter-store"
 import { supabase } from "@/lib/supabase"
 import { Pagination } from "@/components/ui/pagination"
 import { useToast } from "@/hooks/use-toast"
-import { downloadFile } from "@/lib/export-utils"
+import { downloadFile, downloadXLSFile } from "@/lib/export-utils"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { 
   ExecuteRulesProps, 
   CargoDataRecord, 
@@ -396,7 +397,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
   // Note: Filtering is now handled server-side in fetchCargoData
 
   // Export all data functionality - batched approach to fetch all data
-  const handleExportData = async () => {
+  const handleExportData = async (format: "csv" | "xls" = "csv") => {
     setIsExporting(true)
     setExportProgress(0)
     setExportCurrentBatch(0)
@@ -558,15 +559,49 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         }
       }
 
-      // Generate CSV content
-      const csvContent = generateCSV(enrichedData)
-      
       // Generate filename with timestamp
       const timestamp = new Date().toISOString().split("T")[0]
-      const filename = `assigned_cargo_data_export_${timestamp}.csv`
+      const filename = `assigned_cargo_data_export_${timestamp}.${format}`
       
-      // Download the file
-      downloadFile(csvContent, filename, 'text/csv')
+      // Export based on format
+      if (format === "csv") {
+        // Generate CSV content
+        const csvContent = generateCSV(enrichedData)
+        downloadFile(csvContent, filename, 'text/csv')
+      } else if (format === "xls") {
+        // Convert to CargoData format for XLS export
+        const cargoData = enrichedData.map((record: any) => ({
+          id: record.id,
+          origOE: record.orig_oe || '',
+          destOE: record.dest_oe || '',
+          inbFlightNo: record.inb_flight_no || '',
+          outbFlightNo: record.outb_flight_no || '',
+          mailCat: record.mail_cat || '',
+          mailClass: record.mail_class || '',
+          totalKg: record.total_kg || 0,
+          invoiceExtend: record.invoice || '',
+          customer: record.customer_name || record.assigned_customer || record.customer_name_number || null,
+          date: record.inb_flight_date || '',
+          sector: record.orig_oe && record.dest_oe ? `${record.orig_oe}-${record.dest_oe}` : '',
+          euromail: record.mail_cat || '',
+          combined: record.rec_id || '',
+          totalEur: record.assigned_rate || record.rate_value || 0,
+          vatEur: 0,
+          recordId: record.rec_id || '',
+          desNo: record.des_no || '',
+          recNumb: record.rec_numb || '',
+          outbDate: record.outb_flight_date || ''
+        }))
+        
+        const options = {
+          format: "excel" as const,
+          includeAnalysis: false,
+          groupBy: "none" as const,
+          includeCharts: false,
+          customFields: []
+        }
+        downloadXLSFile(cargoData, filename, options)
+      }
 
       console.log(`✅ Successfully exported ${enrichedData.length} records to ${filename}`)
       
@@ -773,19 +808,51 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   />
                 )}
               </div>
-              <Button
-                onClick={handleExportData}
-                className="bg-black text-white hover:bg-gray-800"
-                size="sm"
-                disabled={totalRecords === 0 || isExporting || isApplyingFilters}
-              >
-                {isExporting ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4 mr-2" />
-                )}
-                {isExporting ? 'Exporting...' : 'Export Data'}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    className="bg-black text-white hover:bg-gray-800"
+                    size="sm"
+                    disabled={totalRecords === 0 || isExporting || isApplyingFilters}
+                  >
+                    {isExporting ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    {isExporting ? 'Exporting...' : 'Export Data'}
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem 
+                    onClick={() => handleExportData("csv")}
+                    disabled={isExporting}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex items-center">
+                      <Download className="w-4 h-4 mr-2" />
+                      <div>
+                        <div className="font-medium">Export as CSV</div>
+                        <div className="text-xs text-gray-500">Comma-separated values</div>
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => handleExportData("xls")}
+                    disabled={isExporting}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex items-center">
+                      <Download className="w-4 h-4 mr-2" />
+                      <div>
+                        <div className="font-medium">Export as XLS</div>
+                        <div className="text-xs text-gray-500">Excel spreadsheet</div>
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
                {/* <Button 
                 className="bg-black hover:bg-gray-800 text-white"
                 onClick={() => setCurrentView("results")}

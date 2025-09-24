@@ -5,12 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { RefreshCw, Download, Filter, Loader2, Trash2 } from "lucide-react"
+import { RefreshCw, Download, Filter, Loader2, Trash2, ChevronDown } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cargoDataOperations } from "@/lib/supabase-operations"
 import type { CargoData } from "@/types/cargo-data"
 import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
-import { downloadFile } from "@/lib/export-utils"
+import { downloadFile, downloadXLSFile } from "@/lib/export-utils"
 import { useToast } from "@/hooks/use-toast"
 import { usePageFilters } from "@/store/filter-store"
 import { useWorkflowStore } from "@/store/workflow-store"
@@ -19,6 +19,7 @@ import { useColumnConfigStore, type ColumnConfig } from "@/store/column-config-s
 import { SweetAlert } from "@/components/ui/sweet-alert"
 import { Pagination } from "@/components/ui/pagination"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 
 interface DatabasePreviewProps {
@@ -588,6 +589,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const [exportProgress, setExportProgress] = useState(0)
   const [exportCurrentBatch, setExportCurrentBatch] = useState(0)
   const [exportTotalBatches, setExportTotalBatches] = useState(0)
+  const [exportFormat, setExportFormat] = useState<"csv" | "xls">("csv")
 
   // Generate custom CSV with configured column order - data only
   const generateCustomCSV = (data: CargoData[], columns: ColumnConfig[]): string => {
@@ -609,7 +611,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     return csv
   }
 
-  const handleExportData = async () => {
+  const handleExportData = async (format: "csv" | "xls" = exportFormat) => {
     setGlobalIsExporting(true)
     setExportProgress(0)
     setExportCurrentBatch(0)
@@ -686,15 +688,26 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
         outbDate: record.outb_flight_date || ''
       }))
 
-      // Generate CSV content - data only, no summary
-      const csvContent = generateCustomCSV(exportData, visibleColumns)
-      
       // Generate filename with timestamp
       const timestamp = new Date().toISOString().split("T")[0]
-      const filename = `cargo_data_export_${timestamp}.csv`
+      const filename = `cargo_data_export_${timestamp}.${format}`
       
-      // Download the file
-      downloadFile(csvContent, filename, 'text/csv')
+      // Export based on format
+      if (format === "csv") {
+        // Generate CSV content - data only, no summary
+        const csvContent = generateCustomCSV(exportData, visibleColumns)
+        downloadFile(csvContent, filename, 'text/csv')
+      } else if (format === "xls") {
+        // Generate XLS content with same column order as CSV
+        const options = {
+          format: "excel" as const,
+          includeAnalysis: false,
+          groupBy: "none" as const,
+          includeCharts: false,
+          customFields: []
+        }
+        downloadXLSFile(exportData, filename, options, visibleColumns)
+      }
 
       console.log(`✅ Successfully exported ${exportData.length} records to ${filename}`)
       
@@ -825,19 +838,51 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 Delete Selected ({selectedRows.size})
               </Button>
             )}
-            <Button
-              onClick={handleExportData}
-              className="bg-black text-white"
-              size="sm"
-              disabled={totalRecords === 0 || isAnyProcessRunning}
-            >
-              {globalIsExporting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
-              {globalIsExporting ? 'Exporting...' : 'Export Data'}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  className="bg-black text-white"
+                  size="sm"
+                  disabled={totalRecords === 0 || isAnyProcessRunning}
+                >
+                  {globalIsExporting ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  {globalIsExporting ? 'Exporting...' : 'Export Data'}
+                  <ChevronDown className="w-4 h-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem 
+                  onClick={() => handleExportData("csv")}
+                  disabled={globalIsExporting}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center">
+                    <Download className="w-4 h-4 mr-2" />
+                    <div>
+                      <div className="font-medium">Export as CSV</div>
+                      <div className="text-xs text-gray-500">Comma-separated values</div>
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleExportData("xls")}
+                  disabled={globalIsExporting}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center">
+                    <Download className="w-4 h-4 mr-2" />
+                    <div>
+                      <div className="font-medium">Export as XLS</div>
+                      <div className="text-xs text-gray-500">Excel spreadsheet</div>
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         <div className="flex justify-between">

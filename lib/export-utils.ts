@@ -1,4 +1,5 @@
 import type { ProcessedData, CargoData } from "@/types/cargo-data"
+import * as XLSX from 'xlsx'
 
 export interface ExportOptions {
   format: "excel" | "csv" | "pdf"
@@ -377,4 +378,123 @@ export function generateBillingFilename(): string {
   const timestamp = new Date().toISOString().split("T")[0]
   const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`
   return `billing_export_${invoiceNumber}_${timestamp}.csv`
+}
+
+export function generateXLS(data: CargoData[], options: ExportOptions, columns?: any[]): ArrayBuffer {
+  // Create a new workbook
+  const workbook = XLSX.utils.book_new()
+  
+  // If columns are provided, use them to determine order and labels
+  let excelData: any[]
+  
+  if (columns && columns.length > 0) {
+    // Use the same column order as CSV
+    excelData = data.map((record) => {
+      const row: any = {}
+      columns.forEach((col) => {
+        const value = formatCellValueForXLS(record, col.key)
+        row[col.label] = value
+      })
+      return row
+    })
+  } else {
+    // Fallback to default order if no columns provided
+    excelData = data.map((record) => ({
+      'Origin OE': record.origOE,
+      'Destination OE': record.destOE,
+      'Inbound Flight': record.inbFlightNo,
+      'Outbound Flight': record.outbFlightNo || '',
+      'Mail Category': record.mailCat,
+      'Mail Class': record.mailClass,
+      'Total KG': record.totalKg,
+      'Invoice Extend': record.invoiceExtend,
+      'Customer': record.customer || '',
+      'Date': record.date || '',
+      'Sector': record.sector || '',
+      'Euromail': record.euromail || '',
+      'Combined': record.combined || '',
+      'Total EUR': record.totalEur || 0,
+      'VAT EUR': record.vatEur || 0,
+      'Record ID': record.recordId || '',
+      'DES No': record.desNo || '',
+      'REC Numb': record.recNumb || '',
+      'Outbound Date': record.outbDate || ''
+    }))
+  }
+  
+  // Create worksheet from data
+  const worksheet = XLSX.utils.json_to_sheet(excelData)
+  
+  // Add the worksheet to workbook
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Cargo Data')
+  
+  // Generate Excel file as ArrayBuffer
+  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  
+  return excelBuffer
+}
+
+// Helper function to format cell values for XLS (same logic as CSV)
+function formatCellValueForXLS(record: CargoData, key: string): string {
+  switch (key) {
+    case 'id':
+      return record.id || ''
+    case 'rec_id':
+      return record.recordId || ''
+    case 'orig_oe':
+      return record.origOE || ''
+    case 'dest_oe':
+      return record.destOE || ''
+    case 'inb_flight_no':
+      return record.inbFlightNo || ''
+    case 'outb_flight_no':
+      return record.outbFlightNo || ''
+    case 'mail_cat':
+      return record.mailCat || ''
+    case 'mail_class':
+      return record.mailClass || ''
+    case 'total_kg':
+      return record.totalKg?.toString() || '0'
+    case 'invoice':
+      return record.invoiceExtend || ''
+    case 'customer_name':
+    case 'assigned_customer':
+      return record.customer || ''
+    case 'inb_flight_date':
+      return record.date || ''
+    case 'sector':
+      return record.sector || ''
+    case 'euromail':
+      return record.euromail || ''
+    case 'combined':
+      return record.combined || ''
+    case 'assigned_rate':
+    case 'total_eur':
+      return record.totalEur?.toString() || '0'
+    case 'vat_eur':
+      return record.vatEur?.toString() || '0'
+    case 'des_no':
+      return record.desNo || ''
+    case 'rec_numb':
+      return record.recNumb || ''
+    case 'outb_flight_date':
+      return record.outbDate || ''
+    default:
+      return ''
+  }
+}
+
+export function downloadXLSFile(data: CargoData[], filename: string, options: ExportOptions, columns?: any[]) {
+  const excelBuffer = generateXLS(data, options, columns)
+  const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  
+  URL.revokeObjectURL(url)
 }
