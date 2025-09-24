@@ -27,6 +27,8 @@ interface WorkflowStore {
   setIsBulkDeleting: (bulkDeleting: boolean) => void
   isExecutingRules: boolean
   setIsExecutingRules: (executing: boolean) => void
+  isMappingAndSaving: boolean
+  setIsMappingAndSaving: (mappingAndSaving: boolean) => void
 }
 
 const WorkflowContext = createContext<WorkflowStore | undefined>(undefined)
@@ -47,6 +49,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   const [isExporting, setIsExportingState] = useState(false)
   const [isBulkDeleting, setIsBulkDeletingState] = useState(false)
   const [isExecutingRules, setIsExecutingRulesState] = useState(false)
+  const [isMappingAndSaving, setIsMappingAndSavingState] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
 
   const setActiveStep = (step: WorkflowStep) => {
@@ -82,6 +85,8 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     setIsBulkDeleting: setIsBulkDeletingState,
     isExecutingRules,
     setIsExecutingRules: setIsExecutingRulesState,
+    isMappingAndSaving,
+    setIsMappingAndSaving: setIsMappingAndSavingState,
   }
 
   return (

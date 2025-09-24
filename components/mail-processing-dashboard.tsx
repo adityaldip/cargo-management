@@ -26,7 +26,7 @@ interface FilterCondition {
 }
 
 export function MailProcessingDashboard() {
-  const { activeStep, setActiveStep, isProcessing, isClearingData, isExporting, isBulkDeleting, isExecutingRules } = useWorkflowStore()
+  const { activeStep, setActiveStep, isProcessing, isClearingData, isExporting, isBulkDeleting, isExecutingRules, isMappingAndSaving } = useWorkflowStore()
   const [rateSettings, setRateSettings] = useState<RateSettings>(defaultRateSettings)
   const [mailAgentData, setMailAgentData] = useState<ProcessedData | null>(null)
   const [mailSystemData, setMailSystemData] = useState<ProcessedData | null>(null)
@@ -111,7 +111,7 @@ export function MailProcessingDashboard() {
 
   return (
     <div className="min-h-screen bg-white text-black">
-      <WorkflowNavigation activeStep={activeStep} onStepChange={setActiveStep} isProcessing={isProcessing} isClearingData={isClearingData} isExporting={isExporting} isBulkDeleting={isBulkDeleting} isExecutingRules={isExecutingRules} />
+      <WorkflowNavigation activeStep={activeStep} onStepChange={setActiveStep} isProcessing={isProcessing} isClearingData={isClearingData} isExporting={isExporting} isBulkDeleting={isBulkDeleting} isExecutingRules={isExecutingRules} isMappingAndSaving={isMappingAndSaving} />
       <div className="ml-60 min-h-screen">
         <div className="container mx-auto px-2 py-1">
         {savedPriorityConditions.length > 0 && (

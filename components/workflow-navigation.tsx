@@ -23,9 +23,10 @@ interface WorkflowNavigationProps {
   isExporting?: boolean
   isBulkDeleting?: boolean
   isExecutingRules?: boolean
+  isMappingAndSaving?: boolean
 }
 
-export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false, isBulkDeleting = false, isExecutingRules = false }: WorkflowNavigationProps) {
+export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false, isBulkDeleting = false, isExecutingRules = false, isMappingAndSaving = false }: WorkflowNavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
   
@@ -37,7 +38,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
   const steps = [
     { id: "import-mail-agent", label: "Import Mail Agent", icon: FileUp, tooltip: "Upload and verify mail agent Excel files for processing", lighterColor: true },
     { id: "import-mail-system", label: "Import Mail System", icon: FileUp, tooltip: "Upload and verify mail system Excel files for processing", lighterColor: true },
-    { id: "review-merged-excel", label: "Review Merged Data", icon: FileSpreadsheet, tooltip: "Combine and review data from available sources" },
+    { id: "review-merged-excel", label: "Import Merged Data", icon: FileSpreadsheet, tooltip: "Import and review data from available sources" },
     // { id: "review-customers", label: "Review Customers", icon: Users, tooltip: "Analyze customer performance and individual data breakdown" },
     { id: "assign-customers", label: "Assign Contractees", icon: UserCheck, tooltip: "Configure automated rules for cargo processing and team assignment" },
     { id: "assign-rates", label: "Assign Rates", icon: Calculator, tooltip: "Configure automated rate assignment rules and pricing calculations" },
@@ -47,8 +48,8 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
   ]
 
   const handleStepChange = (stepId: WorkflowStep) => {
-    // Don't allow navigation when processing, clearing data, exporting, bulk deleting, or executing rules
-    if (isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules) return
+    // Don't allow navigation when processing, clearing data, exporting, bulk deleting, executing rules, or mapping and saving
+    if (isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules || isMappingAndSaving) return
     
     onStepChange(stepId)
     setIsMobileMenuOpen(false) // Close mobile menu when step is selected
@@ -122,7 +123,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                       <div
                         onClick={() => handleStepChange(step.id as WorkflowStep)}
                         className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
-                          isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules
+                          isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules || isMappingAndSaving
                             ? "cursor-not-allowed opacity-50 text-gray-400" 
                             : isActive 
                               ? "bg-black text-white cursor-pointer" 
@@ -133,7 +134,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                       >
                         <Icon className="h-4 w-4 flex-shrink-0" />
                         <span className="ml-3 text-sm font-medium truncate">{step.label}</span>
-                        {(isProcessing || isExporting || isExecutingRules) && (
+                        {(isProcessing || isExporting || isExecutingRules || isMappingAndSaving) && (
                           <div className="ml-auto">
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400"></div>
                           </div>
@@ -150,7 +151,9 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                               ? "Navigation is disabled - exporting data in progress"
                               : isExecutingRules
                                 ? "Navigation is disabled - rules are being executed"
-                                : step.tooltip
+                                : isMappingAndSaving
+                                  ? "Navigation is disabled - mapping and saving to database"
+                                  : step.tooltip
                         }
                       </p>
                     </TooltipContent>

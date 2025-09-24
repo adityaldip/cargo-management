@@ -242,7 +242,7 @@ function mapExcelRowToCargoData(row: ExcelRow, columnMap: Record<string, keyof C
 
 export async function processFile(
   file: File, 
-  fileType: "mail-system" | "mail-agent",
+  fileType: "mail-system" | "mail-agent" | "upload-excel",
   ignoreRules?: IgnoreRule[],
   onProgress?: (progress: number, message: string, stats?: { currentRow: number, totalRows: number, processedRows: number }) => void
 ): Promise<FileProcessingResult> {
@@ -436,7 +436,7 @@ export interface ColumnMappingRule {
 // Apply column mappings to raw Excel data
 export async function processFileWithMappings(
   file: File, 
-  fileType: "mail-system" | "mail-agent",
+  fileType: "mail-system" | "mail-agent" | "upload-excel",
   mappings: ColumnMappingRule[],
   ignoreRules?: IgnoreRule[],
   onProgress?: (progress: number, message: string, stats?: { currentRow: number, totalRows: number, processedRows: number }) => void

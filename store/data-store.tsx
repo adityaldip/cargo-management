@@ -11,7 +11,7 @@ import { clearSupabaseData, clearFilteredSupabaseData } from "@/lib/storage-util
 export interface StoredDataset {
   id: string
   name: string
-  type: "mail-agent" | "mail-system"
+  type: "mail-agent" | "mail-system" | "upload-excel"
   data: ProcessedData
   mappings: ColumnMapping[]
   timestamp: number
@@ -29,12 +29,14 @@ export interface ColumnMapping {
 export interface CurrentSession {
   mailAgent?: StoredDataset
   mailSystem?: StoredDataset
+  uploadExcel?: StoredDataset
   combined?: ProcessedData
   supabaseSaved?: {
     timestamp: number
     recordCount: number
     mailAgent?: string
     mailSystem?: string
+    uploadExcel?: string
   }
 }
 
@@ -67,9 +69,9 @@ interface DataState {
   clearCurrentSession: () => void
   
   // Actions - Upload Sessions
-  saveUploadSession: (dataSource: "mail-agent" | "mail-system", sessionData: UploadSession) => void
-  getUploadSession: (dataSource: "mail-agent" | "mail-system") => UploadSession | null
-  clearUploadSession: (dataSource: "mail-agent" | "mail-system") => void
+  saveUploadSession: (dataSource: "mail-agent" | "mail-system" | "upload-excel", sessionData: UploadSession) => void
+  getUploadSession: (dataSource: "mail-agent" | "mail-system" | "upload-excel") => UploadSession | null
+  clearUploadSession: (dataSource: "mail-agent" | "mail-system" | "upload-excel") => void
   clearAllUploadSessions: () => void
   
   // Actions - Supabase Operations
@@ -282,6 +284,16 @@ export const useDataStore = create<DataState>()(
           }
           if (mailSystemDataset) {
             console.log('Adding mail system data:', mailSystemDataset.data.summary)
+            datasets.push(mailSystemDataset.data)
+          }
+          
+          // Handle upload-excel type datasets
+          if (mailAgentDataset && mailAgentDataset.type === "upload-excel") {
+            console.log('Processing upload-excel dataset:', mailAgentDataset.data.summary)
+            datasets.push(mailAgentDataset.data)
+          }
+          if (mailSystemDataset && mailSystemDataset.type === "upload-excel") {
+            console.log('Processing upload-excel dataset:', mailSystemDataset.data.summary)
             datasets.push(mailSystemDataset.data)
           }
           

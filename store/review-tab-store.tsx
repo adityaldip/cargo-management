@@ -3,7 +3,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
-export type ReviewTabType = "configure" | "preview"
+export type ReviewTabType = "configure" | "preview" | "update-excel" | "update-mapping"
 
 interface ReviewTabState {
   activeTab: ReviewTabType
@@ -11,7 +11,7 @@ interface ReviewTabState {
   resetToDefault: () => void
 }
 
-const DEFAULT_TAB: ReviewTabType = "configure"
+const DEFAULT_TAB: ReviewTabType = "update-excel"
 
 export const useReviewTabStore = create<ReviewTabState>()(
   persist(

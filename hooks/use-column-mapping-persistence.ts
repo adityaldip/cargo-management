@@ -10,12 +10,13 @@ interface ColumnMappingState {
   timestamp: number
 }
 
-export function useColumnMappingPersistence(dataSource: "mail-agent" | "mail-system") {
+export function useColumnMappingPersistence(dataSource: "mail-agent" | "mail-system" | "upload-excel") {
   const [isLoaded, setIsLoaded] = useState(false)
   const [storedMapping, setStoredMapping] = useState<ColumnMappingState | null>(null)
 
   const storageKey = 'column-mapping-storage'
-  const mappingKey = dataSource === 'mail-agent' ? 'mailAgentMapping' : 'mailSystemMapping'
+  const mappingKey = dataSource === 'mail-agent' ? 'mailAgentMapping' : 
+                    dataSource === 'mail-system' ? 'mailSystemMapping' : 'uploadExcelMapping'
 
   // Load from localStorage on mount
   useEffect(() => {
