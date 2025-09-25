@@ -5,11 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { RefreshCw, Download, Filter, Loader2, Trash2, ChevronDown } from "lucide-react"
+import { RefreshCw, Download, Filter, Loader2, Trash2, ChevronDown, Eye } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cargoDataOperations } from "@/lib/supabase-operations"
 import type { CargoData } from "@/types/cargo-data"
 import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
+import { DisplayFieldsPopup } from "@/components/ui/display-fields-popup"
 import { downloadFile, downloadXLSFile } from "@/lib/export-utils"
 import { useToast } from "@/hooks/use-toast"
 import { usePageFilters } from "@/store/filter-store"
@@ -35,7 +36,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   const { clearAllData, clearFilteredSupabaseData } = useDataStore()
   
   // Column config store
-  const { columnConfigs } = useColumnConfigStore()
+  const { columnConfigs, setColumnConfigs } = useColumnConfigStore()
   const [realData, setRealData] = useState<CargoData[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [dataSource, setDataSource] = useState<string>("")
@@ -83,6 +84,9 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   // Filter state
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const { conditions: filterConditions, logic: filterLogic, hasActiveFilters, setFilters, clearFilters } = usePageFilters("review-merged-excel")
+  
+  // Display fields state
+  const [isDisplayFieldsOpen, setIsDisplayFieldsOpen] = useState(false)
   
   // Toast for notifications
   const { toast } = useToast()
@@ -314,6 +318,10 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     // Reload data with new filters - pass filters directly to avoid timing issues
     await loadRealData(1, recordsPerPage, conditions, logic)
     await loadStats()
+  }
+
+  const handleApplyDisplayFields = (configs: ColumnConfig[]) => {
+    setColumnConfigs(configs)
   }
 
   const handleClearData = async () => {
@@ -788,6 +796,29 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                   initialConditions={filterConditions}
                   initialLogic={filterLogic}
                   title="Filter Database Data"
+                />
+              )}
+            </div>
+            
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDisplayFieldsOpen(!isDisplayFieldsOpen)}
+                disabled={isAnyProcessRunning}
+                className="border-gray-300 hover:bg-gray-50"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                Display Fields
+              </Button>
+              
+              {isDisplayFieldsOpen && (
+                <DisplayFieldsPopup
+                  isOpen={isDisplayFieldsOpen}
+                  onClose={() => setIsDisplayFieldsOpen(false)}
+                  onApply={handleApplyDisplayFields}
+                  columnConfigs={columnConfigs}
+                  title="Display Fields"
                 />
               )}
             </div>                  
