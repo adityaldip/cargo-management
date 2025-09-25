@@ -123,3 +123,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide scrollbar for WebKit browsers (Chrome, Safari) */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

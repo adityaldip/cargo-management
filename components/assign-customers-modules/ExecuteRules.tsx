@@ -1303,129 +1303,109 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
             >
               <div style={{ width: '2000px' }}>
                 <Table className="border border-collapse">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="border">Inb.Flight Date</TableHead>
-                  <TableHead className="border">Outb.Flight Date</TableHead>
-                  <TableHead className="border">Rec. ID</TableHead>
-                  <TableHead className="border">Des. No.</TableHead>
-                  <TableHead className="border">Rec. Numb.</TableHead>
-                  <TableHead className="border">Orig. OE</TableHead>
-                  <TableHead className="border">Dest. OE</TableHead>
-                  <TableHead className="border">Inb. Flight No.</TableHead>
-                  <TableHead className="border">Outb. Flight No.</TableHead>
-                  <TableHead className="border">Mail Cat.</TableHead>
-                  <TableHead className="border">Mail Class</TableHead>
-                  <TableHead className="border text-right">Total kg</TableHead>
-                  <TableHead className="border">Invoice</TableHead>
-                  <TableHead className="border bg-yellow-200">Contractee - Product</TableHead>
-                  <TableHead 
-                    key={`assigned-at-${orderBy}-${orderDirection}`}
-                    className="border bg-yellow-200 cursor-pointer hover:bg-yellow-300 transition-colors"
-                    onClick={async () => {
-                      console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
-                      if (orderBy === 'assigned_at') {
-                        // Toggle direction if already sorting by assigned_at
-                        const newDirection = orderDirection === 'desc' ? 'asc' : 'desc'
-                        console.log('🔄 Toggling direction to:', newDirection)
-                        setOrderDirection(newDirection)
-                        // Use the new direction directly instead of waiting for state update
-                        await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', newDirection)
-                      } else {
-                        // Set to assigned_at with default desc direction
-                        console.log('🔄 Setting to assigned_at with desc')
-                        setOrderBy('assigned_at')
-                        setOrderDirection('desc')
-                        await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', 'desc')
-                      }
-                    }}
-                  >
-                    Assigned At {orderBy === 'assigned_at' && (orderDirection === 'desc' ? '↓' : '↑')}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-                <TableBody>
-                  {cargoData.map((record, index) => (
-                    <TableRow key={record.id || index}>
-                      <TableCell className="border">{record.inb_flight_date || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.outb_flight_date || 'N/A'}</TableCell>
-                      <TableCell className="border font-mono text-xs">{record.rec_id || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.des_no || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.rec_numb || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.orig_oe || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.dest_oe || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.inb_flight_no || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.outb_flight_no || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.mail_cat || 'N/A'}</TableCell>
-                      <TableCell className="border">{record.mail_class || 'N/A'}</TableCell>
-                      <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
-                      <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
-                      <TableCell className="border text-xs bg-yellow-200">
-                        <Popover 
-                          open={openCustomerSelects[record.id]} 
-                          onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [record.id]: open }))}
-                        >
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              aria-expanded={openCustomerSelects[record.id]}
-                              className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
-                              disabled={isUpdatingAssignment === record.id}
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="border">Inb.Flight Date</TableHead>
+                      <TableHead className="border">Outb.Flight Date</TableHead>
+                      <TableHead className="border">Rec. ID</TableHead>
+                      <TableHead className="border">Des. No.</TableHead>
+                      <TableHead className="border">Rec. Numb.</TableHead>
+                      <TableHead className="border">Orig. OE</TableHead>
+                      <TableHead className="border">Dest. OE</TableHead>
+                      <TableHead className="border">Inb. Flight No.</TableHead>
+                      <TableHead className="border">Outb. Flight No.</TableHead>
+                      <TableHead className="border">Mail Cat.</TableHead>
+                      <TableHead className="border">Mail Class</TableHead>
+                      <TableHead className="border text-right">Total kg</TableHead>
+                      <TableHead className="border">Invoice</TableHead>
+                      <TableHead className="border bg-yellow-200">Contractee - Product</TableHead>
+                      <TableHead 
+                        key={`assigned-at-${orderBy}-${orderDirection}`}
+                        className="border bg-yellow-200 cursor-pointer hover:bg-yellow-300 transition-colors"
+                        onClick={async () => {
+                          console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
+                          if (orderBy === 'assigned_at') {
+                            // Toggle direction if already sorting by assigned_at
+                            const newDirection = orderDirection === 'desc' ? 'asc' : 'desc'
+                            console.log('🔄 Toggling direction to:', newDirection)
+                            setOrderDirection(newDirection)
+                            // Use the new direction directly instead of waiting for state update
+                            await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', newDirection)
+                          } else {
+                            // Set to assigned_at with default desc direction
+                            console.log('🔄 Setting to assigned_at with desc')
+                            setOrderBy('assigned_at')
+                            setOrderDirection('desc')
+                            await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', 'desc')
+                          }
+                        }}
+                      >
+                        Assigned At {orderBy === 'assigned_at' && (orderDirection === 'desc' ? '↓' : '↑')}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                    <TableBody>
+                      {cargoData.map((record, index) => (
+                        <TableRow key={record.id || index}>
+                          <TableCell className="border">{record.inb_flight_date || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.outb_flight_date || 'N/A'}</TableCell>
+                          <TableCell className="border font-mono text-xs">{record.rec_id || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.des_no || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.rec_numb || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.orig_oe || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.dest_oe || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.inb_flight_no || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.outb_flight_no || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.mail_cat || 'N/A'}</TableCell>
+                          <TableCell className="border">{record.mail_class || 'N/A'}</TableCell>
+                          <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
+                          <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
+                          <TableCell className="border text-xs bg-yellow-200">
+                            <Popover 
+                              open={openCustomerSelects[record.id]} 
+                              onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [record.id]: open }))}
                             >
-                              <span className="truncate">
-                                {(() => {
-                                  const customerId = customerAssignments[record.id] || record.assigned_customer
-                                  const productId = productAssignments[record.id] || record.customer_code_id
-                                  
-                                  if (customerId === 'unassigned' || !customerId) {
-                                    return "Unassigned"
-                                  }
-                                  
-                                  const customer = customers.find(c => c.id === customerId)
-                                  const code = customer?.codes.find(c => c.id === productId)
-                                  
-                                  if (customer && code) {
-                                    return `${customer.name} - ${code.product}`
-                                  } else if (customer) {
-                                    return `${customer.name} - No Product`
-                                  }
-                                  
-                                  return "Select customer-product..."
-                                })()}
-                              </span>
-                              <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 p-0" side="bottom" align="start">
-                            <Command>
-                              <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
-                              <CommandEmpty>No combinations found.</CommandEmpty>
-                              <CommandGroup className="max-h-64 overflow-auto">
-                                <CommandItem
-                                  value="unassigned"
-                                  onSelect={() => {
-                                    handleAssignmentUpdate(record.id, 'unassigned', 'no-product')
-                                    setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
-                                  }}
-                                  className="text-xs"
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openCustomerSelects[record.id]}
+                                  className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                                  disabled={isUpdatingAssignment === record.id}
                                 >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-3 w-3",
-                                      (customerAssignments[record.id] || record.assigned_customer) === 'unassigned' || !record.assigned_customer ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  Unassigned
-                                </CommandItem>
-                                {memoizedCustomers.map((customer) => {
-                                  const activeCodes = customer.codes.filter(code => code.is_active)
-                                  return activeCodes.map((code) => (
+                                  <span className="truncate">
+                                    {(() => {
+                                      const customerId = customerAssignments[record.id] || record.assigned_customer
+                                      const productId = productAssignments[record.id] || record.customer_code_id
+                                      
+                                      if (customerId === 'unassigned' || !customerId) {
+                                        return "Unassigned"
+                                      }
+                                      
+                                      const customer = customers.find(c => c.id === customerId)
+                                      const code = customer?.codes.find(c => c.id === productId)
+                                      
+                                      if (customer && code) {
+                                        return `${customer.name} - ${code.product}`
+                                      } else if (customer) {
+                                        return `${customer.name} - No Product`
+                                      }
+                                      
+                                      return "Select customer-product..."
+                                    })()}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
+                                  <CommandEmpty>No combinations found.</CommandEmpty>
+                                  <CommandGroup className="max-h-64 overflow-auto">
                                     <CommandItem
-                                      key={`${customer.id}-${code.id}`}
-                                      value={`${customer.name} ${code.product}`}
+                                      value="unassigned"
                                       onSelect={() => {
-                                        handleAssignmentUpdate(record.id, customer.id, code.id)
+                                        handleAssignmentUpdate(record.id, 'unassigned', 'no-product')
                                         setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
                                       }}
                                       className="text-xs"
@@ -1433,28 +1413,48 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                                       <Check
                                         className={cn(
                                           "mr-2 h-3 w-3",
-                                          (customerAssignments[record.id] || record.assigned_customer) === customer.id && 
-                                          (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
+                                          (customerAssignments[record.id] || record.assigned_customer) === 'unassigned' || !record.assigned_customer ? "opacity-100" : "opacity-0"
                                         )}
                                       />
-                                      <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
-                                        <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
-                                        <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
-                                      </div>
+                                      Unassigned
                                     </CommandItem>
-                                  ))
-                                })}
-                              </CommandGroup>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                      </TableCell>
-                      <TableCell className="border text-xs bg-yellow-200">
-                        {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
-                      </TableCell>
-                  </TableRow>
-                  ))}
-              </TableBody>
+                                    {memoizedCustomers.map((customer) => {
+                                      const activeCodes = customer.codes.filter(code => code.is_active)
+                                      return activeCodes.map((code) => (
+                                        <CommandItem
+                                          key={`${customer.id}-${code.id}`}
+                                          value={`${customer.name} ${code.product}`}
+                                          onSelect={() => {
+                                            handleAssignmentUpdate(record.id, customer.id, code.id)
+                                            setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-3 w-3",
+                                              (customerAssignments[record.id] || record.assigned_customer) === customer.id && 
+                                              (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+                                            <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
+                                            <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
+                                          </div>
+                                        </CommandItem>
+                                      ))
+                                    })}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </TableCell>
+                          <TableCell className="border text-xs bg-yellow-200">
+                            {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
+                          </TableCell>
+                      </TableRow>
+                      ))}
+                  </TableBody>
                 </Table>
               </div>
             </div>

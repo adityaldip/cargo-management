@@ -1457,8 +1457,33 @@ export function ExecuteRates() {
             <span className="ml-2 text-gray-600">Loading cargo data...</span>
           </div>
         ) : (
-        <div className="overflow-x-auto">
-          <Table className="border border-collapse">
+        <div className="space-y-0">
+          {/* Top scroll bar - wrapper1 */}
+          <div 
+            className="overflow-x-auto overflow-y-hidden" 
+            style={{ width: '100%', height: '20px' }}
+            onScroll={(e) => {
+              const wrapper2 = e.currentTarget.parentElement?.querySelector('.wrapper2')
+              if (wrapper2) {
+                wrapper2.scrollLeft = e.currentTarget.scrollLeft
+              }
+            }}
+          >
+            <div style={{ width: '2000px', height: '20px' }}></div>
+          </div>
+          {/* Main table - wrapper2 */}
+          <div 
+            className="overflow-x-auto overflow-y-hidden wrapper2"
+            style={{ width: '100%' }}
+            onScroll={(e) => {
+              const wrapper1 = e.currentTarget.parentElement?.querySelector('.overflow-x-auto:first-child')
+              if (wrapper1) {
+                wrapper1.scrollLeft = e.currentTarget.scrollLeft
+              }
+            }}
+          >
+            <div style={{ width: '2000px' }}>
+              <table className="border border-collapse w-full" style={{ width: '2000px', minWidth: '2000px' }}>
             <TableHeader>
               <TableRow>
                 <TableHead className="border">Inb.Flight Date</TableHead>
@@ -1697,7 +1722,9 @@ export function ExecuteRates() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </table>
+            </div>
+          </div>
         </div>
         )}
 
