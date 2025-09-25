@@ -35,11 +35,9 @@ const createDefaultColumnConfigs = (): ColumnConfig[] => {
     mail_class: 'Mail Class',
     total_kg: 'Total Weight (kg)',
     invoice: 'Invoice',
-    assigned_customer: 'Contractee',
-    customer_name_number: 'Contractee Name',
-    rate_name: 'Rate Name',
-    rate_value: 'Rate Value',
-    rate_currency: 'Rate Currency',
+    contractee_product: 'Contractee - Product',
+    rate_selection: 'Rate Selection',
+    calculated_rate_value: 'Calculated Rate Value',
     assigned_at: 'Assigned At'
   }
 
@@ -57,11 +55,9 @@ const createDefaultColumnConfigs = (): ColumnConfig[] => {
     { key: 'mail_class', visible: true },
     { key: 'total_kg', visible: true },
     { key: 'invoice', visible: true },
-    { key: 'assigned_customer', visible: true },
-    { key: 'customer_name_number', visible: true },
-    { key: 'rate_name', visible: true },
-    { key: 'rate_value', visible: true },
-    { key: 'rate_currency', visible: true },
+    { key: 'contractee_product', visible: true },
+    { key: 'rate_selection', visible: true },
+    { key: 'calculated_rate_value', visible: true },
     { key: 'assigned_at', visible: true }
   ]
 

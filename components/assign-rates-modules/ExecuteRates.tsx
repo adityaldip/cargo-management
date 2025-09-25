@@ -132,11 +132,9 @@ export function ExecuteRates() {
       
       // Text fields - wider
       'invoice': 'w-32',
-      'assigned_customer': 'w-40',
-      'customer_name': 'w-40',
-      'customer_name_number': 'w-40',
-      'rate_name': 'w-32',
-      'rate_currency': 'w-20',
+      'contractee_product': 'w-40',
+      'rate_selection': 'w-40',
+      'calculated_rate_value': 'w-32',
       
       // Default width for unknown fields
       'default': 'w-24'
@@ -1580,34 +1578,28 @@ export function ExecuteRates() {
                 {visibleColumns.map((column) => (
                   <TableHead 
                     key={column.key}
-                    className={`border ${getColumnWidth(column.key)} ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                    className={`border ${getColumnWidth(column.key)} ${column.key === 'contractee_product' || column.key === 'rate_selection' || column.key === 'calculated_rate_value' || column.key === 'assigned_at' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' || column.key === 'calculated_rate_value' ? 'text-right' : ''} ${column.key === 'assigned_at' ? 'cursor-pointer hover:bg-yellow-300 transition-colors' : ''}`}
+                    onClick={column.key === 'assigned_at' ? async () => {
+                      console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
+                      if (orderBy === 'assigned_at') {
+                        // Toggle direction if already sorting by assigned_at
+                        const newDirection = orderDirection === 'desc' ? 'asc' : 'desc'
+                        console.log('🔄 Toggling direction to:', newDirection)
+                        setOrderDirection(newDirection)
+                        // Use the new direction directly instead of waiting for state update
+                        await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', newDirection)
+                      } else {
+                        // Set to assigned_at with default desc direction
+                        console.log('🔄 Setting to assigned_at with desc')
+                        setOrderBy('assigned_at')
+                        setOrderDirection('desc')
+                        await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', 'desc')
+                      }
+                    } : undefined}
                   >
-                    {column.label}
+                    {column.key === 'assigned_at' ? `${column.label} ${orderBy === 'assigned_at' && (orderDirection === 'desc' ? '↓' : '↑')}` : column.label}
                   </TableHead>
                 ))}
-                <TableHead 
-                  key={`assigned-at-${orderBy}-${orderDirection}`}
-                  className="border bg-yellow-200 cursor-pointer hover:bg-yellow-300 transition-colors w-32"
-                  onClick={async () => {
-                    console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
-                    if (orderBy === 'assigned_at') {
-                      // Toggle direction if already sorting by assigned_at
-                      const newDirection = orderDirection === 'desc' ? 'asc' : 'desc'
-                      console.log('🔄 Toggling direction to:', newDirection)
-                      setOrderDirection(newDirection)
-                      // Use the new direction directly instead of waiting for state update
-                      await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', newDirection)
-                    } else {
-                      // Set to assigned_at with default desc direction
-                      console.log('🔄 Setting to assigned_at with desc')
-                      setOrderBy('assigned_at')
-                      setOrderDirection('desc')
-                      await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', 'desc')
-                    }
-                  }}
-                >
-                  Assigned At {orderBy === 'assigned_at' && (orderDirection === 'desc' ? '↓' : '↑')}
-                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1616,7 +1608,7 @@ export function ExecuteRates() {
                   {visibleColumns.map((column) => (
                     <TableCell 
                       key={`cell-${index}-${column.key}`}
-                      className={`border ${getColumnWidth(column.key)} ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                      className={`border ${getColumnWidth(column.key)} ${column.key === 'contractee_product' || column.key === 'rate_selection' || column.key === 'calculated_rate_value' || column.key === 'assigned_at' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' || column.key === 'calculated_rate_value' ? 'text-right' : ''}`}
                     >
                       {(() => {
                         const fieldMapping: Record<string, string> = {
@@ -1633,17 +1625,188 @@ export function ExecuteRates() {
                           'mail_class': 'mailClass',
                           'total_kg': 'totalKg',
                           'invoice': 'invoiceExtend',
-                          'customer_name_number': 'customer',
-                          'assigned_customer': 'customer',
                           'assigned_rate': 'totalEur',
-                          'rate_name': 'rate_name',
-                          'rate_value': 'rate_value',
-                          'rate_currency': 'rate_currency',
+                          'contractee_product': 'contractee_product',
+                          'rate_selection': 'rate_selection',
+                          'calculated_rate_value': 'calculated_rate_value',
                           'assigned_at': 'assigned_at'
                         }
                         
                         const mappedKey = fieldMapping[column.key] || column.key
                         let value = (record as any)[mappedKey] || (record as any)[column.key]
+                        
+                        // Special handling for contractee_product column (interactive popover) - MUST BE FIRST
+                        if (column.key === 'contractee_product') {
+                          return (
+                            <Popover 
+                              open={openCustomerSelects[record.id]} 
+                              onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [record.id]: open }))}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openCustomerSelects[record.id]}
+                                  className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                                  disabled={isUpdatingAssignment === record.id}
+                                >
+                                  <span className="truncate">
+                                    {(() => {
+                                      const customerId = customerAssignments[record.id] || record.assigned_customer
+                                      const productId = productAssignments[record.id] || record.customer_code_id
+                                      
+                                      if (customerId === 'unassigned' || !customerId) {
+                                        return "Unassigned"
+                                      }
+                                      
+                                      const customer = customers.find(c => c.id === customerId)
+                                      const code = customer?.codes.find(c => c.id === productId)
+                                      
+                                      if (customer && code) {
+                                        return `${customer.name} - ${code.product}`
+                                      } else if (customer) {
+                                        return `${customer.name} - No Product`
+                                      }
+                                      
+                                      return "Select customer-product..."
+                                    })()}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
+                                  <CommandEmpty>No combinations found.</CommandEmpty>
+                                  <CommandGroup className="max-h-64 overflow-auto">
+                                    <CommandItem
+                                      value="unassigned"
+                                      onSelect={() => {
+                                        handleAssignmentUpdate(record.id, 'unassigned', 'no-product')
+                                        setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                                      }}
+                                      className="text-xs"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-3 w-3",
+                                          (customerAssignments[record.id] || record.assigned_customer) === 'unassigned' || !record.assigned_customer ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      Unassigned
+                                    </CommandItem>
+                                    {memoizedCustomers.map((customer) => {
+                                      const activeCodes = customer.codes.filter(code => code.is_active)
+                                      return activeCodes.map((code) => (
+                                        <CommandItem
+                                          key={`${customer.id}-${code.id}`}
+                                          value={`${customer.name} ${code.product}`}
+                                          onSelect={() => {
+                                            handleAssignmentUpdate(record.id, customer.id, code.id)
+                                            setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-3 w-3",
+                                              (customerAssignments[record.id] || record.assigned_customer) === customer.id && 
+                                              (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+                                            <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
+                                            <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
+                                          </div>
+                                        </CommandItem>
+                                      ))
+                                    })}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          )
+                        }
+                        
+                        // Special handling for rate_selection column (interactive popover)
+                        if (column.key === 'rate_selection') {
+                          return (
+                            <Popover 
+                              open={openRateSelects[record.id]} 
+                              onOpenChange={(open) => setOpenRateSelects(prev => ({ ...prev, [record.id]: open }))}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openRateSelects[record.id]}
+                                  className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                                  disabled={isUpdatingRate === record.id}
+                                >
+                                  <span className="truncate">
+                                    {(() => {
+                                      const rateId = rateAssignments[record.id] || record.rate_id
+                                      
+                                      if (!rateId) {
+                                        return "Select rate..."
+                                      }
+                                      
+                                      const rate = rates.find(r => r.id === rateId)
+                                      
+                                      if (rate) {
+                                        return `${rate.name} (${rate.base_rate} ${rate.currency})`
+                                      }
+                                      
+                                      return "Select rate..."
+                                    })()}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Search rates..." className="h-8 text-xs" />
+                                  <CommandEmpty>No rates found.</CommandEmpty>
+                                  <CommandGroup className="max-h-64 overflow-auto">
+                                    {memoizedRates.map((rate: any) => (
+                                      <CommandItem
+                                        key={rate.id}
+                                        value={`${rate.name} ${rate.base_rate} ${rate.currency}`}
+                                        onSelect={() => {
+                                          handleRateUpdate(record.id, rate.id)
+                                          setOpenRateSelects(prev => ({ ...prev, [record.id]: false }))
+                                        }}
+                                        className="text-xs"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-3 w-3",
+                                            (rateAssignments[record.id] || record.rate_id) === rate.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+                                          <span className="font-medium text-sm truncate flex-1 min-w-0">{rate.name}</span>
+                                          <span className="text-gray-500 text-xs flex-shrink-0">{rate.base_rate} {rate.currency}</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          )
+                        }
+                        
+                        // Special handling for calculated_rate_value column
+                        if (column.key === 'calculated_rate_value') {
+                          const value = record.calculated_rate_value
+                          return value ? `${parseFloat(value).toFixed(2)}` : '0.00'
+                        }
+                        
+                        // Special handling for assigned_at column
+                        if (column.key === 'assigned_at') {
+                          return record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'
+                        }
                         
                         if (value === undefined || value === null || value === '') {
                           return 'N/A'
@@ -1665,180 +1828,6 @@ export function ExecuteRates() {
                       })()}
                     </TableCell>
                   ))}
-                  <TableCell className="border text-xs bg-yellow-200">
-                    <Popover 
-                      open={openCustomerSelects[record.id]} 
-                      onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [record.id]: open }))}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={openCustomerSelects[record.id]}
-                          className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
-                          disabled={isUpdatingAssignment === record.id}
-                        >
-                          <span className="truncate">
-                            {(() => {
-                              const customerId = customerAssignments[record.id] || record.assigned_customer
-                              const productId = productAssignments[record.id] || record.customer_code_id
-                              
-                              if (customerId === 'unassigned' || !customerId) {
-                                return "Unassigned"
-                              }
-                              
-                              const customer = customers.find(c => c.id === customerId)
-                              const code = customer?.codes.find(c => c.id === productId)
-                              
-                              if (customer && code) {
-                                return `${customer.name} - ${code.product}`
-                              } else if (customer) {
-                                return `${customer.name} - No Product`
-                              }
-                              
-                              return "Select customer-product..."
-                            })()}
-                          </span>
-                          <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80 p-0" side="bottom" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
-                          <CommandEmpty>No combinations found.</CommandEmpty>
-                          <CommandGroup className="max-h-64 overflow-auto">
-                            <CommandItem
-                              value="unassigned"
-                              onSelect={() => {
-                                handleAssignmentUpdate(record.id, 'unassigned', 'no-product')
-                                setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
-                              }}
-                              className="text-xs"
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-3 w-3",
-                                  (customerAssignments[record.id] || record.assigned_customer) === 'unassigned' || !record.assigned_customer ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              Unassigned
-                            </CommandItem>
-                            {memoizedCustomers.map((customer) => {
-                              const activeCodes = customer.codes.filter(code => code.is_active)
-                              return activeCodes.map((code) => (
-                                <CommandItem
-                                  key={`${customer.id}-${code.id}`}
-                                  value={`${customer.name} ${code.product}`}
-                                  onSelect={() => {
-                                    handleAssignmentUpdate(record.id, customer.id, code.id)
-                                    setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
-                                  }}
-                                  className="text-xs"
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-3 w-3",
-                                      (customerAssignments[record.id] || record.assigned_customer) === customer.id && 
-                                      (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
-                                    <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
-                                    <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
-                                  </div>
-                                </CommandItem>
-                              ))
-                            })}
-                          </CommandGroup>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </TableCell>
-                  <TableCell className="border text-xs bg-yellow-200">
-                    <Popover 
-                      open={openRateSelects[record.id]} 
-                      onOpenChange={(open) => setOpenRateSelects(prev => ({ ...prev, [record.id]: open }))}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={openRateSelects[record.id]}
-                          className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
-                          disabled={isUpdatingRate === record.id}
-                        >
-                          <span className="truncate">
-                            {(() => {
-                              const rateId = rateAssignments[record.id] || record.rate_id
-                              
-                              if (!rateId) {
-                                return "Select rate..."
-                              }
-                              
-                              const rate = rates.find(r => r.id === rateId)
-                              
-                              if (rate) {
-                                return `${rate.name} (${rate.base_rate} ${rate.currency})`
-                              }
-                              
-                              return "Select rate..."
-                            })()}
-                          </span>
-                          <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80 p-0" side="bottom" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search rates..." className="h-8 text-xs" />
-                          <CommandEmpty>No rates found.</CommandEmpty>
-                          <CommandGroup className="max-h-64 overflow-auto">
-                            {memoizedRates.map((rate: any) => (
-                              <CommandItem
-                                key={rate.id}
-                                value={`${rate.name} ${rate.base_rate} ${rate.currency}`}
-                                onSelect={() => {
-                                  handleRateUpdate(record.id, rate.id)
-                                  setOpenRateSelects(prev => ({ ...prev, [record.id]: false }))
-                                }}
-                                className="text-xs"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-3 w-3",
-                                    (rateAssignments[record.id] || record.rate_id) === rate.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
-                                  <span className="font-medium text-sm truncate flex-1 min-w-0">{rate.name}</span>
-                                  <span className="text-gray-500 text-xs flex-shrink-0">{rate.base_rate} {rate.currency}</span>
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </TableCell>
-                  {/* <TableCell className="border text-xs bg-yellow-200">
-                    {(() => {
-                      const rateId = rateAssignments[record.id] || record.rate_id
-                      const rate = rates.find(r => r.id === rateId)
-                      return rate ? `${rate.base_rate} ${rate.currency}` : 'N/A'
-                    })()}
-                  </TableCell> */}
-                  <TableCell className="border text-xs bg-yellow-200 text-right">
-                    {(() => {
-                      const value = record.calculated_rate_value
-                      console.log(`🎯 Displaying rate for ${record.rec_id}: calculated_rate_value=${value}, type=${typeof value}`)
-                      return value ? `${parseFloat(value).toFixed(2)}` : '0.00'
-                    })()}
-                  </TableCell>
-                  {/* <TableCell className="border text-xs bg-yellow-200">
-                    {record.rate_currency || record.rates?.currency || 'EUR'}
-                  </TableCell> */}
-                  <TableCell className="border text-xs bg-yellow-200">
-                    {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
