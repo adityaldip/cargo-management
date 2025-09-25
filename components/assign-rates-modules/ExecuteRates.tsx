@@ -4,11 +4,13 @@ import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Play, Download, Filter, Loader2, RefreshCw, ChevronDown } from "lucide-react"
+import { Play, Download, Filter, Loader2, RefreshCw, ChevronDown, Eye } from "lucide-react"
 import { WarningBanner } from "@/components/ui/status-banner"
 import { useRateRulesData } from "./hooks"
 import { FilterPopup, FilterCondition, FilterField } from "@/components/ui/filter-popup"
+import { DisplayFieldsPopup } from "@/components/ui/display-fields-popup"
 import { usePageFilters } from "@/store/filter-store"
+import { useExecuteRatesColumnConfigStore, type ColumnConfig } from "@/store/execute-rates-column-config-store"
 import { supabase } from "@/lib/supabase"
 import { Pagination } from "@/components/ui/pagination"
 import { useToast } from "@/hooks/use-toast"
@@ -78,9 +80,71 @@ export function ExecuteRates() {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const { conditions: filterConditions, logic: filterLogic, hasActiveFilters, setFilters, clearFilters } = usePageFilters("execute-rates")
   
+  // Display fields state
+  const [isDisplayFieldsOpen, setIsDisplayFieldsOpen] = useState(false)
+  
+  // Column config store
+  const { columnConfigs, setColumnConfigs } = useExecuteRatesColumnConfigStore()
+  
   // Toast for notifications
   const { toast } = useToast()
   
+  // Get only visible columns in order
+  const visibleColumns = useMemo(() => 
+    columnConfigs
+      .filter(config => config.visible)
+      .sort((a, b) => a.order - b.order),
+    [columnConfigs]
+  )
+
+  // Calculate responsive column widths based on content
+  const getColumnWidth = (columnKey: string): string => {
+    const widthMap: Record<string, string> = {
+      // ID fields - narrow
+      'id': 'w-20',
+      'rec_id': 'w-20',
+      'des_no': 'w-16',
+      'rec_numb': 'w-16',
+      
+      // Date fields - medium
+      'inb_flight_date': 'w-28',
+      'outb_flight_date': 'w-28',
+      'created_at': 'w-24',
+      'updated_at': 'w-24',
+      'assigned_at': 'w-32',
+      
+      // Location fields - medium
+      'orig_oe': 'w-16',
+      'dest_oe': 'w-16',
+      
+      // Flight numbers - wider
+      'inb_flight_no': 'w-24',
+      'outb_flight_no': 'w-24',
+      
+      // Category fields - medium
+      'mail_cat': 'w-20',
+      'mail_class': 'w-20',
+      
+      // Numeric fields - medium
+      'total_kg': 'w-20',
+      'assigned_rate': 'w-20',
+      'rate_value': 'w-20',
+      
+      // Text fields - wider
+      'invoice': 'w-32',
+      'assigned_customer': 'w-40',
+      'customer_name': 'w-40',
+      'customer_name_number': 'w-40',
+      'rate_name': 'w-32',
+      'rate_currency': 'w-20',
+      
+      // Default width for unknown fields
+      'default': 'w-24'
+    }
+    
+    return widthMap[columnKey] || widthMap['default']
+  }
+
   // Define filter fields based on actual cargo_data columns
   const filterFields: FilterField[] = [
     { key: 'inb_flight_date', label: 'Inb. Flight Date', type: 'date' },
@@ -755,6 +819,10 @@ export function ExecuteRates() {
     setIsApplyingFilters(false)
   }
 
+  const handleApplyDisplayFields = (configs: ColumnConfig[]) => {
+    setColumnConfigs(configs)
+  }
+
   // Handle customer-product assignment updates
   const handleAssignmentUpdate = async (recordId: string, customerId: string, productId: string) => {
     setIsUpdatingAssignment(recordId)
@@ -1326,6 +1394,29 @@ export function ExecuteRates() {
                 />
               )}
             </div>
+            
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDisplayFieldsOpen(!isDisplayFieldsOpen)}
+                disabled={isApplyingFilters || isExporting}
+                className="border-gray-300 hover:bg-gray-50"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                Display Fields
+              </Button>
+              
+              {isDisplayFieldsOpen && (
+                <DisplayFieldsPopup
+                  isOpen={isDisplayFieldsOpen}
+                  onClose={() => setIsDisplayFieldsOpen(false)}
+                  onApply={handleApplyDisplayFields}
+                  columnConfigs={columnConfigs}
+                  title="Display Fields"
+                />
+              )}
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1482,31 +1573,21 @@ export function ExecuteRates() {
               }
             }}
           >
-            <div style={{ width: '2000px' }}>
-              <table className="border border-collapse w-full" style={{ width: '2000px', minWidth: '2000px' }}>
+            <div className="min-w-full">
+              <table className="border border-collapse w-full">
             <TableHeader>
               <TableRow>
-                <TableHead className="border">Inb.Flight Date</TableHead>
-                <TableHead className="border">Outb.Flight Date</TableHead>
-                <TableHead className="border">Rec. ID</TableHead>
-                <TableHead className="border">Des. No.</TableHead>
-                <TableHead className="border">Rec. Numb.</TableHead>
-                <TableHead className="border">Orig. OE</TableHead>
-                <TableHead className="border">Dest. OE</TableHead>
-                <TableHead className="border">Inb. Flight No.</TableHead>
-                <TableHead className="border">Outb. Flight No.</TableHead>
-                <TableHead className="border">Mail Cat.</TableHead>
-                <TableHead className="border">Mail Class</TableHead>
-                <TableHead className="border text-right">Total kg</TableHead>
-                <TableHead className="border">Invoice</TableHead>
-                <TableHead className="border bg-yellow-200">Contractee</TableHead>
-                <TableHead className="border bg-yellow-200">Rate Name</TableHead>
-                {/* <TableHead className="border bg-yellow-200">Base Rate</TableHead> */}
-                <TableHead className="border text-right bg-yellow-200">Rate Value</TableHead>
-                {/* <TableHead className="border bg-yellow-200">Currency</TableHead> */}
+                {visibleColumns.map((column) => (
+                  <TableHead 
+                    key={column.key}
+                    className={`border ${getColumnWidth(column.key)} ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                  >
+                    {column.label}
+                  </TableHead>
+                ))}
                 <TableHead 
                   key={`assigned-at-${orderBy}-${orderDirection}`}
-                  className="border bg-yellow-200 cursor-pointer hover:bg-yellow-300 transition-colors"
+                  className="border bg-yellow-200 cursor-pointer hover:bg-yellow-300 transition-colors w-32"
                   onClick={async () => {
                     console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
                     if (orderBy === 'assigned_at') {
@@ -1532,19 +1613,58 @@ export function ExecuteRates() {
             <TableBody>
               {cargoData.map((record, index) => (
                 <TableRow key={record.id || index}>
-                  <TableCell className="border">{record.inb_flight_date || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.outb_flight_date || 'N/A'}</TableCell>
-                  <TableCell className="border font-mono text-xs">{record.rec_id || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.des_no || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.rec_numb || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.orig_oe || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.dest_oe || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.inb_flight_no || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.outb_flight_no || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.mail_cat || 'N/A'}</TableCell>
-                  <TableCell className="border">{record.mail_class || 'N/A'}</TableCell>
-                  <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
-                  <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
+                  {visibleColumns.map((column) => (
+                    <TableCell 
+                      key={`cell-${index}-${column.key}`}
+                      className={`border ${getColumnWidth(column.key)} ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                    >
+                      {(() => {
+                        const fieldMapping: Record<string, string> = {
+                          'rec_id': 'recordId',
+                          'inb_flight_date': 'date', 
+                          'outb_flight_date': 'outbDate',
+                          'des_no': 'desNo',
+                          'rec_numb': 'recNumb',
+                          'orig_oe': 'origOE',
+                          'dest_oe': 'destOE',
+                          'inb_flight_no': 'inbFlightNo',
+                          'outb_flight_no': 'outbFlightNo',
+                          'mail_cat': 'mailCat',
+                          'mail_class': 'mailClass',
+                          'total_kg': 'totalKg',
+                          'invoice': 'invoiceExtend',
+                          'customer_name_number': 'customer',
+                          'assigned_customer': 'customer',
+                          'assigned_rate': 'totalEur',
+                          'rate_name': 'rate_name',
+                          'rate_value': 'rate_value',
+                          'rate_currency': 'rate_currency',
+                          'assigned_at': 'assigned_at'
+                        }
+                        
+                        const mappedKey = fieldMapping[column.key] || column.key
+                        let value = (record as any)[mappedKey] || (record as any)[column.key]
+                        
+                        if (value === undefined || value === null || value === '') {
+                          return 'N/A'
+                        }
+                        
+                        // Format numeric values
+                        if (column.key === 'total_kg' || column.key === 'assigned_rate' || column.key === 'rate_value') {
+                          return typeof value === 'number' ? value.toFixed(1) : String(value)
+                        }
+                        
+                        // Format date values
+                        if (column.key === 'inb_flight_date' || column.key === 'outb_flight_date' || column.key === 'processed_at' || column.key === 'created_at' || column.key === 'updated_at' || column.key === 'assigned_at') {
+                          if (typeof value === 'string' && value.includes('T')) {
+                            return new Date(value).toLocaleDateString()
+                          }
+                        }
+                        
+                        return String(value)
+                      })()}
+                    </TableCell>
+                  ))}
                   <TableCell className="border text-xs bg-yellow-200">
                     <Popover 
                       open={openCustomerSelects[record.id]} 

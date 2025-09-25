@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Play, ArrowLeft, Filter, RefreshCw, Download, ChevronDown } from "lucide-react"
+import { Loader2, Play, ArrowLeft, Filter, RefreshCw, Download, ChevronDown, Eye } from "lucide-react"
 import { WarningBanner } from "@/components/ui/status-banner"
 import { useCustomerRules } from "./hooks"
 import { FilterPopup } from "@/components/ui/filter-popup"
+import { DisplayFieldsPopup } from "@/components/ui/display-fields-popup"
 import { usePageFilters } from "@/store/filter-store"
+import { useExecuteRulesColumnConfigStore, type ColumnConfig } from "@/store/execute-rules-column-config-store"
 import { supabase, safeSupabaseOperation } from "@/lib/supabase"
 import { Pagination } from "@/components/ui/pagination"
 import { useToast } from "@/hooks/use-toast"
@@ -79,9 +81,66 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const { conditions: filterConditions, logic: filterLogic, hasActiveFilters, setFilters, clearFilters } = usePageFilters("execute-rules")
   
+  // Display fields state
+  const [isDisplayFieldsOpen, setIsDisplayFieldsOpen] = useState(false)
+  
+  // Column config store
+  const { columnConfigs, setColumnConfigs } = useExecuteRulesColumnConfigStore()
+  
   // Toast for notifications
   const { toast } = useToast()
   
+  // Get only visible columns in order
+  const visibleColumns = useMemo(() => 
+    columnConfigs
+      .filter(config => config.visible)
+      .sort((a, b) => a.order - b.order),
+    [columnConfigs]
+  )
+
+  // Calculate responsive column widths based on content
+  const getColumnWidth = (columnKey: string): string => {
+    const widthMap: Record<string, string> = {
+      // ID fields - narrow
+      'id': 'w-20',
+      'rec_id': 'w-20',
+      'des_no': 'w-16',
+      'rec_numb': 'w-16',
+      
+      // Date fields - medium
+      'inb_flight_date': 'w-28',
+      'outb_flight_date': 'w-28',
+      'created_at': 'w-24',
+      'updated_at': 'w-24',
+      
+      // Location fields - medium
+      'orig_oe': 'w-16',
+      'dest_oe': 'w-16',
+      
+      // Flight numbers - wider
+      'inb_flight_no': 'w-24',
+      'outb_flight_no': 'w-24',
+      
+      // Category fields - medium
+      'mail_cat': 'w-20',
+      'mail_class': 'w-20',
+      
+      // Numeric fields - medium
+      'total_kg': 'w-20',
+      'assigned_rate': 'w-20',
+      
+      // Text fields - wider
+      'invoice': 'w-32',
+      'contractee_product': 'w-40',
+      'assigned_at': 'w-32',
+      
+      // Default width for unknown fields
+      'default': 'w-24'
+    }
+    
+    return widthMap[columnKey] || widthMap['default']
+  }
+
   // Define filter fields based on actual cargo_data columns
   const filterFields: FilterField[] = [
     { key: 'inb_flight_date', label: 'Inb. Flight Date', type: 'date' },
@@ -711,6 +770,10 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
     setIsApplyingFilters(false)
   }
 
+  const handleApplyDisplayFields = (configs: ColumnConfig[]) => {
+    setColumnConfigs(configs)
+  }
+
   // Handle customer-product assignment updates
   const handleAssignmentUpdate = async (recordId: string, customerId: string, productId: string) => {
     setIsUpdatingAssignment(recordId)
@@ -1147,6 +1210,29 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   />
                 )}
               </div>
+              
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsDisplayFieldsOpen(!isDisplayFieldsOpen)}
+                  disabled={isApplyingFilters || isExporting}
+                  className="border-gray-300 hover:bg-gray-50"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Display Fields
+                </Button>
+                
+                {isDisplayFieldsOpen && (
+                  <DisplayFieldsPopup
+                    isOpen={isDisplayFieldsOpen}
+                    onClose={() => setIsDisplayFieldsOpen(false)}
+                    onApply={handleApplyDisplayFields}
+                    columnConfigs={columnConfigs}
+                    title="Display Fields"
+                  />
+                )}
+              </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -1301,157 +1387,191 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                 }
               }}
             >
-              <div style={{ width: '2000px' }}>
-                <Table className="border border-collapse">
+            <div style={{ width: '2000px' }}>
+              <Table className="border border-collapse w-full" style={{ width: '2000px', minWidth: '2000px' }}>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="border">Inb.Flight Date</TableHead>
-                      <TableHead className="border">Outb.Flight Date</TableHead>
-                      <TableHead className="border">Rec. ID</TableHead>
-                      <TableHead className="border">Des. No.</TableHead>
-                      <TableHead className="border">Rec. Numb.</TableHead>
-                      <TableHead className="border">Orig. OE</TableHead>
-                      <TableHead className="border">Dest. OE</TableHead>
-                      <TableHead className="border">Inb. Flight No.</TableHead>
-                      <TableHead className="border">Outb. Flight No.</TableHead>
-                      <TableHead className="border">Mail Cat.</TableHead>
-                      <TableHead className="border">Mail Class</TableHead>
-                      <TableHead className="border text-right">Total kg</TableHead>
-                      <TableHead className="border">Invoice</TableHead>
-                      <TableHead className="border bg-yellow-200">Contractee - Product</TableHead>
-                      <TableHead 
-                        key={`assigned-at-${orderBy}-${orderDirection}`}
-                        className="border bg-yellow-200 cursor-pointer hover:bg-yellow-300 transition-colors"
-                        onClick={async () => {
-                          console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
-                          if (orderBy === 'assigned_at') {
-                            // Toggle direction if already sorting by assigned_at
-                            const newDirection = orderDirection === 'desc' ? 'asc' : 'desc'
-                            console.log('🔄 Toggling direction to:', newDirection)
-                            setOrderDirection(newDirection)
-                            // Use the new direction directly instead of waiting for state update
-                            await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', newDirection)
-                          } else {
-                            // Set to assigned_at with default desc direction
-                            console.log('🔄 Setting to assigned_at with desc')
-                            setOrderBy('assigned_at')
-                            setOrderDirection('desc')
-                            await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', 'desc')
-                          }
-                        }}
-                      >
-                        Assigned At {orderBy === 'assigned_at' && (orderDirection === 'desc' ? '↓' : '↑')}
-                      </TableHead>
+                      {visibleColumns.map((column) => {
+                        console.log('🔍 Rendering column header:', column.key, column.label)
+                        return (
+                        <TableHead 
+                          key={column.key}
+                          className={`border ${getColumnWidth(column.key)} ${column.key === 'contractee_product' || column.key === 'assigned_at' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''} ${column.key === 'assigned_at' ? 'cursor-pointer hover:bg-yellow-300 transition-colors' : ''}`}
+                          onClick={column.key === 'assigned_at' ? async () => {
+                            console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
+                            if (orderBy === 'assigned_at') {
+                              // Toggle direction if already sorting by assigned_at
+                              const newDirection = orderDirection === 'desc' ? 'asc' : 'desc'
+                              console.log('🔄 Toggling direction to:', newDirection)
+                              setOrderDirection(newDirection)
+                              // Use the new direction directly instead of waiting for state update
+                              await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', newDirection)
+                            } else {
+                              // Set to assigned_at with default desc direction
+                              console.log('🔄 Setting to assigned_at with desc')
+                              setOrderBy('assigned_at')
+                              setOrderDirection('desc')
+                              await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', 'desc')
+                            }
+                          } : undefined}
+                        >
+                          {column.key === 'assigned_at' ? `${column.label} ${orderBy === 'assigned_at' && (orderDirection === 'desc' ? '↓' : '↑')}` : column.label}
+                        </TableHead>
+                        )
+                      })}
                     </TableRow>
                   </TableHeader>
                     <TableBody>
                       {cargoData.map((record, index) => (
                         <TableRow key={record.id || index}>
-                          <TableCell className="border">{record.inb_flight_date || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.outb_flight_date || 'N/A'}</TableCell>
-                          <TableCell className="border font-mono text-xs">{record.rec_id || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.des_no || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.rec_numb || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.orig_oe || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.dest_oe || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.inb_flight_no || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.outb_flight_no || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.mail_cat || 'N/A'}</TableCell>
-                          <TableCell className="border">{record.mail_class || 'N/A'}</TableCell>
-                          <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
-                          <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
-                          <TableCell className="border text-xs bg-yellow-200">
-                            <Popover 
-                              open={openCustomerSelects[record.id]} 
-                              onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [record.id]: open }))}
+                          {visibleColumns.map((column) => (
+                            <TableCell 
+                              key={`cell-${index}-${column.key}`}
+                              className={`border ${getColumnWidth(column.key)} ${column.key === 'contractee_product' || column.key === 'assigned_at' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
                             >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  aria-expanded={openCustomerSelects[record.id]}
-                                  className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
-                                  disabled={isUpdatingAssignment === record.id}
-                                >
-                                  <span className="truncate">
-                                    {(() => {
-                                      const customerId = customerAssignments[record.id] || record.assigned_customer
-                                      const productId = productAssignments[record.id] || record.customer_code_id
-                                      
-                                      if (customerId === 'unassigned' || !customerId) {
-                                        return "Unassigned"
-                                      }
-                                      
-                                      const customer = customers.find(c => c.id === customerId)
-                                      const code = customer?.codes.find(c => c.id === productId)
-                                      
-                                      if (customer && code) {
-                                        return `${customer.name} - ${code.product}`
-                                      } else if (customer) {
-                                        return `${customer.name} - No Product`
-                                      }
-                                      
-                                      return "Select customer-product..."
-                                    })()}
-                                  </span>
-                                  <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-80 p-0" side="bottom" align="start">
-                                <Command>
-                                  <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
-                                  <CommandEmpty>No combinations found.</CommandEmpty>
-                                  <CommandGroup className="max-h-64 overflow-auto">
-                                    <CommandItem
-                                      value="unassigned"
-                                      onSelect={() => {
-                                        handleAssignmentUpdate(record.id, 'unassigned', 'no-product')
-                                        setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
-                                      }}
-                                      className="text-xs"
+                              {(() => {
+                                const fieldMapping: Record<string, string> = {
+                                  'rec_id': 'recordId',
+                                  'inb_flight_date': 'date', 
+                                  'outb_flight_date': 'outbDate',
+                                  'des_no': 'desNo',
+                                  'rec_numb': 'recNumb',
+                                  'orig_oe': 'origOE',
+                                  'dest_oe': 'destOE',
+                                  'inb_flight_no': 'inbFlightNo',
+                                  'outb_flight_no': 'outbFlightNo',
+                                  'mail_cat': 'mailCat',
+                                  'mail_class': 'mailClass',
+                                  'total_kg': 'totalKg',
+                                  'invoice': 'invoiceExtend',
+                                  'assigned_rate': 'totalEur',
+                                  'contractee_product': 'contractee_product',
+                                  'assigned_at': 'assigned_at'
+                                }
+                                
+                                // Special handling for contractee_product column (interactive popover) - MUST BE FIRST
+                                if (column.key === 'contractee_product') {
+                                  console.log('🔍 Rendering contractee_product column for record:', record.id)
+                                  return (
+                                    <Popover 
+                                      open={openCustomerSelects[record.id]} 
+                                      onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [record.id]: open }))}
                                     >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-3 w-3",
-                                          (customerAssignments[record.id] || record.assigned_customer) === 'unassigned' || !record.assigned_customer ? "opacity-100" : "opacity-0"
-                                        )}
-                                      />
-                                      Unassigned
-                                    </CommandItem>
-                                    {memoizedCustomers.map((customer) => {
-                                      const activeCodes = customer.codes.filter(code => code.is_active)
-                                      return activeCodes.map((code) => (
-                                        <CommandItem
-                                          key={`${customer.id}-${code.id}`}
-                                          value={`${customer.name} ${code.product}`}
-                                          onSelect={() => {
-                                            handleAssignmentUpdate(record.id, customer.id, code.id)
-                                            setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
-                                          }}
-                                          className="text-xs"
+                                      <PopoverTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          role="combobox"
+                                          aria-expanded={openCustomerSelects[record.id]}
+                                          className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                                          disabled={isUpdatingAssignment === record.id}
                                         >
-                                          <Check
-                                            className={cn(
-                                              "mr-2 h-3 w-3",
-                                              (customerAssignments[record.id] || record.assigned_customer) === customer.id && 
-                                              (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
-                                            )}
-                                          />
-                                          <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
-                                            <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
-                                            <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
-                                          </div>
-                                        </CommandItem>
-                                      ))
-                                    })}
-                                  </CommandGroup>
-                                </Command>
-                              </PopoverContent>
-                            </Popover>
-                          </TableCell>
-                          <TableCell className="border text-xs bg-yellow-200">
-                            {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
-                          </TableCell>
+                                          <span className="truncate">
+                                            {(() => {
+                                              const customerId = customerAssignments[record.id] || record.assigned_customer
+                                              const productId = productAssignments[record.id] || record.customer_code_id
+                                              
+                                              if (customerId === 'unassigned' || !customerId) {
+                                                return "Unassigned"
+                                              }
+                                              
+                                              const customer = customers.find(c => c.id === customerId)
+                                              const code = customer?.codes.find(c => c.id === productId)
+                                              
+                                              if (customer && code) {
+                                                return `${customer.name} - ${code.product}`
+                                              } else if (customer) {
+                                                return `${customer.name} - No Product`
+                                              }
+                                              
+                                              return "Select customer-product..."
+                                            })()}
+                                          </span>
+                                          <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                                        <Command>
+                                          <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
+                                          <CommandEmpty>No combinations found.</CommandEmpty>
+                                          <CommandGroup className="max-h-64 overflow-auto">
+                                            <CommandItem
+                                              value="unassigned"
+                                              onSelect={() => {
+                                                handleAssignmentUpdate(record.id, 'unassigned', 'no-product')
+                                                setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                                              }}
+                                              className="text-xs"
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  "mr-2 h-3 w-3",
+                                                  (customerAssignments[record.id] || record.assigned_customer) === 'unassigned' || !record.assigned_customer ? "opacity-100" : "opacity-0"
+                                                )}
+                                              />
+                                              Unassigned
+                                            </CommandItem>
+                                            {memoizedCustomers.map((customer) => {
+                                              const activeCodes = customer.codes.filter(code => code.is_active)
+                                              return activeCodes.map((code) => (
+                                                <CommandItem
+                                                  key={`${customer.id}-${code.id}`}
+                                                  value={`${customer.name} ${code.product}`}
+                                                  onSelect={() => {
+                                                    handleAssignmentUpdate(record.id, customer.id, code.id)
+                                                    setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                                                  }}
+                                                  className="text-xs"
+                                                >
+                                                  <Check
+                                                    className={cn(
+                                                      "mr-2 h-3 w-3",
+                                                      (customerAssignments[record.id] || record.assigned_customer) === customer.id && 
+                                                      (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
+                                                    )}
+                                                  />
+                                                  <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+                                                    <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
+                                                    <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
+                                                  </div>
+                                                </CommandItem>
+                                              ))
+                                            })}
+                                          </CommandGroup>
+                                        </Command>
+                                      </PopoverContent>
+                                    </Popover>
+                                  )
+                                }
+                                
+                                // Regular field processing for other columns
+                                const mappedKey = fieldMapping[column.key] || column.key
+                                let value = (record as any)[mappedKey] || (record as any)[column.key]
+                                
+                                if (value === undefined || value === null || value === '') {
+                                  return 'N/A'
+                                }
+                                
+                                // Format numeric values
+                                if (column.key === 'total_kg' || column.key === 'assigned_rate') {
+                                  return typeof value === 'number' ? value.toFixed(1) : String(value)
+                                }
+                                
+                                // Format date values
+                                if (column.key === 'inb_flight_date' || column.key === 'outb_flight_date' || column.key === 'processed_at' || column.key === 'created_at' || column.key === 'updated_at' || column.key === 'assigned_at') {
+                                  if (typeof value === 'string' && value.includes('T')) {
+                                    return new Date(value).toLocaleDateString()
+                                  }
+                                }
+                                
+                                // Special handling for assigned_at column
+                                if (column.key === 'assigned_at') {
+                                  return record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'
+                                }
+                                
+                                return String(value)
+                              })()}
+                            </TableCell>
+                          ))}
                       </TableRow>
                       ))}
                   </TableBody>
