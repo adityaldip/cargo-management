@@ -62,6 +62,10 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
   const [productAssignments, setProductAssignments] = useState<Record<string, string>>({})
   const [isUpdatingAssignment, setIsUpdatingAssignment] = useState<string | null>(null)
   
+  // Ordering state
+  const [orderBy, setOrderBy] = useState<'id' | 'assigned_at' | 'created_at'>('assigned_at')
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc')
+  
   // Popover state for customer-product selects
   const [openCustomerSelects, setOpenCustomerSelects] = useState<Record<string, boolean>>({})
   const [openProductSelects, setOpenProductSelects] = useState<Record<string, boolean>>({})
@@ -145,6 +149,266 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
     }
   }
 
+
+  // Fetch cargo data with specific ordering parameters
+  const fetchCargoDataWithOrder = async (page: number, limit: number, orderField: 'id' | 'assigned_at' | 'created_at', orderDir: 'asc' | 'desc', isRefresh = false, customFilters?: FilterCondition[], customLogic?: "AND" | "OR") => {
+    try {
+      console.log(`🔄 fetchCargoDataWithOrder called: page=${page}, limit=${limit}, order=${orderField}, direction=${orderDir}, isRefresh=${isRefresh}`)
+      
+      if (isRefresh) {
+        setRefreshing(true)
+      } else {
+        setLoading(true)
+      }
+      setError(null)
+
+      // Use custom filters if provided, otherwise use current state
+      const activeFilters = customFilters || filterConditions
+      const activeLogic = customLogic || filterLogic
+      const hasFilters = customFilters ? customFilters.length > 0 : hasActiveFilters
+      
+      console.log('🔍 Using filters:', activeFilters, 'logic:', activeLogic)
+
+      // Build base query for assigned customers
+      console.log('🔍 Building base queries for assigned customers...')
+      let countQuery = supabase
+        .from('cargo_data')
+        .select('*', { count: 'exact', head: true })
+        .not('assigned_customer', 'is', null)
+
+      let dataQuery = supabase
+        .from('cargo_data')
+        .select('*')
+        .not('assigned_customer', 'is', null)
+      
+      console.log('✅ Base queries built successfully')
+
+      // Apply filters if any
+      if (hasFilters && activeFilters.length > 0) {
+        console.log('🔍 Applying filters:', activeFilters)
+        
+        activeFilters.forEach((condition, index) => {
+          const { field, operator, value } = condition
+          
+          console.log(`🔍 Applying filter ${index + 1}: ${field} ${operator} "${value}"`)
+          
+          if (value && value.trim() !== '') {
+            try {
+              switch (operator) {
+                case 'equals':
+                  countQuery = countQuery.eq(field, value)
+                  dataQuery = dataQuery.eq(field, value)
+                  break
+                case 'contains':
+                  countQuery = countQuery.ilike(field, `%${value}%`)
+                  dataQuery = dataQuery.ilike(field, `%${value}%`)
+                  break
+                case 'starts_with':
+                  countQuery = countQuery.ilike(field, `${value}%`)
+                  dataQuery = dataQuery.ilike(field, `${value}%`)
+                  break
+                case 'ends_with':
+                  countQuery = countQuery.ilike(field, `%${value}`)
+                  dataQuery = dataQuery.ilike(field, `%${value}`)
+                  break
+                case 'greater_than':
+                  const numValue = parseFloat(value)
+                  if (!isNaN(numValue)) {
+                    countQuery = countQuery.gt(field, numValue)
+                    dataQuery = dataQuery.gt(field, numValue)
+                  }
+                  break
+                case 'less_than':
+                  const numValue2 = parseFloat(value)
+                  if (!isNaN(numValue2)) {
+                    countQuery = countQuery.lt(field, numValue2)
+                    dataQuery = dataQuery.lt(field, numValue2)
+                  }
+                  break
+                case 'not_empty':
+                  countQuery = countQuery.not(field, 'is', null).neq(field, '')
+                  dataQuery = dataQuery.not(field, 'is', null).neq(field, '')
+                  break
+                case 'is_empty':
+                  countQuery = countQuery.or(`${field}.is.null,${field}.eq.`)
+                  dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
+                  break
+              }
+              console.log(`✅ Filter ${index + 1} applied successfully`)
+            } catch (filterError) {
+              console.error(`❌ Error applying filter ${index + 1}:`, filterError)
+              throw new Error(`Failed to apply filter: ${field} ${operator} "${value}". Error: ${filterError instanceof Error ? filterError.message : 'Unknown error'}`)
+            }
+          }
+        })
+        console.log('✅ All filters applied successfully')
+      }
+
+      // Get total count with filters applied
+      console.log('🔍 Executing count query...')
+      const { count: totalCount, error: countError } = await countQuery
+
+      if (countError) {
+        console.error('❌ Count query error:', countError)
+        console.error('❌ Count query details:', {
+          message: countError.message,
+          details: countError.details,
+          hint: countError.hint,
+          code: countError.code
+        })
+        
+        // Try a simpler count query as fallback
+        console.log('🔄 Attempting fallback count query...')
+        const { count: fallbackCount, error: fallbackError } = await supabase
+          .from('cargo_data')
+          .select('*', { count: 'exact', head: true })
+          .not('assigned_customer', 'is', null)
+        
+        if (fallbackError) {
+          console.error('❌ Fallback count query also failed:', fallbackError)
+          throw new Error(`Failed to get count: ${countError.message}. Fallback also failed: ${fallbackError.message}`)
+        }
+        
+        console.log('✅ Fallback count query succeeded:', fallbackCount)
+        const total = fallbackCount || 0
+        const totalPages = Math.ceil(total / limit)
+        const hasNextPage = page < totalPages
+        const hasPrevPage = page > 1
+
+        // Fetch paginated data with filters applied (but without count)
+        const { data: cargo, error: cargoError } = await dataQuery
+          .order(orderField, { ascending: orderDir === 'asc' })
+          .range((page - 1) * limit, page * limit - 1)
+
+        if (cargoError) {
+          console.error('❌ Data query also failed:', cargoError)
+          throw new Error(`Failed to fetch cargo data: ${cargoError.message}`)
+        }
+
+        // Set the data and pagination info
+        setCargoData(cargo || [])
+        setTotalRecords(total)
+        setTotalPages(totalPages)
+        setHasNextPage(hasNextPage)
+        setHasPrevPage(hasPrevPage)
+        
+        console.log(`✅ fetchCargoDataWithOrder completed with fallback: ${cargo?.length || 0} records, total=${total}, page=${page}`)
+        return
+      }
+
+      // Calculate pagination
+      const total = totalCount || 0
+      const totalPages = Math.ceil(total / limit)
+      const hasNextPage = page < totalPages
+      const hasPrevPage = page > 1
+
+      // Fetch paginated data with filters applied
+      console.log('🔍 Ordering by:', orderField, 'direction:', orderDir, 'ascending:', orderDir === 'asc')
+      const { data: cargo, error: cargoError } = await dataQuery
+        .order(orderField, { ascending: orderDir === 'asc' })
+        .range((page - 1) * limit, page * limit - 1)
+
+      if (cargoError) {
+        throw new Error(`Failed to fetch cargo data: ${cargoError.message}`)
+      }
+
+      // Fetch customer data to resolve customer names and codes
+      let enrichedCargo: any[] = cargo || []
+      if (cargo && cargo.length > 0) {
+        // Get unique customer IDs and customer code IDs from the cargo data
+        const customerIds = [...new Set(cargo.map((record: any) => record.assigned_customer).filter(Boolean))]
+        const customerCodeIds = [...new Set(cargo.map((record: any) => record.customer_code_id).filter(Boolean))]
+        
+        console.log('🔍 Customer IDs to lookup:', customerIds)
+        console.log('🔍 Customer Code IDs to lookup:', customerCodeIds)
+        
+        if (customerIds.length > 0 || customerCodeIds.length > 0) {
+          try {
+            // Fetch customers by ID
+            let customersData: any[] = []
+            if (customerIds.length > 0) {
+              console.log('🔍 Customer UUIDs to lookup:', customerIds)
+              
+              const { data: customers, error: customersError } = await supabase
+                .from('customers')
+                .select('id, name, code')
+                .in('id', customerIds)
+              
+              if (customersError) {
+                console.error('Error fetching customers by UUID:', customersError)
+              } else {
+                customersData = customers || []
+                console.log('✅ Found customers by UUID:', customersData.length)
+              }
+            }
+
+            // Fetch customer codes by ID
+            let customerCodesData: any[] = []
+            if (customerCodeIds.length > 0) {
+              console.log('🔍 Customer Code UUIDs to lookup:', customerCodeIds)
+              
+              const { data: customerCodes, error: customerCodesError } = await supabase
+                .from('customer_codes')
+                .select('id, code, product, customer_id, customers!inner(id, name)')
+                .in('id', customerCodeIds)
+              
+              if (customerCodesError) {
+                console.error('Error fetching customer codes by UUID:', customerCodesError)
+              } else {
+                customerCodesData = customerCodes || []
+                console.log('✅ Found customer codes by UUID:', customerCodesData.length)
+              }
+            }
+            
+            // Merge customer and customer code data with cargo data
+            enrichedCargo = cargo.map((record: any) => {
+              const customer = customersData?.find((c: any) => c.id === record.assigned_customer)
+              const customerCode = customerCodesData?.find((cc: any) => cc.id === record.customer_code_id)
+              
+              return {
+                ...record,
+                customers: customer || null,
+                customer_codes: customerCode || null
+              }
+            })
+            
+          } catch (customerFetchError) {
+            console.error('Error in customer fetch operation:', customerFetchError)
+            // Continue with original data if customer fetch fails
+            enrichedCargo = cargo
+          }
+        }
+      }
+
+      setCargoData(enrichedCargo)
+      setTotalRecords(total)
+      setTotalPages(totalPages)
+      setHasNextPage(hasNextPage)
+      setHasPrevPage(hasPrevPage)
+      
+      console.log(`✅ fetchCargoDataWithOrder completed: ${cargo?.length || 0} records, total=${total}, page=${page}`)
+    } catch (err) {
+      console.error('❌ Error fetching cargo data:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch cargo data'
+      console.error('❌ Full error details:', {
+        message: errorMessage,
+        stack: err instanceof Error ? err.stack : undefined,
+        name: err instanceof Error ? err.name : undefined
+      })
+      setError(errorMessage)
+      
+      // Show toast notification for better user feedback
+      toast({
+        title: "Data Loading Failed ❌",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 5000,
+      })
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
 
   // Fetch cargo data from Supabase - only assigned customers with server-side pagination
   const fetchCargoData = async (page: number = currentPage, limit: number = recordsPerPage, isRefresh = false, customFilters?: FilterCondition[], customLogic?: "AND" | "OR") => {
@@ -274,7 +538,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
 
         // Fetch paginated data with filters applied (but without count)
         const { data: cargo, error: cargoError } = await dataQuery
-          .order('created_at', { ascending: false })
+          .order(orderBy, { ascending: orderDirection === 'asc' })
           .range((page - 1) * limit, page * limit - 1)
 
         if (cargoError) {
@@ -300,8 +564,9 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
       const hasPrevPage = page > 1
 
       // Fetch paginated data with filters applied
+      console.log('🔍 Ordering by:', orderBy, 'direction:', orderDirection, 'ascending:', orderDirection === 'asc')
       const { data: cargo, error: cargoError } = await dataQuery
-        .order('created_at', { ascending: false })
+        .order(orderBy, { ascending: orderDirection === 'asc' })
         .range((page - 1) * limit, page * limit - 1)
 
       if (cargoError) {
@@ -412,6 +677,11 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
     fetchCargoData()
   }, [])
 
+  // Force re-render when ordering changes to update visual indicators
+  useEffect(() => {
+    console.log('🔄 Ordering state changed:', orderBy, orderDirection)
+  }, [orderBy, orderDirection])
+
   // Note: Filter reloading is now handled directly in filter handlers
 
   // Filter handlers
@@ -470,13 +740,14 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
       setProductAssignments(prev => ({ ...prev, [recordId]: productId }))
       
       // Update the cargo data in place to avoid reordering
+      // Keep the original assigned_at to maintain the current table order
       setCargoData(prev => prev.map(record => 
         record.id === recordId 
           ? { 
               ...record, 
               assigned_customer: customerId === 'unassigned' ? undefined : customerId,
-              customer_code_id: productId === 'no-product' ? undefined : productId,
-              assigned_at: new Date().toISOString()
+              customer_code_id: productId === 'no-product' ? undefined : productId
+              // Keep original assigned_at to maintain order
             } 
           : record
       ))
@@ -577,7 +848,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         
         // Fetch paginated data for this batch
         const { data: batchData, error: batchError } = await dataQuery
-          .order('created_at', { ascending: false })
+          .order(orderBy, { ascending: orderDirection === 'asc' })
           .range((currentPage - 1) * batchSize, currentPage * batchSize - 1)
         
         if (batchError) {
@@ -823,8 +1094,10 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                 size="sm"
                 onClick={async () => {
                   console.log('🔄 Refresh button clicked')
+                  console.log('🔍 Current order:', orderBy, orderDirection)
                   try {
                     await fetchCustomers()
+                    // Force refresh with current ordering state
                     await fetchCargoData(currentPage, recordsPerPage, true)
                     console.log('✅ Refresh completed successfully')
                   } catch (error) {
@@ -839,43 +1112,6 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   <RefreshCw className="w-4 h-4 mr-2" />
                 )}
                 Refresh
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  console.log('🧪 Testing connection...')
-                  try {
-                    const response = await fetch('/api/cargo-data/test-connection')
-                    const result = await response.json()
-                    console.log('🧪 Connection test result:', result)
-                    if (result.success) {
-                      toast({
-                        title: "Connection Test Passed ✅",
-                        description: `Total records: ${result.totalRecords}, Assigned: ${result.assignedRecords}`,
-                        duration: 3000,
-                      })
-                    } else {
-                      toast({
-                        title: "Connection Test Failed ❌",
-                        description: result.error,
-                        variant: "destructive",
-                        duration: 5000,
-                      })
-                    }
-                  } catch (error) {
-                    console.error('❌ Connection test failed:', error)
-                    toast({
-                      title: "Connection Test Failed ❌",
-                      description: error instanceof Error ? error.message : 'Unknown error',
-                      variant: "destructive",
-                      duration: 5000,
-                    })
-                  }
-                }}
-                disabled={refreshing}
-              >
-                Test Connection
               </Button>
               <div className="relative">
                 <Button
@@ -1058,7 +1294,29 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   <TableHead className="border text-right">Total kg</TableHead>
                   <TableHead className="border">Invoice</TableHead>
                   <TableHead className="border bg-yellow-200">Contractee - Product</TableHead>
-                  <TableHead className="border bg-yellow-200">Assigned At</TableHead>
+                  <TableHead 
+                    key={`assigned-at-${orderBy}-${orderDirection}`}
+                    className="border bg-yellow-200 cursor-pointer hover:bg-yellow-300 transition-colors"
+                    onClick={async () => {
+                      console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
+                      if (orderBy === 'assigned_at') {
+                        // Toggle direction if already sorting by assigned_at
+                        const newDirection = orderDirection === 'desc' ? 'asc' : 'desc'
+                        console.log('🔄 Toggling direction to:', newDirection)
+                        setOrderDirection(newDirection)
+                        // Use the new direction directly instead of waiting for state update
+                        await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', newDirection)
+                      } else {
+                        // Set to assigned_at with default desc direction
+                        console.log('🔄 Setting to assigned_at with desc')
+                        setOrderBy('assigned_at')
+                        setOrderDirection('desc')
+                        await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', 'desc')
+                      }
+                    }}
+                  >
+                    Assigned At {orderBy === 'assigned_at' && (orderDirection === 'desc' ? '↓' : '↑')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
                 <TableBody>
@@ -1154,9 +1412,9 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                                           (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
                                         )}
                                       />
-                                      <div className="flex items-center justify-between min-w-0 flex-1">
-                                        <span className="font-medium text-sm">{customer.name}</span>
-                                        <span className="text-gray-500 text-xs ml-2">{code.product}</span>
+                                      <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+                                        <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
+                                        <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
                                       </div>
                                     </CommandItem>
                                   ))
@@ -1365,9 +1623,9 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                                             (productAssignments[row.id] || row.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
                                           )}
                                         />
-                                        <div className="flex items-center justify-between min-w-0 flex-1">
-                                          <span className="font-medium text-sm">{customer.name}</span>
-                                          <span className="text-gray-500 text-xs ml-2">{code.product}</span>
+                                        <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+                                          <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
+                                          <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
                                         </div>
                                       </CommandItem>
                                     ))
