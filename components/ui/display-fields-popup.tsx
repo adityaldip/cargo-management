@@ -88,10 +88,6 @@ export function DisplayFieldsPopup({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 border border-gray-400"></div>
-            <div className="w-3 h-3 border border-gray-400"></div>
-          </div>
           <span className="text-sm font-medium text-gray-900">{title}</span>
         </div>
         <div className="flex items-center gap-1">

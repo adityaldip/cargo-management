@@ -236,6 +236,50 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
     [columnConfigs]
   )
 
+  // Calculate responsive column widths based on content
+  const getColumnWidth = (columnKey: string): string => {
+    const widthMap: Record<string, string> = {
+      // ID fields - narrow
+      'id': 'w-20',
+      'rec_id': 'w-20',
+      'des_no': 'w-16',
+      'rec_numb': 'w-16',
+      
+      // Date fields - medium
+      'inb_flight_date': 'w-28',
+      'outb_flight_date': 'w-28',
+      'created_at': 'w-24',
+      'updated_at': 'w-24',
+      
+      // Location fields - medium
+      'orig_oe': 'w-16',
+      'dest_oe': 'w-16',
+      
+      // Flight numbers - wider
+      'inb_flight_no': 'w-24',
+      'outb_flight_no': 'w-24',
+      
+      // Category fields - medium
+      'mail_cat': 'w-20',
+      'mail_class': 'w-20',
+      
+      // Numeric fields - medium
+      'total_kg': 'w-20',
+      'assigned_rate': 'w-20',
+      
+      // Text fields - wider
+      'invoice': 'w-32',
+      'assigned_customer': 'w-40',
+      'customer_name': 'w-40',
+      'customer_name_number': 'w-40',
+      
+      // Default width for unknown fields
+      'default': 'w-24'
+    }
+    
+    return widthMap[columnKey] || widthMap['default']
+  }
+
   // Calculate pagination for server-side data
   const startIndex = (currentPage - 1) * recordsPerPage
   const endIndex = startIndex + sampleExcelData.length // Use actual data length from server
@@ -1044,7 +1088,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 }
               }}
             >
-              <div style={{ width: '2000px', height: '20px' }}></div>
+              <div className="min-w-full h-5"></div>
             </div>
             {/* Main table - wrapper2 */}
             <div 
@@ -1057,11 +1101,11 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 }
               }}
             >
-              <div style={{ width: '2000px' }}>
+              <div className="min-w-full">
                 <Table className="border border-collapse border-radius-lg">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="border text-center" style={{ padding: "2px" }}>
+                  <TableHead className="border text-center w-12" style={{ padding: "2px" }}>
                       <Checkbox
                         checked={selectedRows.size > 0 && selectedRows.size === currentRecords.length}
                         onCheckedChange={handleSelectAll}
@@ -1073,7 +1117,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                   {visibleColumns.map((column) => (
                     <TableHead 
                       key={column.key}
-                      className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                      className={`border ${getColumnWidth(column.key)} ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
                     >
                       {column.label}
                     </TableHead>
@@ -1093,7 +1137,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 ) : (
                   currentRecords.map((record, index) => (
                     <TableRow key={`row-${startIndex + index}-${record.id || 'no-id'}`}>
-                      <TableCell className="border text-center" style={{ padding: "2px" }}>
+                      <TableCell className="border text-center w-12" style={{ padding: "2px" }}>
                         <Checkbox
                           checked={selectedRows.has(record.id)}
                           onCheckedChange={(checked) => handleSelectRow(record.id, checked as boolean)}
@@ -1101,7 +1145,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                           className="h-4 w-4 border-2 border-gray-300 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 mx-auto block"
                         />
                       </TableCell>
-                      <TableCell className="border text-center">
+                      <TableCell className="border text-center w-16">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1128,7 +1172,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                       {visibleColumns.map((column) => (
                         <TableCell 
                           key={`cell-${startIndex + index}-${column.key}`}
-                          className={`border ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
+                          className={`border ${getColumnWidth(column.key)} ${column.key === 'assigned_customer' || column.key === 'assigned_rate' ? 'bg-yellow-200' : ''} ${column.key === 'rec_id' || column.key === 'id' ? 'font-mono text-xs' : ''} ${column.key === 'total_kg' || column.key === 'assigned_rate' ? 'text-right' : ''}`}
                         >
                           {formatCellValue(record, column.key)}
                         </TableCell>
