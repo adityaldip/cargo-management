@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -14,6 +14,10 @@ import { Pagination } from "@/components/ui/pagination"
 import { useToast } from "@/hooks/use-toast"
 import { downloadFile, downloadXLSFile } from "@/lib/export-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export function ExecuteRates() {
   // Data fetching state
@@ -40,6 +44,35 @@ export function ExecuteRates() {
   const [exportProgress, setExportProgress] = useState(0)
   const [exportCurrentBatch, setExportCurrentBatch] = useState(0)
   const [exportTotalBatches, setExportTotalBatches] = useState(0)
+  
+  // Customer assignment state
+  const [customers, setCustomers] = useState<Array<{id: string, name: string, code: string, codes: {id: string, code: string, product: string, is_active: boolean}[]}>>([])
+  const [customerAssignments, setCustomerAssignments] = useState<Record<string, string>>({})
+  const [productAssignments, setProductAssignments] = useState<Record<string, string>>({})
+  const [isUpdatingAssignment, setIsUpdatingAssignment] = useState<string | null>(null)
+  
+  // Rate assignment state
+  const [rates, setRates] = useState<Array<{id: string, name: string, description: string, rate_type: string, base_rate: number, currency: string, multiplier: number}>>([])
+  const [rateAssignments, setRateAssignments] = useState<Record<string, string>>({})
+  const [isUpdatingRate, setIsUpdatingRate] = useState<string | null>(null)
+  
+  // Popover state for customer-product selects
+  const [openCustomerSelects, setOpenCustomerSelects] = useState<Record<string, boolean>>({})
+  const [openRateSelects, setOpenRateSelects] = useState<Record<string, boolean>>({})
+  
+  // Ordering state
+  const [orderBy, setOrderBy] = useState<'id' | 'assigned_at' | 'created_at'>('assigned_at')
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc')
+  
+  // Memoized customers for better performance
+  const memoizedCustomers = useMemo(() => {
+    return customers.sort((a, b) => a.name.localeCompare(b.name))
+  }, [customers])
+  
+  // Memoized rates for better performance
+  const memoizedRates = useMemo(() => {
+    return rates.sort((a, b) => a.name.localeCompare(b.name))
+  }, [rates])
   
   // Filter state - now persistent
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -167,7 +200,7 @@ export function ExecuteRates() {
 
       // Fetch paginated data with filters applied
       const { data: cargo, error: cargoError } = await dataQuery
-        .order('created_at', { ascending: false })
+        .order(orderBy, { ascending: orderDirection === 'asc' })
         .range((page - 1) * limit, page * limit - 1)
 
       if (cargoError) {
@@ -275,10 +308,298 @@ export function ExecuteRates() {
     }
   }
 
+  // Fetch customers from Supabase
+  const fetchCustomers = async () => {
+    try {
+      console.log('🔍 Fetching customers from Supabase...')
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('id, name, code')
+        .eq('is_active', true)
+        .order('name')
+
+      if (customersError) {
+        console.error('❌ Error fetching customers:', customersError)
+        return
+      }
+
+      if (!customersData || customersData.length === 0) {
+        setCustomers([])
+        return
+      }
+
+      // Get customer IDs for fetching codes
+      const customerIds = customersData.map((c: any) => c.id)
+      
+      // Get all active codes for these customers
+      const { data: codesData, error: codesError } = await supabase
+        .from('customer_codes')
+        .select('id, customer_id, code, product, is_active')
+        .in('customer_id', customerIds)
+        .eq('is_active', true)
+        .order('code')
+      
+      if (codesError) {
+        console.error('❌ Error loading customer codes:', codesError)
+        return
+      }
+
+      // Combine customers with their codes
+      const customersWithCodes = customersData.map((customer: any) => ({
+        ...customer,
+        codes: (codesData || []).filter((code: any) => code.customer_id === customer.id)
+      }))
+      
+      console.log('✅ Successfully fetched customers with codes:', customersWithCodes?.length || 0)
+      setCustomers(customersWithCodes)
+    } catch (err) {
+      console.error('❌ Error in fetchCustomers:', err)
+    }
+  }
+
+  // Fetch rates from Supabase
+  const fetchRates = async () => {
+    try {
+      console.log('🔍 Fetching rates from Supabase...')
+      const { data: ratesData, error: ratesError } = await supabase
+        .from('rates')
+        .select('id, name, description, rate_type, base_rate, currency, multiplier')
+        .eq('is_active', true)
+        .order('name')
+
+      if (ratesError) {
+        console.error('❌ Error fetching rates:', ratesError)
+        return
+      }
+
+      if (!ratesData || ratesData.length === 0) {
+        setRates([])
+        return
+      }
+      
+      console.log('✅ Successfully fetched rates:', ratesData?.length || 0)
+      setRates(ratesData)
+    } catch (err) {
+      console.error('❌ Error in fetchRates:', err)
+    }
+  }
+
+  // Fetch cargo data with specific ordering parameters
+  const fetchCargoDataWithOrder = async (page: number, limit: number, orderField: 'id' | 'assigned_at' | 'created_at', orderDir: 'asc' | 'desc', isRefresh = false, customFilters?: FilterCondition[], customLogic?: "AND" | "OR") => {
+    try {
+      console.log(`🔄 fetchCargoDataWithOrder called: page=${page}, limit=${limit}, order=${orderField}, direction=${orderDir}, isRefresh=${isRefresh}`)
+      
+      if (isRefresh) {
+        setRefreshing(true)
+      } else {
+        setLoading(true)
+      }
+      setError(null)
+
+      // Use custom filters if provided, otherwise use current state
+      const activeFilters = customFilters || filterConditions
+      const activeLogic = customLogic || filterLogic
+      const hasFilters = customFilters ? customFilters.length > 0 : hasActiveFilters
+      
+      console.log('🔍 Using filters:', activeFilters, 'logic:', activeLogic)
+
+      // Build base query for assigned rates
+      let countQuery = supabase
+        .from('cargo_data')
+        .select('*', { count: 'exact', head: true })
+        .not('rate_id', 'is', null)
+
+      let dataQuery = supabase
+        .from('cargo_data')
+        .select('*')
+        .not('rate_id', 'is', null)
+
+      // Apply filters if any
+      if (hasFilters && activeFilters.length > 0) {
+        console.log('🔍 Applying filters:', activeFilters)
+        
+        activeFilters.forEach((condition, index) => {
+          const { field, operator, value } = condition
+          
+          if (value && value.trim() !== '') {
+            switch (operator) {
+              case 'equals':
+                countQuery = countQuery.eq(field, value)
+                dataQuery = dataQuery.eq(field, value)
+                break
+              case 'contains':
+                countQuery = countQuery.ilike(field, `%${value}%`)
+                dataQuery = dataQuery.ilike(field, `%${value}%`)
+                break
+              case 'starts_with':
+                countQuery = countQuery.ilike(field, `${value}%`)
+                dataQuery = dataQuery.ilike(field, `${value}%`)
+                break
+              case 'ends_with':
+                countQuery = countQuery.ilike(field, `%${value}`)
+                dataQuery = dataQuery.ilike(field, `%${value}`)
+                break
+              case 'greater_than':
+                const numValue = parseFloat(value)
+                if (!isNaN(numValue)) {
+                  countQuery = countQuery.gt(field, numValue)
+                  dataQuery = dataQuery.gt(field, numValue)
+                }
+                break
+              case 'less_than':
+                const numValue2 = parseFloat(value)
+                if (!isNaN(numValue2)) {
+                  countQuery = countQuery.lt(field, numValue2)
+                  dataQuery = dataQuery.lt(field, numValue2)
+                }
+                break
+              case 'not_empty':
+                countQuery = countQuery.not(field, 'is', null).neq(field, '')
+                dataQuery = dataQuery.not(field, 'is', null).neq(field, '')
+                break
+              case 'is_empty':
+                countQuery = countQuery.or(`${field}.is.null,${field}.eq.`)
+                dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
+                break
+            }
+          }
+        })
+      }
+
+      // Get total count with filters applied
+      const { count: totalCount, error: countError } = await countQuery
+
+      if (countError) {
+        throw new Error(`Failed to get count: ${countError.message}`)
+      }
+
+      // Calculate pagination
+      const total = totalCount || 0
+      const totalPages = Math.ceil(total / limit)
+      const hasNextPage = page < totalPages
+      const hasPrevPage = page > 1
+
+      // Fetch paginated data with filters applied
+      const { data: cargo, error: cargoError } = await dataQuery
+        .order(orderField, { ascending: orderDir === 'asc' })
+        .range((page - 1) * limit, page * limit - 1)
+
+      if (cargoError) {
+        throw new Error(`Failed to fetch cargo data: ${cargoError.message}`)
+      }
+
+      // Fetch rate data and customer data to resolve names
+      let enrichedCargo: any[] = cargo || []
+      if (cargo && cargo.length > 0) {
+        // Get unique rate IDs and customer IDs from the cargo data
+        const rateIds = [...new Set(cargo.map((record: any) => record.rate_id).filter(Boolean))]
+        const customerIds = [...new Set(cargo.map((record: any) => record.assigned_customer).filter(Boolean))]
+        
+        console.log('🔍 Rate IDs to lookup:', rateIds)
+        console.log('🔍 Customer IDs to lookup:', customerIds)
+        console.log('🔍 Sample cargo records:', cargo.slice(0, 3))
+        
+        // Fetch rates and customers in parallel
+        const [ratesResult, customersResult] = await Promise.allSettled([
+          rateIds.length > 0 ? supabase
+            .from('rates')
+            .select('id, name, description, rate_type, base_rate, currency, multiplier')
+            .in('id', rateIds) : Promise.resolve({ data: [], error: null }),
+          customerIds.length > 0 ? supabase
+            .from('customers')
+            .select('id, name, code')
+            .in('id', customerIds) : Promise.resolve({ data: [], error: null })
+        ])
+        
+        const ratesData = ratesResult.status === 'fulfilled' ? ratesResult.value.data : []
+        const customersData = customersResult.status === 'fulfilled' ? customersResult.value.data : []
+        
+        if (ratesResult.status === 'rejected') {
+          console.error('Error fetching rates:', ratesResult.reason)
+        } else {
+          console.log('✅ Found rates:', ratesData?.length || 0)
+        }
+        
+        if (customersResult.status === 'rejected') {
+          console.error('Error fetching customers:', customersResult.reason)
+        } else {
+          console.log('✅ Found customers:', customersData?.length || 0)
+        }
+        
+        // Merge rate and customer data with cargo data
+        enrichedCargo = cargo.map((record: any) => {
+          const rate: any = ratesData?.find((r: any) => r.id === record.rate_id)
+          const customer: any = customersData?.find((c: any) => c.id === record.assigned_customer)
+          
+          // Calculate rate value if it's 0.00 or null
+          let calculatedRateValue = record.rate_value
+          
+          // Debug: Log all record data
+          console.log(`🔍 Record ${record.rec_id}: rate_value=${record.rate_value}, rate_id=${record.rate_id}, total_kg=${record.total_kg}`)
+          console.log(`🔍 Found rate:`, rate)
+          console.log(`🔍 Found customer:`, customer)
+          
+          if ((record.rate_value === 0 || record.rate_value === null || record.rate_value === '0.00' || parseFloat(record.rate_value) === 0) && rate) {
+            console.log(`💰 Calculating rate for ${record.rec_id}: type=${rate.rate_type}, base_rate=${rate.base_rate}, total_kg=${record.total_kg}`)
+            
+            if (rate.rate_type === 'per_kg') {
+              calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0)
+            } else if (rate.rate_type === 'fixed') {
+              calculatedRateValue = rate.base_rate || 0
+            } else if (rate.rate_type === 'multiplier') {
+              calculatedRateValue = (record.total_kg || 0) * (rate.base_rate || 0) * (rate.multiplier || 1)
+            }
+            // Round to 2 decimal places
+            calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
+            
+            console.log(`💰 Calculated rate for ${record.rec_id}: calculated=${calculatedRateValue}`)
+          } else if ((record.rate_value === 0 || record.rate_value === null || record.rate_value === '0.00' || parseFloat(record.rate_value) === 0) && !rate) {
+            console.log(`⚠️ No rate found for ${record.rec_id}, using default calculation`)
+            // Fallback: assume per_kg rate with default base rate based on currency
+            const defaultRate = record.rate_currency === 'USD' ? 2.5 : 2.5 // Default rate per kg
+            calculatedRateValue = (record.total_kg || 0) * defaultRate
+            calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
+            console.log(`💰 Fallback calculation for ${record.rec_id}: ${calculatedRateValue}`)
+          } else {
+            console.log(`💰 Using existing rate value for ${record.rec_id}: ${calculatedRateValue}`)
+          }
+          
+          return {
+            ...record,
+            rates: rate || null,
+            customers: customer || null,
+            calculated_rate_value: calculatedRateValue
+          }
+        })
+      }
+
+      setCargoData(enrichedCargo)
+      setTotalRecords(total)
+      setTotalPages(totalPages)
+      setHasNextPage(hasNextPage)
+      setHasPrevPage(hasPrevPage)
+      
+      console.log(`✅ fetchCargoDataWithOrder completed: ${cargo?.length || 0} records, total=${total}, page=${page}`)
+    } catch (err) {
+      console.error('Error fetching cargo data:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch cargo data')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
   // Load data on component mount
   useEffect(() => {
+    fetchCustomers()
+    fetchRates()
     fetchCargoData()
   }, [])
+
+  // Force re-render when ordering changes to update visual indicators
+  useEffect(() => {
+    console.log('🔄 Ordering state changed:', orderBy, orderDirection)
+  }, [orderBy, orderDirection])
 
   // Calculate total revenue when component loads or filters change
   useEffect(() => {
@@ -432,6 +753,198 @@ export function ExecuteRates() {
     // Immediately reload data without filters
     await fetchCargoData(1, recordsPerPage, false, [], "AND")
     setIsApplyingFilters(false)
+  }
+
+  // Handle customer-product assignment updates
+  const handleAssignmentUpdate = async (recordId: string, customerId: string, productId: string) => {
+    setIsUpdatingAssignment(recordId)
+    
+    try {
+      const { data, error } = await (supabase as any)
+        .from('cargo_data')
+        .update({
+          assigned_customer: customerId === 'unassigned' ? null : customerId,
+          customer_code_id: productId === 'no-product' ? null : productId,
+          assigned_at: new Date().toISOString()
+        })
+        .eq('id', recordId)
+
+      if (error) {
+        console.error('Error updating assignment:', error)
+        toast({
+          title: "Error",
+          description: "Failed to update assignment",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Update local state
+      setCustomerAssignments(prev => ({ ...prev, [recordId]: customerId }))
+      setProductAssignments(prev => ({ ...prev, [recordId]: productId }))
+      
+      // Update the cargo data in place to avoid reordering
+      setCargoData(prev => prev.map(record => 
+        record.id === recordId 
+          ? { 
+              ...record, 
+              assigned_customer: customerId === 'unassigned' ? undefined : customerId,
+              customer_code_id: productId === 'no-product' ? undefined : productId
+            } 
+          : record
+      ))
+      
+      toast({
+        title: "Success",
+        description: "Record updated"
+      })
+    } catch (error) {
+      console.error('Error updating assignment:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update assignment",
+        variant: "destructive"
+      })
+    } finally {
+      setIsUpdatingAssignment(null)
+    }
+  }
+
+  // Handle rate assignment updates
+  const handleRateUpdate = async (recordId: string, rateId: string) => {
+    setIsUpdatingRate(recordId)
+    
+    try {
+      console.log('🔄 Starting rate update for record:', recordId, 'rate:', rateId)
+      
+      // Find the selected rate
+      const selectedRate = rates.find(rate => rate.id === rateId)
+      if (!selectedRate) {
+        throw new Error('Selected rate not found')
+      }
+      
+      console.log('✅ Selected rate found:', selectedRate)
+
+      // Calculate new rate value based on rate type and record weight
+      const record = cargoData.find(r => r.id === recordId)
+      if (!record) {
+        throw new Error('Record not found in cargo data')
+      }
+      
+      console.log('✅ Record found:', record)
+      
+      let calculatedRateValue = 0
+      
+      if (selectedRate.rate_type === 'per_kg') {
+        calculatedRateValue = (record.total_kg || 0) * (selectedRate.base_rate || 0)
+      } else if (selectedRate.rate_type === 'fixed') {
+        calculatedRateValue = selectedRate.base_rate || 0
+      } else if (selectedRate.rate_type === 'multiplier') {
+        calculatedRateValue = (record.total_kg || 0) * (selectedRate.base_rate || 0) * (selectedRate.multiplier || 1)
+      }
+      // Round to 2 decimal places
+      calculatedRateValue = Math.round(calculatedRateValue * 100) / 100
+      
+      console.log('💰 Calculated rate value:', calculatedRateValue)
+
+      const updateData = {
+        rate_id: rateId,
+        rate_value: calculatedRateValue,
+        rate_currency: selectedRate.currency
+      }
+      
+      console.log('🔄 Updating database with:', updateData)
+      console.log('🔍 Supabase client:', supabase)
+      console.log('🔍 Record ID type:', typeof recordId, recordId)
+
+      // Test the connection first
+      try {
+        const { data: testData, error: testError } = await supabase
+          .from('cargo_data')
+          .select('id')
+          .eq('id', recordId)
+          .limit(1)
+        
+        console.log('🔍 Test query result:', { testData, testError })
+        
+        if (testError) {
+          console.error('❌ Test query failed:', testError)
+          throw new Error(`Test query failed: ${testError.message}`)
+        }
+        
+        if (!testData || testData.length === 0) {
+          throw new Error(`Record with ID ${recordId} not found in database`)
+        }
+        
+        console.log('✅ Test query successful, record exists')
+      } catch (testErr) {
+        console.error('❌ Test query error:', testErr)
+        throw testErr
+      }
+
+      const { data, error } = await (supabase as any)
+        .from('cargo_data')
+        .update(updateData)
+        .eq('id', recordId)
+
+      console.log('🔍 Update result:', { data, error })
+
+      if (error) {
+        console.error('❌ Database error:', error)
+        console.error('❌ Error type:', typeof error)
+        console.error('❌ Error constructor:', error?.constructor?.name)
+        console.error('❌ Error details:', {
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+          code: error?.code
+        })
+        toast({
+          title: "Database Error",
+          description: `Failed to update rate: ${error?.message || 'Unknown database error'}`,
+          variant: "destructive"
+        })
+        return
+      }
+
+      console.log('✅ Database update successful:', data)
+
+      // Update local state
+      setRateAssignments(prev => ({ ...prev, [recordId]: rateId }))
+      
+      // Update the cargo data in place to avoid reordering
+      setCargoData(prev => prev.map(record => 
+        record.id === recordId 
+          ? { 
+              ...record, 
+              rate_id: rateId,
+              rate_name: selectedRate.name,
+              rate_value: calculatedRateValue,
+              rate_currency: selectedRate.currency,
+              rate_type: selectedRate.rate_type,
+              calculated_rate_value: calculatedRateValue,
+              rates: selectedRate
+            } 
+          : record
+      ))
+      
+      console.log('✅ Local state updated successfully')
+      
+      toast({
+        title: "Success",
+        description: "Rate updated successfully"
+      })
+    } catch (error) {
+      console.error('❌ Error updating rate:', error)
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+      toast({
+        title: "Error",
+        description: `Failed to update rate: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      })
+    } finally {
+      setIsUpdatingRate(null)
+    }
   }
 
   // Export all data functionality - batched approach to fetch all data
@@ -759,8 +1272,12 @@ export function ExecuteRates() {
               size="sm"
               onClick={async () => {
                 console.log('🔄 Refresh button clicked')
+                console.log('🔍 Current order:', orderBy, orderDirection)
                 try {
-                  await fetchCargoData(currentPage, recordsPerPage, true)
+                  await fetchCustomers()
+                  await fetchRates()
+                  // Force refresh with current ordering state
+                  await fetchCargoDataWithOrder(currentPage, recordsPerPage, orderBy, orderDirection, true)
                   console.log('✅ Refresh completed successfully')
                 } catch (error) {
                   console.error('❌ Refresh failed:', error)
@@ -959,10 +1476,32 @@ export function ExecuteRates() {
                 <TableHead className="border">Invoice</TableHead>
                 <TableHead className="border bg-yellow-200">Contractee</TableHead>
                 <TableHead className="border bg-yellow-200">Rate Name</TableHead>
-                <TableHead className="border bg-yellow-200">Base Rate</TableHead>
+                {/* <TableHead className="border bg-yellow-200">Base Rate</TableHead> */}
                 <TableHead className="border text-right bg-yellow-200">Rate Value</TableHead>
-                <TableHead className="border bg-yellow-200">Currency</TableHead>
-                <TableHead className="border bg-yellow-200">Assigned At</TableHead>
+                {/* <TableHead className="border bg-yellow-200">Currency</TableHead> */}
+                <TableHead 
+                  key={`assigned-at-${orderBy}-${orderDirection}`}
+                  className="border bg-yellow-200 cursor-pointer hover:bg-yellow-300 transition-colors"
+                  onClick={async () => {
+                    console.log('🔄 Header clicked - current state:', orderBy, orderDirection)
+                    if (orderBy === 'assigned_at') {
+                      // Toggle direction if already sorting by assigned_at
+                      const newDirection = orderDirection === 'desc' ? 'asc' : 'desc'
+                      console.log('🔄 Toggling direction to:', newDirection)
+                      setOrderDirection(newDirection)
+                      // Use the new direction directly instead of waiting for state update
+                      await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', newDirection)
+                    } else {
+                      // Set to assigned_at with default desc direction
+                      console.log('🔄 Setting to assigned_at with desc')
+                      setOrderBy('assigned_at')
+                      setOrderDirection('desc')
+                      await fetchCargoDataWithOrder(currentPage, recordsPerPage, 'assigned_at', 'desc')
+                    }
+                  }}
+                >
+                  Assigned At {orderBy === 'assigned_at' && (orderDirection === 'desc' ? '↓' : '↑')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -982,14 +1521,166 @@ export function ExecuteRates() {
                   <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
                   <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
                   <TableCell className="border text-xs bg-yellow-200">
-                    {record.customers?.name || record.customer_name_number || 'N/A'}
+                    <Popover 
+                      open={openCustomerSelects[record.id]} 
+                      onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [record.id]: open }))}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openCustomerSelects[record.id]}
+                          className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                          disabled={isUpdatingAssignment === record.id}
+                        >
+                          <span className="truncate">
+                            {(() => {
+                              const customerId = customerAssignments[record.id] || record.assigned_customer
+                              const productId = productAssignments[record.id] || record.customer_code_id
+                              
+                              if (customerId === 'unassigned' || !customerId) {
+                                return "Unassigned"
+                              }
+                              
+                              const customer = customers.find(c => c.id === customerId)
+                              const code = customer?.codes.find(c => c.id === productId)
+                              
+                              if (customer && code) {
+                                return `${customer.name} - ${code.product}`
+                              } else if (customer) {
+                                return `${customer.name} - No Product`
+                              }
+                              
+                              return "Select customer-product..."
+                            })()}
+                          </span>
+                          <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
+                          <CommandEmpty>No combinations found.</CommandEmpty>
+                          <CommandGroup className="max-h-64 overflow-auto">
+                            <CommandItem
+                              value="unassigned"
+                              onSelect={() => {
+                                handleAssignmentUpdate(record.id, 'unassigned', 'no-product')
+                                setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                              }}
+                              className="text-xs"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-3 w-3",
+                                  (customerAssignments[record.id] || record.assigned_customer) === 'unassigned' || !record.assigned_customer ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              Unassigned
+                            </CommandItem>
+                            {memoizedCustomers.map((customer) => {
+                              const activeCodes = customer.codes.filter(code => code.is_active)
+                              return activeCodes.map((code) => (
+                                <CommandItem
+                                  key={`${customer.id}-${code.id}`}
+                                  value={`${customer.name} ${code.product}`}
+                                  onSelect={() => {
+                                    handleAssignmentUpdate(record.id, customer.id, code.id)
+                                    setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                                  }}
+                                  className="text-xs"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-3 w-3",
+                                      (customerAssignments[record.id] || record.assigned_customer) === customer.id && 
+                                      (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+                                    <span className="font-medium text-sm truncate flex-1 min-w-0">{customer.name}</span>
+                                    <span className="text-gray-500 text-xs flex-shrink-0">{code.product}</span>
+                                  </div>
+                                </CommandItem>
+                              ))
+                            })}
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </TableCell>
                   <TableCell className="border text-xs bg-yellow-200">
-                    {record.rates?.name || record.rate_name || 'Unknown Rate'}
+                    <Popover 
+                      open={openRateSelects[record.id]} 
+                      onOpenChange={(open) => setOpenRateSelects(prev => ({ ...prev, [record.id]: open }))}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openRateSelects[record.id]}
+                          className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                          disabled={isUpdatingRate === record.id}
+                        >
+                          <span className="truncate">
+                            {(() => {
+                              const rateId = rateAssignments[record.id] || record.rate_id
+                              
+                              if (!rateId) {
+                                return "Select rate..."
+                              }
+                              
+                              const rate = rates.find(r => r.id === rateId)
+                              
+                              if (rate) {
+                                return `${rate.name} (${rate.base_rate} ${rate.currency})`
+                              }
+                              
+                              return "Select rate..."
+                            })()}
+                          </span>
+                          <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search rates..." className="h-8 text-xs" />
+                          <CommandEmpty>No rates found.</CommandEmpty>
+                          <CommandGroup className="max-h-64 overflow-auto">
+                            {memoizedRates.map((rate: any) => (
+                              <CommandItem
+                                key={rate.id}
+                                value={`${rate.name} ${rate.base_rate} ${rate.currency}`}
+                                onSelect={() => {
+                                  handleRateUpdate(record.id, rate.id)
+                                  setOpenRateSelects(prev => ({ ...prev, [record.id]: false }))
+                                }}
+                                className="text-xs"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-3 w-3",
+                                    (rateAssignments[record.id] || record.rate_id) === rate.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
+                                  <span className="font-medium text-sm truncate flex-1 min-w-0">{rate.name}</span>
+                                  <span className="text-gray-500 text-xs flex-shrink-0">{rate.base_rate} {rate.currency}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </TableCell>
-                  <TableCell className="border text-xs bg-yellow-200">
-                    {record.rates?.base_rate || record.base_rate || 'N/A'}
-                  </TableCell>
+                  {/* <TableCell className="border text-xs bg-yellow-200">
+                    {(() => {
+                      const rateId = rateAssignments[record.id] || record.rate_id
+                      const rate = rates.find(r => r.id === rateId)
+                      return rate ? `${rate.base_rate} ${rate.currency}` : 'N/A'
+                    })()}
+                  </TableCell> */}
                   <TableCell className="border text-xs bg-yellow-200 text-right">
                     {(() => {
                       const value = record.calculated_rate_value
@@ -997,9 +1688,9 @@ export function ExecuteRates() {
                       return value ? `${parseFloat(value).toFixed(2)}` : '0.00'
                     })()}
                   </TableCell>
-                  <TableCell className="border text-xs bg-yellow-200">
+                  {/* <TableCell className="border text-xs bg-yellow-200">
                     {record.rate_currency || record.rates?.currency || 'EUR'}
-                  </TableCell>
+                  </TableCell> */}
                   <TableCell className="border text-xs bg-yellow-200">
                     {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
                   </TableCell>
