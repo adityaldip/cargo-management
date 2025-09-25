@@ -10,11 +10,16 @@ import { WarningBanner } from "@/components/ui/status-banner"
 import { useCustomerRules } from "./hooks"
 import { FilterPopup } from "@/components/ui/filter-popup"
 import { usePageFilters } from "@/store/filter-store"
-import { supabase } from "@/lib/supabase"
+import { supabase, safeSupabaseOperation } from "@/lib/supabase"
 import { Pagination } from "@/components/ui/pagination"
 import { useToast } from "@/hooks/use-toast"
 import { downloadFile, downloadXLSFile } from "@/lib/export-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { 
   ExecuteRulesProps, 
   CargoDataRecord, 
@@ -31,7 +36,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const [customers, setCustomers] = useState<Array<{id: string, name: string, code: string, codes: {id: string, code: string, product: string, is_active: boolean}[]}>>([])
   
   // Pagination state - like database-preview.tsx
   const [currentPage, setCurrentPage] = useState(1)
@@ -51,6 +56,20 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
   const [exportProgress, setExportProgress] = useState(0)
   const [exportCurrentBatch, setExportCurrentBatch] = useState(0)
   const [exportTotalBatches, setExportTotalBatches] = useState(0)
+  
+  // Customer-product assignment state
+  const [customerAssignments, setCustomerAssignments] = useState<Record<string, string>>({})
+  const [productAssignments, setProductAssignments] = useState<Record<string, string>>({})
+  const [isUpdatingAssignment, setIsUpdatingAssignment] = useState<string | null>(null)
+  
+  // Popover state for customer-product selects
+  const [openCustomerSelects, setOpenCustomerSelects] = useState<Record<string, boolean>>({})
+  const [openProductSelects, setOpenProductSelects] = useState<Record<string, boolean>>({})
+  
+  // Memoized customers for better performance
+  const memoizedCustomers = useMemo(() => {
+    return customers.sort((a, b) => a.name.localeCompare(b.name))
+  }, [customers])
   
   // Filter state - now persistent
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -92,12 +111,40 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
         return
       }
 
-      console.log('✅ Successfully fetched customers:', customersData?.length || 0)
-      setCustomers(customersData || [])
+      if (!customersData || customersData.length === 0) {
+        setCustomers([])
+        return
+      }
+
+      // Get customer IDs for fetching codes
+      const customerIds = customersData.map((c: any) => c.id)
+      
+      // Get all active codes for these customers
+      const { data: codesData, error: codesError } = await supabase
+        .from('customer_codes')
+        .select('id, customer_id, code, product, is_active')
+        .in('customer_id', customerIds)
+        .eq('is_active', true)
+        .order('code')
+      
+      if (codesError) {
+        console.error('❌ Error loading customer codes:', codesError)
+        return
+      }
+
+      // Combine customers with their codes
+      const customersWithCodes = customersData.map((customer: any) => ({
+        ...customer,
+        codes: (codesData || []).filter((code: any) => code.customer_id === customer.id)
+      }))
+      
+      console.log('✅ Successfully fetched customers with codes:', customersWithCodes?.length || 0)
+      setCustomers(customersWithCodes)
     } catch (err) {
       console.error('❌ Error in fetchCustomers:', err)
     }
   }
+
 
   // Fetch cargo data from Supabase - only assigned customers with server-side pagination
   const fetchCargoData = async (page: number = currentPage, limit: number = recordsPerPage, isRefresh = false, customFilters?: FilterCondition[], customLogic?: "AND" | "OR") => {
@@ -392,6 +439,62 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
     // Immediately reload data without filters
     await fetchCargoData(1, recordsPerPage, false, [], "AND")
     setIsApplyingFilters(false)
+  }
+
+  // Handle customer-product assignment updates
+  const handleAssignmentUpdate = async (recordId: string, customerId: string, productId: string) => {
+    setIsUpdatingAssignment(recordId)
+    
+    try {
+      const { data, error } = await (supabase as any)
+        .from('cargo_data')
+        .update({
+          assigned_customer: customerId === 'unassigned' ? null : customerId,
+          customer_code_id: productId === 'no-product' ? null : productId,
+          assigned_at: new Date().toISOString()
+        })
+        .eq('id', recordId)
+
+      if (error) {
+        console.error('Error updating assignment:', error)
+        toast({
+          title: "Error",
+          description: "Failed to update assignment",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Update local state
+      setCustomerAssignments(prev => ({ ...prev, [recordId]: customerId }))
+      setProductAssignments(prev => ({ ...prev, [recordId]: productId }))
+      
+      // Update the cargo data in place to avoid reordering
+      setCargoData(prev => prev.map(record => 
+        record.id === recordId 
+          ? { 
+              ...record, 
+              assigned_customer: customerId === 'unassigned' ? undefined : customerId,
+              customer_code_id: productId === 'no-product' ? undefined : productId,
+              assigned_at: new Date().toISOString()
+            } 
+          : record
+      ))
+      
+      toast({
+        title: "Success",
+        description: "Assignment contractee updated successfully"
+      })
+    } catch (error) {
+      console.error('Error updating assignment:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update assignment",
+        variant: "destructive"
+      })
+    } finally {
+      setIsUpdatingAssignment(null)
+    }
   }
 
   // Note: Filtering is now handled server-side in fetchCargoData
@@ -954,9 +1057,8 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   <TableHead className="border">Mail Class</TableHead>
                   <TableHead className="border text-right">Total kg</TableHead>
                   <TableHead className="border">Invoice</TableHead>
-                    <TableHead className="border bg-yellow-200">Assigned Contractee</TableHead>
-                    <TableHead className="border bg-yellow-200">Contractee Product</TableHead>
-                    <TableHead className="border bg-yellow-200">Assigned At</TableHead>
+                  <TableHead className="border bg-yellow-200">Contractee - Product</TableHead>
+                  <TableHead className="border bg-yellow-200">Assigned At</TableHead>
                 </TableRow>
               </TableHeader>
                 <TableBody>
@@ -976,10 +1078,93 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                       <TableCell className="border text-right">{record.total_kg || '0.0'}</TableCell>
                       <TableCell className="border">{record.invoice || 'N/A'}</TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
-                        {record.customers?.name || (record.assigned_customer ? `Customer ID: ${record.assigned_customer}` : 'Unassigned')}
-                      </TableCell>
-                      <TableCell className="border text-xs bg-yellow-200">
-                        {(record as any).customer_codes?.product || 'N/A'}
+                        <Popover 
+                          open={openCustomerSelects[record.id]} 
+                          onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [record.id]: open }))}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openCustomerSelects[record.id]}
+                              className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                              disabled={isUpdatingAssignment === record.id}
+                            >
+                              <span className="truncate">
+                                {(() => {
+                                  const customerId = customerAssignments[record.id] || record.assigned_customer
+                                  const productId = productAssignments[record.id] || record.customer_code_id
+                                  
+                                  if (customerId === 'unassigned' || !customerId) {
+                                    return "Unassigned"
+                                  }
+                                  
+                                  const customer = customers.find(c => c.id === customerId)
+                                  const code = customer?.codes.find(c => c.id === productId)
+                                  
+                                  if (customer && code) {
+                                    return `${customer.name} - ${code.product}`
+                                  } else if (customer) {
+                                    return `${customer.name} - No Product`
+                                  }
+                                  
+                                  return "Select customer-product..."
+                                })()}
+                              </span>
+                              <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
+                              <CommandEmpty>No combinations found.</CommandEmpty>
+                              <CommandGroup className="max-h-64 overflow-auto">
+                                <CommandItem
+                                  value="unassigned"
+                                  onSelect={() => {
+                                    handleAssignmentUpdate(record.id, 'unassigned', 'no-product')
+                                    setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                                  }}
+                                  className="text-xs"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-3 w-3",
+                                      (customerAssignments[record.id] || record.assigned_customer) === 'unassigned' || !record.assigned_customer ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  Unassigned
+                                </CommandItem>
+                                {memoizedCustomers.map((customer) => {
+                                  const activeCodes = customer.codes.filter(code => code.is_active)
+                                  return activeCodes.map((code) => (
+                                    <CommandItem
+                                      key={`${customer.id}-${code.id}`}
+                                      value={`${customer.name} ${code.product}`}
+                                      onSelect={() => {
+                                        handleAssignmentUpdate(record.id, customer.id, code.id)
+                                        setOpenCustomerSelects(prev => ({ ...prev, [record.id]: false }))
+                                      }}
+                                      className="text-xs"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-3 w-3",
+                                          (customerAssignments[record.id] || record.assigned_customer) === customer.id && 
+                                          (productAssignments[record.id] || record.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div className="flex items-center justify-between min-w-0 flex-1">
+                                        <span className="font-medium text-sm">{customer.name}</span>
+                                        <span className="text-gray-500 text-xs ml-2">{code.product}</span>
+                                      </div>
+                                    </CommandItem>
+                                  ))
+                                })}
+                              </CommandGroup>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                       <TableCell className="border text-xs bg-yellow-200">
                         {record.assigned_at ? new Date(record.assigned_at).toLocaleDateString() : 'N/A'}
@@ -1071,8 +1256,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                     <TableHead>Flight No.</TableHead>
                     <TableHead>Mail Cat.</TableHead>
                     <TableHead>Weight (kg)</TableHead>
-                    <TableHead>Assigned Contractee</TableHead>
-                    <TableHead>Contractee Product</TableHead>
+                    <TableHead>Customer - Product</TableHead>
                     <TableHead>Assigned At</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -1105,10 +1289,93 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                           {row.total_kg || "0.0"}
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate">
-                          {row.customers?.name || (row.assigned_customer ? `Contractee ID: ${row.assigned_customer}` : 'Unassigned')}
-                        </TableCell>
-                        <TableCell>
-                          {(row as any).customer_codes?.product || 'N/A'}
+                          <Popover 
+                            open={openCustomerSelects[row.id]} 
+                            onOpenChange={(open) => setOpenCustomerSelects(prev => ({ ...prev, [row.id]: open }))}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openCustomerSelects[row.id]}
+                                className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                                disabled={isUpdatingAssignment === row.id}
+                              >
+                                <span className="truncate">
+                                  {(() => {
+                                    const customerId = customerAssignments[row.id] || row.assigned_customer
+                                    const productId = productAssignments[row.id] || row.customer_code_id
+                                    
+                                    if (customerId === 'unassigned' || !customerId) {
+                                      return "Unassigned"
+                                    }
+                                    
+                                    const customer = customers.find(c => c.id === customerId)
+                                    const code = customer?.codes.find(c => c.id === productId)
+                                    
+                                    if (customer && code) {
+                                      return `${customer.name} - ${code.product}`
+                                    } else if (customer) {
+                                      return `${customer.name} - No Product`
+                                    }
+                                    
+                                    return "Select customer-product..."
+                                  })()}
+                                </span>
+                                <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                              <Command>
+                                <CommandInput placeholder="Search customer-product combinations..." className="h-8 text-xs" />
+                                <CommandEmpty>No combinations found.</CommandEmpty>
+                                <CommandGroup className="max-h-64 overflow-auto">
+                                  <CommandItem
+                                    value="unassigned"
+                                    onSelect={() => {
+                                      handleAssignmentUpdate(row.id, 'unassigned', 'no-product')
+                                      setOpenCustomerSelects(prev => ({ ...prev, [row.id]: false }))
+                                    }}
+                                    className="text-xs"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-3 w-3",
+                                        (customerAssignments[row.id] || row.assigned_customer) === 'unassigned' || !row.assigned_customer ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    Unassigned
+                                  </CommandItem>
+                                  {memoizedCustomers.map((customer) => {
+                                    const activeCodes = customer.codes.filter(code => code.is_active)
+                                    return activeCodes.map((code) => (
+                                      <CommandItem
+                                        key={`${customer.id}-${code.id}`}
+                                        value={`${customer.name} ${code.product}`}
+                                        onSelect={() => {
+                                          handleAssignmentUpdate(row.id, customer.id, code.id)
+                                          setOpenCustomerSelects(prev => ({ ...prev, [row.id]: false }))
+                                        }}
+                                        className="text-xs"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-3 w-3",
+                                            (customerAssignments[row.id] || row.assigned_customer) === customer.id && 
+                                            (productAssignments[row.id] || row.customer_code_id) === code.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex items-center justify-between min-w-0 flex-1">
+                                          <span className="font-medium text-sm">{customer.name}</span>
+                                          <span className="text-gray-500 text-xs ml-2">{code.product}</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))
+                                  })}
+                                </CommandGroup>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </TableCell>
                         <TableCell>
                           {row.assigned_at ? new Date(row.assigned_at).toLocaleDateString() : "N/A"}
