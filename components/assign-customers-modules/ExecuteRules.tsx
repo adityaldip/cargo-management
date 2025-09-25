@@ -483,7 +483,7 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
       
       toast({
         title: "Success",
-        description: "Assignment contractee updated successfully"
+        description: "Record updated"
       })
     } catch (error) {
       console.error('Error updating assignment:', error)
