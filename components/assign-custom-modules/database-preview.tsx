@@ -1001,8 +1001,33 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
             <span>Loading data...</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table className="border border-collapse border-radius-lg">
+          <div className="space-y-0">
+            {/* Top scroll bar - wrapper1 */}
+            <div 
+              className="overflow-x-auto overflow-y-hidden" 
+              style={{ width: '100%', height: '20px' }}
+              onScroll={(e) => {
+                const wrapper2 = e.currentTarget.parentElement?.querySelector('.wrapper2')
+                if (wrapper2) {
+                  wrapper2.scrollLeft = e.currentTarget.scrollLeft
+                }
+              }}
+            >
+              <div style={{ width: '2000px', height: '20px' }}></div>
+            </div>
+            {/* Main table - wrapper2 */}
+            <div 
+              className="overflow-x-auto overflow-y-hidden wrapper2"
+              style={{ width: '100%' }}
+              onScroll={(e) => {
+                const wrapper1 = e.currentTarget.parentElement?.querySelector('.overflow-x-auto:first-child')
+                if (wrapper1) {
+                  wrapper1.scrollLeft = e.currentTarget.scrollLeft
+                }
+              }}
+            >
+              <div style={{ width: '2000px' }}>
+                <Table className="border border-collapse border-radius-lg">
               <TableHeader>
                 <TableRow>
                   <TableHead className="border text-center" style={{ padding: "2px" }}>
@@ -1081,7 +1106,9 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                   ))
                 )}
               </TableBody>
-            </Table>
+                </Table>
+              </div>
+            </div>
           </div>
         )}
         
