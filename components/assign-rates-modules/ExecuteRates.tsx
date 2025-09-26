@@ -1543,7 +1543,7 @@ export function ExecuteRates() {
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            <span className="ml-2 text-gray-600">Loading cargo data...</span>
+            <span className="ml-2">Loading cargo data...</span>
           </div>
         ) : (
         <div className="space-y-0">
@@ -1571,8 +1571,8 @@ export function ExecuteRates() {
               }
             }}
           >
-            <div className="min-w-full">
-              <table className="border border-collapse w-full">
+            <div style={{ width: '2000px' }}>
+              <Table className="border border-collapse w-full" style={{ width: '2000px', minWidth: '2000px' }}>
             <TableHeader>
               <TableRow>
                 {visibleColumns.map((column) => (
@@ -1831,7 +1831,7 @@ export function ExecuteRates() {
                 </TableRow>
               ))}
             </TableBody>
-          </table>
+          </Table>
             </div>
           </div>
         </div>

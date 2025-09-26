@@ -1088,7 +1088,7 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 }
               }}
             >
-              <div className="min-w-full h-5"></div>
+              <div style={{ width: '2000px', height: '20px' }}></div>
             </div>
             {/* Main table - wrapper2 */}
             <div 
@@ -1101,8 +1101,8 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
                 }
               }}
             >
-              <div className="min-w-full">
-                <Table className="border border-collapse border-radius-lg">
+              <div style={{ width: '2000px' }}>
+                <Table className="border border-collapse w-full" style={{ width: '2000px', minWidth: '2000px' }}>
               <TableHeader>
                 <TableRow>
                   <TableHead className="border text-center w-12" style={{ padding: "2px" }}>
