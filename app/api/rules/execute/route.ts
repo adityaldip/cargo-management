@@ -283,6 +283,12 @@ export async function POST(request: NextRequest) {
               return parseFloat(fieldValue) > parseFloat(conditionValue)
             case 'less_than':
               return parseFloat(fieldValue) < parseFloat(conditionValue)
+            case 'is_empty':
+              return !fieldValue || fieldValue.trim() === ''
+            case 'not_empty':
+              return fieldValue && fieldValue.trim() !== ''
+            case 'does_not_contain':
+              return !fieldValue.includes(conditionValue)
             default:
               return false
           }

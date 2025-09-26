@@ -292,6 +292,10 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                   countQuery = countQuery.or(`${field}.is.null,${field}.eq.`)
                   dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
                   break
+                case 'does_not_contain':
+                  countQuery = countQuery.not(field, 'ilike', `%${value}%`)
+                  dataQuery = dataQuery.not(field, 'ilike', `%${value}%`)
+                  break
               }
               console.log(`✅ Filter ${index + 1} applied successfully`)
             } catch (filterError) {
@@ -552,6 +556,10 @@ export function ExecuteRules({ currentView, setCurrentView }: ExecuteRulesProps)
                 case 'is_empty':
                   countQuery = countQuery.or(`${field}.is.null,${field}.eq.`)
                   dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
+                  break
+                case 'does_not_contain':
+                  countQuery = countQuery.not(field, 'ilike', `%${value}%`)
+                  dataQuery = dataQuery.not(field, 'ilike', `%${value}%`)
                   break
               }
               console.log(`✅ Filter ${index + 1} applied successfully`)

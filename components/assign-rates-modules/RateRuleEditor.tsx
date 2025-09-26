@@ -138,7 +138,7 @@ export function RateRuleEditor({
                       role="combobox"
                       aria-expanded={openFieldSelects[index]}
                       disabled={isExecutingRules}
-                      className="h-6 w-28 text-xs border-gray-200 justify-between font-normal"
+                      className="h-6 w-36 text-xs border-gray-200 justify-between font-normal"
                     >
                       <span className="truncate">
                         {condition.field
@@ -186,13 +186,16 @@ export function RateRuleEditor({
                       variant="outline"
                       role="combobox"
                       aria-expanded={openOperatorSelects[index]}
-                      className="h-6 w-24 text-xs border-gray-200 justify-between font-normal"
+                      className="h-6 w-34 text-xs border-gray-200 justify-between font-normal"
                     >
                       <span className="truncate">
                         {condition.operator === "equals" && "Is"}
                         {condition.operator === "contains" && "Contains"}
                         {condition.operator === "starts_with" && "Starts"}
-                        {condition.operator === "ends_with" && "Ends"}
+                        {condition.operator === "ends_with" && "Ends"},
+                        {condition.operator === "is_empty" && "Is empty"},
+                        {condition.operator === "not_empty" && "Is not empty"},
+                        {condition.operator === "does_not_contain" && "Does not contain"},
                         {!condition.operator && "Op..."}
                       </span>
                       <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
@@ -207,7 +210,10 @@ export function RateRuleEditor({
                           { value: "equals", label: "Is" },
                           { value: "contains", label: "Contains" },
                           { value: "starts_with", label: "Starts" },
-                          { value: "ends_with", label: "Ends" }
+                          { value: "ends_with", label: "Ends" },
+                          { value: "is_empty", label: "Is empty" },
+                          { value: "not_empty", label: "Is not empty" },
+                          { value: "does_not_contain", label: "Does not contain" },
                         ].map((operator) => (
                           <CommandItem
                             key={operator.value}

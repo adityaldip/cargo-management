@@ -213,6 +213,12 @@ export async function POST(request: NextRequest) {
               return parseFloat(fieldValue) > parseFloat(value)
             case 'less_than':
               return parseFloat(fieldValue) < parseFloat(value)
+            case 'is_empty':
+              return !fieldValue || fieldValue.trim() === ''
+            case 'not_empty':
+              return fieldValue && fieldValue.trim() !== ''
+            case 'does_not_contain':
+              return !fieldValue.includes(value)
             default:
               return false
           }
