@@ -27,34 +27,65 @@ export async function GET(request: NextRequest) {
 
     console.log('Fetching unique values for field:', field)
     
-    // Build query based on whether to include assigned records
-    let query = supabaseAdmin
-      .from('cargo_data')
-      .select(field)
-      .not(field, 'is', null)
-      .not(field, 'eq', '')
-      .order(field)
-      .limit(50000) // Large limit to get most/all data
+    // Fetch all data using pagination to bypass Supabase's 1000 limit
+    let allData: any[] = []
+    let offset = 0
+    const pageSize = 1000
+    let hasMore = true
+    let totalCount = 0
     
-    // If not including assigned records, filter for unassigned only
-    if (!includeAssigned) {
-      query = query.is('rate_id', null) // Only get unassigned records
-      console.log('Filtering for unassigned records only')
-    } else {
-      console.log('Including all records (assigned and unassigned)')
+    console.log('Fetching data with pagination to bypass 1000 limit...')
+    
+    while (hasMore) {
+      // Build query for current page
+      let query = supabaseAdmin
+        .from('cargo_data')
+        .select(field, { count: 'exact' })
+        .not(field, 'is', null)
+        .not(field, 'eq', '')
+        .order(field)
+        .range(offset, offset + pageSize - 1)
+      
+      // If not including assigned records, filter for unassigned only
+      if (!includeAssigned) {
+        query = query.is('rate_id', null)
+      }
+      
+      const { data: pageData, error, count } = await query
+      
+      if (error) {
+        console.error('Supabase error fetching field values:', error)
+        return NextResponse.json({ 
+          error: 'Failed to fetch field values', 
+          details: error.message 
+        }, { status: 500 })
+      }
+      
+      if (pageData && pageData.length > 0) {
+        allData = [...allData, ...pageData]
+        totalCount = count || 0
+        console.log(`Fetched page ${Math.floor(offset / pageSize) + 1}: ${pageData.length} records (total so far: ${allData.length})`)
+        
+        // Check if we got less than pageSize, meaning we're done
+        if (pageData.length < pageSize) {
+          hasMore = false
+        } else {
+          offset += pageSize
+        }
+      } else {
+        hasMore = false
+      }
     }
     
-    const { data, error } = await query
-    
-    if (error) {
-      console.error('Supabase error fetching field values:', error)
-      return NextResponse.json({ 
-        error: 'Failed to fetch field values', 
-        details: error.message 
-      }, { status: 500 })
-    }
+    const data = allData
+    const count = totalCount
 
     console.log(`Fetched ${data?.length || 0} total records`)
+    console.log(`Total count available: ${count}`)
+    
+    // Log pagination info
+    const pagesFetched = Math.ceil(data.length / 1000)
+    console.log(`Fetched ${pagesFetched} pages of data`)
     
     if (!data || data.length === 0) {
       console.log('No data found for field:', field)
@@ -68,8 +99,18 @@ export async function GET(request: NextRequest) {
 
     console.log(`Found ${uniqueValues.length} unique values for field ${field}`)
     console.log('Sample values:', uniqueValues.slice(0, 10))
+    
+    // If we have a lot of data, we might want to implement pagination in the future
+    if (uniqueValues.length > 50000) {
+      console.warn(`⚠️ Large dataset: ${uniqueValues.length} unique values. Consider implementing pagination.`)
+    }
 
-    return NextResponse.json({ values: uniqueValues })
+    return NextResponse.json({ 
+      values: uniqueValues,
+      totalCount: count,
+      totalFetched: data.length,
+      pagesFetched: Math.ceil(data.length / 1000)
+    })
     
   } catch (error) {
     console.error('Error in field-values API:', error)
