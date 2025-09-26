@@ -272,13 +272,37 @@ export async function POST(request: NextRequest) {
 
           switch (condition.operator) {
             case 'equals':
-              return fieldValue === conditionValue
+              // Handle multi-select values (comma-separated)
+              if (conditionValue.includes(',')) {
+                const conditionValues = conditionValue.split(',').map(v => v.trim()).filter(Boolean)
+                return conditionValues.includes(fieldValue)
+              } else {
+                return fieldValue === conditionValue
+              }
             case 'contains':
-              return fieldValue.includes(conditionValue)
+              // Handle multi-select values for contains
+              if (conditionValue.includes(',')) {
+                const conditionValues = conditionValue.split(',').map(v => v.trim()).filter(Boolean)
+                return conditionValues.some(conditionValue => fieldValue.includes(conditionValue))
+              } else {
+                return fieldValue.includes(conditionValue)
+              }
             case 'starts_with':
-              return fieldValue.startsWith(conditionValue)
+              // Handle multi-select values for starts_with
+              if (conditionValue.includes(',')) {
+                const conditionValues = conditionValue.split(',').map(v => v.trim()).filter(Boolean)
+                return conditionValues.some(conditionValue => fieldValue.startsWith(conditionValue))
+              } else {
+                return fieldValue.startsWith(conditionValue)
+              }
             case 'ends_with':
-              return fieldValue.endsWith(conditionValue)
+              // Handle multi-select values for ends_with
+              if (conditionValue.includes(',')) {
+                const conditionValues = conditionValue.split(',').map(v => v.trim()).filter(Boolean)
+                return conditionValues.some(conditionValue => fieldValue.endsWith(conditionValue))
+              } else {
+                return fieldValue.endsWith(conditionValue)
+              }
             case 'greater_than':
               return parseFloat(fieldValue) > parseFloat(conditionValue)
             case 'less_than':
@@ -288,7 +312,13 @@ export async function POST(request: NextRequest) {
             case 'not_empty':
               return fieldValue && fieldValue.trim() !== ''
             case 'does_not_contain':
-              return !fieldValue.includes(conditionValue)
+              // Handle multi-select values for does_not_contain
+              if (conditionValue.includes(',')) {
+                const conditionValues = conditionValue.split(',').map(v => v.trim()).filter(Boolean)
+                return !conditionValues.some(conditionValue => fieldValue.includes(conditionValue))
+              } else {
+                return !fieldValue.includes(conditionValue)
+              }
             default:
               return false
           }
