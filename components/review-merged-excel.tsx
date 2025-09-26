@@ -154,7 +154,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             size="sm"
             onClick={() => setActiveTab("update-excel")}
             disabled={isClearingData || isExporting || isMappingAndSaving}
-            className={activeTab === "update-excel" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
+            className={activeTab === "update-excel" ? "bg-black text-white hover:bg-gray-800" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Settings className="h-4 w-4 mr-2" />
             Upload Excel
@@ -164,7 +164,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             size="sm"
             onClick={() => setActiveTab("update-mapping")}
             disabled={isClearingData || isExporting || isMappingAndSaving}
-            className={activeTab === "update-mapping" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
+            className={activeTab === "update-mapping" ? "bg-black text-white hover:bg-gray-800" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Eye className="h-4 w-4 mr-2" />
             Mapping
@@ -174,7 +174,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             size="sm"
             onClick={() => setActiveTab("configure")}
             disabled={isClearingData || isExporting || isMappingAndSaving}
-            className={activeTab === "configure" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
+            className={activeTab === "configure" ? "bg-black text-white hover:bg-gray-800" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Settings className="h-4 w-4 mr-2" />
             Configure Columns
@@ -184,7 +184,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
             size="sm"
             onClick={() => setActiveTab("preview")}
             disabled={isClearingData || isExporting || isMappingAndSaving}
-            className={activeTab === "preview" ? "bg-white shadow-sm text-black hover:bg-white" : "text-gray-600 hover:text-black hover:bg-gray-50"}
+            className={activeTab === "preview" ? "bg-black text-white hover:bg-gray-800" : "text-gray-600 hover:text-black hover:bg-gray-50"}
           >
             <Eye className="h-4 w-4 mr-2" />
             Preview
