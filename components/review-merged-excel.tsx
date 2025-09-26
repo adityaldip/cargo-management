@@ -43,8 +43,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
     const { getUploadSession } = useDataStore.getState()
     const uploadSession = getUploadSession("upload-excel")
     if (uploadSession) {
-      console.log('Restoring upload session:', uploadSession)
-      
       // Restore processed data
       if (uploadSession.processedData) {
         setUploadedData(uploadSession.processedData)
@@ -74,25 +72,17 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         timestamp: Date.now()
       }
       saveUploadSession("upload-excel", sessionData)
-      console.log('Saved upload session:', sessionData)
     }
   }, [uploadedData, excelColumns, sampleData])
 
   // Handle clear data
   const handleClearData = async () => {
-    console.log('🔍 handleClearData called in review-merged-excel')
     try {
       const result = await clearAllData(undefined, undefined)
       
       if (result.success) {
-        console.log(`result`, result)
-        console.log(`✅ Successfully cleared all data:`)
-        console.log(`- Local storage: ${result.localCleared ? 'cleared' : 'failed'}`)
-        console.log(`- Supabase: ${result.supabaseDeletedCount || 0} records deleted`)
-        
         // Toast is handled by database-preview component
       } else if (result.cancelled) {
-        console.log('❌ Clear data process was cancelled')
         toast({
           title: "Process cancelled",
           description: "Clear data process was cancelled by user",
@@ -100,7 +90,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
           duration: 3000,
         })
       } else {
-        console.error('❌ Failed to clear all data:', result.error)
         toast({
           title: "Failed to clear data",
           description: result.error || "Unknown error occurred",
@@ -109,7 +98,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         })
       }
     } catch (error) {
-      console.error('❌ Error during clear operation:', error)
       toast({
         title: "Error clearing data",
         description: error instanceof Error ? error.message : 'Unknown error occurred',
@@ -140,7 +128,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
 
       onMergedData(combined)
     } catch (error) {
-      console.error("Error merging data:", error)
+      // Error merging data
     }
   }
 
@@ -208,20 +196,17 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
         {activeTab === "update-excel" && (
           <UploadExcel 
             onDataProcessed={(data) => {
-              console.log('Uploaded Excel data:', data)
               setUploadedData(data)
               if (data) {
                 setActiveTab("update-mapping")
               }
             }}
             onColumnsExtracted={(columns, sampleData) => {
-              console.log('Extracted columns:', columns)
-              console.log('Sample data:', sampleData)
               setExcelColumns(columns)
               setSampleData(sampleData)
             }}
             onContinue={() => {
-              console.log('Continue from Upload Excel')
+              // Continue from Upload Excel
             }}
           />
         )}
@@ -233,10 +218,9 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
               excelColumns={excelColumns} 
               sampleData={sampleData} 
               onSupabaseProgress={(progress: any) => {
-                console.log('Supabase progress update:', progress)
+                // Supabase progress update
               }}
               onMappingComplete={async (mappings: any) => {
-                console.log('Processing mappings:', mappings)
                 
                 // Import the necessary functions for processing
                 const { processFileWithMappings } = await import('@/lib/file-processor')
@@ -252,19 +236,17 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                 }
                 
                 // STEP 1: Process file with mappings ONLY (no database save yet)
-                console.log('STEP 1: Processing file with mappings...')
                 const result = await processFileWithMappings(
                   uploadedFile, 
                   "upload-excel", 
                   mappings, 
                   undefined, 
                   (progress, message, stats) => {
-                    console.log('Mapping processing progress:', progress, message, stats)
+                    // Mapping processing progress
                   }
                 )
                 
                 if (result.success && result.data) {
-                  console.log('✅ STEP 1 COMPLETE: Mapping processing successful:', result.data)
                   
                   // Create dataset to save
                   const dataset = {
@@ -282,7 +264,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                   addDataset(dataset)
                   updateCurrentSession({ uploadExcel: dataset })
                   
-                  console.log('✅ STEP 1 COMPLETE: Dataset created and stored locally')
+                  // Dataset created and stored locally
                   
                   // Notify UpdateMapping that mapping is complete
                   if ((window as any).supabaseProgressHandler) {
@@ -300,12 +282,10 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                   await new Promise(resolve => setTimeout(resolve, 500))
                   
                   // STEP 2: Now start database saving (after mapping is completely done)
-                  console.log('STEP 2: Starting database save process...')
                   
                   // Custom save function with real progress tracking
                   const saveWithProgress = async (dataset: any, onProgress: (progress: any) => void) => {
                     try {
-                      console.log('Starting Supabase save process with progress tracking...')
                       
                       if (!dataset) {
                         return { success: false, error: "No dataset provided" }
@@ -337,12 +317,11 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                           }
                           supabaseData.push(converted)
                         } catch (conversionError) {
-                          console.error(`Error converting record ${i}:`, conversionError, dataset.data.data[i])
                           continue
                         }
                       }
                       
-                      console.log(`Converted ${supabaseData.length} records for Supabase`)
+                      // Converted records for Supabase
                       
                       if (supabaseData.length === 0) {
                         return { success: false, error: "No valid records to save after conversion" }
@@ -369,12 +348,9 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                         const batch = supabaseData.slice(i, i + batchSize)
                         const currentBatchNum = Math.floor(i/batchSize) + 1
                         
-                        console.log(`Saving batch ${currentBatchNum}/${totalBatches} (${batch.length} records)`)
-                        
                         const batchResult = await cargoDataOperations.bulkInsert(batch)
                         
                         if (batchResult.error) {
-                          console.error('Error saving batch to Supabase:', batchResult.error)
                           onProgress({
                             percentage: Math.round((totalSaved / supabaseData.length) * 100),
                             currentCount: totalSaved,
@@ -403,8 +379,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                           status: 'saving'
                         })
                         
-                        console.log(`Successfully saved batch. Total saved so far: ${totalSaved}`)
-                        
                         // Small delay to allow UI updates
                         await new Promise(resolve => setTimeout(resolve, 100))
                       }
@@ -419,13 +393,12 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                         status: 'completed'
                       })
                       
-                      console.log(`Successfully saved ${totalSaved} records to Supabase`)
+                      // Successfully saved records to Supabase
                       return { 
                         success: true, 
                         savedCount: totalSaved 
                       }
                     } catch (error) {
-                      console.error('Error saving merged data to Supabase:', error)
                       onProgress({
                         percentage: 0,
                         currentCount: 0,
@@ -443,12 +416,9 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                   
                   // Save to Supabase with progress tracking
                   try {
-                    console.log('Saving to Supabase...', dataset)
-                    console.log(`📊 Saving ${result.data.data.length} records to database...`)
                     
                     const supabaseResult = await saveWithProgress(dataset, (progress) => {
                       // Update the progress in the UpdateMapping component
-                      console.log('Supabase save progress:', progress)
                       
                       // Use the progress handler if available
                       if ((window as any).supabaseProgressHandler) {
@@ -457,8 +427,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                     })
                     
                     if (supabaseResult.success) {
-                      console.log('✅ Data saved to Supabase successfully:', supabaseResult)
-                      console.log(`📊 Successfully saved ${supabaseResult.savedCount || result.data.data.length} records to database`)
                       
                       // Update the progress with final success and record count
                       if ((window as any).supabaseProgressHandler) {
@@ -472,11 +440,9 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                         })
                       }
                     } else {
-                      console.error('❌ Failed to save to Supabase:', supabaseResult.error)
                       throw new Error(`Supabase save failed: ${supabaseResult.error}`)
                     }
                   } catch (supabaseError) {
-                    console.error('❌ Supabase save error:', supabaseError)
                     throw new Error(`Failed to save to database: ${supabaseError}`)
                   }
                   
@@ -487,7 +453,6 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                 }
               }}
               onCancel={() => {
-                console.log('Cancel update mapping - clearing all data...')
                 
                 // Clear all store data when canceling
                 const { clearAllColumnMappings } = useColumnMappingStore.getState()
@@ -514,7 +479,7 @@ export function ReviewMergedExcel({ mailAgentData, mailSystemData, onMergedData,
                 setExcelColumns([])
                 setSampleData({})
                 
-                console.log('All data cleared, going back to upload tab')
+                // All data cleared, going back to upload tab
                 // Go back to upload tab
                 setActiveTab("update-excel")
               }}
