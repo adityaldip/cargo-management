@@ -1,5 +1,7 @@
 export { AssignCustomers } from './AssignCustomers'
 export { CustomerManagement } from './CustomerManagement'
+export { CustomerModal } from './CustomerModal'
+export { CustomerTable } from './CustomerTable'
 export { RulesConfiguration } from './RulesConfiguration'
 export { ExecuteRules } from './ExecuteRules'
 export { CreateCustomerRuleModal } from './CreateCustomerRuleModal'
