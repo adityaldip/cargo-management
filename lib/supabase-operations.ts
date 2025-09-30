@@ -301,9 +301,19 @@ export const cargoDataOperations = {
   },
 
   // Get cargo data statistics
-  async getStats(search: string = '') {
+  async getStats(search: string = '', filterParams: any = {}) {
     try {
-      const response = await fetch(`/api/cargo-data/stats?${new URLSearchParams({ search })}`)
+      const params = new URLSearchParams({ search })
+      
+      // Add filter parameters if provided
+      if (filterParams.filters) {
+        params.append('filters', filterParams.filters)
+      }
+      if (filterParams.filterLogic) {
+        params.append('filterLogic', filterParams.filterLogic)
+      }
+      
+      const response = await fetch(`/api/cargo-data/stats?${params}`)
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

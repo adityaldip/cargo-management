@@ -71,7 +71,7 @@ export function InvoiceTable({
           <Table className="border border-collapse text-sm">
             <TableHeader>
               <TableRow>
-                <TableHead className="border w-6 p-0.5 text-center">
+                {/* <TableHead className="border w-6 p-0.5 text-center">
                   <input
                     type="checkbox"
                     checked={selectedInvoices.length === invoices.length && invoices.length > 0}
@@ -79,7 +79,7 @@ export function InvoiceTable({
                     className="rounded border-gray-300"
                     title="Select all invoices on this page"
                   />
-                </TableHead>
+                </TableHead> */}
                 <TableHead className="border p-1">Invoice</TableHead>
                 <TableHead className="border p-1">Customer</TableHead>
                 <TableHead className="border p-1">Date</TableHead>
@@ -96,7 +96,7 @@ export function InvoiceTable({
                   )}
                   onClick={() => onInvoiceClick(invoice)}
                 >
-                  <TableCell className="border p-0.5 text-center">
+                  {/* <TableCell className="border p-0.5 text-center">
                     <input
                       type="checkbox"
                       checked={selectedInvoices.includes(invoice.id)}
@@ -107,7 +107,7 @@ export function InvoiceTable({
                       className="rounded border-gray-300"
                       title={`Select invoice ${invoice.invoiceNumber}`}
                     />
-                  </TableCell>
+                  </TableCell> */}
                   <TableCell className="border p-1 font-medium">
                     <div className="flex items-center gap-1">
                       <FileText className="h-3 w-3 text-gray-500" />

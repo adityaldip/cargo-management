@@ -65,18 +65,40 @@ export async function GET(request: NextRequest) {
     // Get detailed items for each invoice using the detail view
     const invoiceIds = invoiceSummaries.map((summary: any) => summary.invoice_id)
     
-    const { data: invoiceDetails, error: detailsError } = await supabaseAdmin
-      .from('invoice_detail_view')
-      .select('*')
-      .in('invoice_id', invoiceIds)
+    // Fetch all invoice details using pagination to bypass Supabase 1000 limit
+    let allInvoiceDetails: any[] = []
+    let from = 0
+    const batchSize = 1000
     
-    if (detailsError) {
-      console.error('Error fetching invoice details:', detailsError)
-      // Continue without details - we'll have summary data
+    while (true) {
+      const { data: batchDetails, error: detailsError } = await supabaseAdmin
+        .from('invoice_detail_view')
+        .select('*')
+        .in('invoice_id', invoiceIds)
+        .range(from, from + batchSize - 1)
+      
+      if (detailsError) {
+        console.error('Error fetching invoice details:', detailsError)
+        break
+      }
+      
+      if (!batchDetails || batchDetails.length === 0) {
+        break
+      }
+      
+      allInvoiceDetails = allInvoiceDetails.concat(batchDetails)
+      
+      // If we got less than batchSize, we've reached the end
+      if (batchDetails.length < batchSize) {
+        break
+      }
+      
+      from += batchSize
     }
     
+    
     // Group details by invoice_id
-    const detailsByInvoice = (invoiceDetails || []).reduce((acc: Record<string, any[]>, detail: any) => {
+    const detailsByInvoice = allInvoiceDetails.reduce((acc: Record<string, any[]>, detail: any) => {
       if (!acc[detail.invoice_id]) {
         acc[detail.invoice_id] = []
       }
@@ -87,6 +109,7 @@ export async function GET(request: NextRequest) {
     // Format invoices for the frontend with all customer details
     const invoices = invoiceSummaries.map((summary: any, index: number) => {
       const itemsDetails = detailsByInvoice[summary.invoice_id] || []
+
       
       return {
         id: summary.invoice_id || `invoice-${index}-${Date.now()}`,
@@ -112,28 +135,30 @@ export async function GET(request: NextRequest) {
         customer_postal_code: summary.customer_postal_code,
         customer_country: summary.customer_country,
         customer_accounting_label: summary.customer_accounting_label,
-        itemsDetails: itemsDetails.map((item: any, itemIndex: number) => ({
-          id: item.id || `item-${index}-${itemIndex}-${Date.now()}`,
-          recId: item.recId,
-          route: item.route,
-          mailCat: item.mailCat,
-          mailClass: item.mailClass,
-          weight: item.weight,
-          rate: item.rate,
-          amount: item.amount,
-          date: item.date,
-          invoice: item.invoice,
-          origOE: item.origOE,
-          destOE: item.destOE,
-          rateInfo: {
-            id: item.rate_id,
-            name: item.rate_name,
-            description: item.rate_description,
-            rate_type: item.rate_type,
-            base_rate: item.base_rate,
-            currency: item.rate_currency
+        itemsDetails: itemsDetails.map((item: any, itemIndex: number) => {
+          return {
+            id: item.id || `item-${index}-${itemIndex}-${Date.now()}`,
+            recId: item.recid, // Fixed: was item.recId, now item.recid
+            route: item.route,
+            mailCat: item.mailcat, // Fixed: was item.mailCat, now item.mailcat
+            mailClass: item.mailclass, // Fixed: was item.mailClass, now item.mailclass
+            weight: item.weight,
+            rate: item.rate,
+            amount: item.amount,
+            date: item.date,
+            invoice: item.invoice,
+            origOE: item.origeo, // Fixed: was item.origOE, now item.origeo
+            destOE: item.destoe, // Fixed: was item.destOE, now item.destoe
+            rateInfo: {
+              id: item.rate_id,
+              name: item.rate_name,
+              description: item.rate_description,
+              rate_type: item.rate_type,
+              base_rate: item.base_rate,
+              currency: item.rate_currency
+            }
           }
-        }))
+        })
       }
     })
     

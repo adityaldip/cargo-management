@@ -15,6 +15,7 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
     return null
   }
 
+
   return (
     <div className="w-1/2 h-[calc(100vh-2rem)] flex flex-col">
       <Card className="bg-white border-gray-200 shadow-sm flex-1 pt-0" style={{ paddingBottom: 0 }}>
@@ -123,10 +124,16 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
                   {(() => {
                     // Check if this is a CargoInvoice with real data
                     const isCargoInvoice = 'itemsDetails' in selectedInvoice && selectedInvoice.itemsDetails
+                    // Handle the case where length might be undefined due to proxy or serialization issues
+                    const itemsDetails = selectedInvoice.itemsDetails
+                    const hasValidItemsDetails = itemsDetails && 
+                        Array.isArray(itemsDetails) && 
+                        (itemsDetails.length > 0 || (itemsDetails.length === undefined && itemsDetails[0] !== undefined))
                     
-                    if (isCargoInvoice && selectedInvoice.itemsDetails && selectedInvoice.itemsDetails.length > 0) {
+                    
+                    if (isCargoInvoice && hasValidItemsDetails) {
                       // Use real cargo data
-                      return selectedInvoice.itemsDetails.map((item: CargoInvoiceItem, index: number) => (
+                      return selectedInvoice.itemsDetails?.map((item: CargoInvoiceItem, index: number) => (
                         <div key={item.id || index} className="grid grid-cols-5 gap-2 text-sm text-gray-700 py-0.5">
                           <div className="font-mono">{item.route}</div>
                           <div>{item.mailCat}</div>
@@ -138,10 +145,20 @@ export function InvoicePdfPreview({ selectedInvoice }: InvoicePdfPreviewProps) {
                         </div>
                       ))
                     } else {
-                      // No data available
+                      // Check if it's an empty array vs no data
+                      const isEmptyArray = Array.isArray(selectedInvoice.itemsDetails) && selectedInvoice.itemsDetails.length === 0
+                      
                       return (
-                        <div className="text-center py-4 text-gray-500">
-                          No cargo data available
+                        <div className="text-center py-4 text-gray-500 space-y-2">
+                          <div>
+                            {isEmptyArray ? 'No cargo items found for this invoice' : 'No cargo data available'}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            This invoice has no associated cargo items in the database.
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Debug: itemsDetails = {JSON.stringify(selectedInvoice.itemsDetails)}
+                          </div>
                         </div>
                       )
                     }

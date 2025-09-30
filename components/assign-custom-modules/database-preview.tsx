@@ -210,7 +210,13 @@ export function DatabasePreview({ onClearData }: DatabasePreviewProps) {
   // Load statistics from server
   const loadStats = async () => {
     try {
-      const result = await cargoDataOperations.getStats("")
+      // Build filter parameters to match the main data loading
+      const filterParams = hasActiveFilters ? {
+        filters: JSON.stringify(filterConditions),
+        filterLogic: filterLogic
+      } : {}
+      
+      const result = await cargoDataOperations.getStats("", filterParams)
       if (result && !result.error) {
         setStats(result)
       }

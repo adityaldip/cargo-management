@@ -663,16 +663,136 @@ export function ExecuteRates() {
     console.log('🔄 Ordering state changed:', orderBy, orderDirection)
   }, [orderBy, orderDirection])
 
-  // Calculate total revenue when component loads or filters change
+  // Calculate total revenue and stats when component loads or filters change
   useEffect(() => {
     if (!loading && totalRecords > 0) {
       calculateTotalRevenue()
+      loadTotalStats()
     }
   }, [loading, totalRecords, filterConditions, filterLogic])
 
   // State for total revenue calculation
   const [totalRevenue, setTotalRevenue] = useState(0)
   const [isCalculatingTotal, setIsCalculatingTotal] = useState(false)
+  
+  // State for total statistics
+  const [totalStats, setTotalStats] = useState({
+    totalWeight: 0,
+    avgWeight: 0,
+    totalRecords: 0
+  })
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
+
+  // Load total statistics from server using batched approach
+  const loadTotalStats = async () => {
+    if (isLoadingStats) return
+    
+    setIsLoadingStats(true)
+    try {
+      console.log('📊 Loading total statistics for assigned rates using batched approach...')
+      
+      // Use batched approach to fetch all records
+      const batchSize = 1000
+      let allCargoData: any[] = []
+      let currentPage = 1
+      let hasMoreData = true
+      
+      while (hasMoreData) {
+        // Build query for current batch
+        let dataQuery = supabase
+          .from('cargo_data')
+          .select('total_kg')
+          .not('rate_id', 'is', null)
+          .range((currentPage - 1) * batchSize, currentPage * batchSize - 1)
+        
+        // Apply same filters as current view
+        if (hasActiveFilters && filterConditions.length > 0) {
+          filterConditions.forEach((condition) => {
+            const { field, operator, value } = condition
+            
+            if (value && value.trim() !== '') {
+              switch (operator) {
+                case 'equals':
+                  dataQuery = dataQuery.eq(field, value)
+                  break
+                case 'contains':
+                  dataQuery = dataQuery.ilike(field, `%${value}%`)
+                  break
+                case 'starts_with':
+                  dataQuery = dataQuery.ilike(field, `${value}%`)
+                  break
+                case 'ends_with':
+                  dataQuery = dataQuery.ilike(field, `%${value}`)
+                  break
+                case 'greater_than':
+                  const numValue = parseFloat(value)
+                  if (!isNaN(numValue)) {
+                    dataQuery = dataQuery.gt(field, numValue)
+                  }
+                  break
+                case 'less_than':
+                  const numValue2 = parseFloat(value)
+                  if (!isNaN(numValue2)) {
+                    dataQuery = dataQuery.lt(field, numValue2)
+                  }
+                  break
+                case 'not_empty':
+                  dataQuery = dataQuery.not(field, 'is', null).neq(field, '')
+                  break
+                case 'is_empty':
+                  dataQuery = dataQuery.or(`${field}.is.null,${field}.eq.`)
+                  break
+              }
+            }
+          })
+        }
+        
+        // Fetch current batch
+        const { data: batchData, error } = await dataQuery
+        
+        if (error) {
+          console.error(`Error fetching batch ${currentPage} for stats:`, error)
+          break
+        }
+        
+        if (batchData && batchData.length > 0) {
+          allCargoData.push(...batchData)
+          console.log(`📊 Batch ${currentPage} completed: ${batchData.length} records (Total so far: ${allCargoData.length})`)
+          
+          // Check if we got less than batchSize, meaning we've reached the end
+          if (batchData.length < batchSize) {
+            hasMoreData = false
+          } else {
+            currentPage++
+          }
+        } else {
+          hasMoreData = false
+        }
+      }
+      
+      if (allCargoData.length === 0) {
+        setTotalStats({ totalWeight: 0, avgWeight: 0, totalRecords: 0 })
+        return
+      }
+      
+      // Calculate total statistics
+      const totalWeight = allCargoData.reduce((sum, record: any) => sum + (record.total_kg || 0), 0)
+      const avgWeight = allCargoData.length > 0 ? totalWeight / allCargoData.length : 0
+      
+      setTotalStats({
+        totalWeight,
+        avgWeight,
+        totalRecords: allCargoData.length
+      })
+      
+      console.log(`📊 Total stats calculated: ${allCargoData.length} records, ${totalWeight.toFixed(1)}kg total, ${avgWeight.toFixed(1)}kg avg`)
+      
+    } catch (error) {
+      console.error('Error loading total stats:', error)
+    } finally {
+      setIsLoadingStats(false)
+    }
+  }
 
   // Calculate total revenue across ALL records (not just current page)
   const calculateTotalRevenue = async () => {
@@ -1307,11 +1427,11 @@ export function ExecuteRates() {
   const paginationHasPrevPage = hasPrevPage
   const paginationHasNextPage = hasNextPage
 
-  // Calculate statistics for the current page data
-  const totalItems = totalRecords // Use total records from server
-  const totalWeight = cargoData.reduce((sum, record) => sum + parseFloat(String(record.total_kg || 0)), 0)
-  const avgWeight = cargoData.length > 0 ? totalWeight / cargoData.length : 0
-  const assignedCount = totalRecords // All records are assigned since we filter them
+  // Use total statistics from all records, not just current page
+  const totalItems = totalStats.totalRecords || totalRecords // Use total stats or fallback to server total
+  const totalWeight = totalStats.totalWeight
+  const avgWeight = totalStats.avgWeight
+  const assignedCount = totalStats.totalRecords || totalRecords // All records are assigned since we filter them
 
   return (
     <div className="space-y-4 pt-2">
@@ -1490,8 +1610,26 @@ export function ExecuteRates() {
             ) : (
               <span>Total Records: <strong className="text-black">{totalItems.toLocaleString()}</strong></span>
             )}
-            <span>Total Weight: <strong className="text-black">{totalWeight.toFixed(1)} kg</strong></span>
-            <span>Avg Weight: <strong className="text-black">{avgWeight.toFixed(1)} kg</strong></span>
+            <span>Total Weight: <strong className="text-black">
+              {isLoadingStats ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Calculating...
+                </span>
+              ) : (
+                `${totalWeight.toFixed(1)} kg`
+              )}
+            </strong></span>
+            <span>Avg Weight: <strong className="text-black">
+              {isLoadingStats ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Calculating...
+                </span>
+              ) : (
+                `${avgWeight.toFixed(1)} kg`
+              )}
+            </strong></span>
             <span>Total Revenue: <strong className="text-black">
               {isCalculatingTotal ? (
                 <span className="flex items-center gap-1">
