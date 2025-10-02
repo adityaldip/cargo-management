@@ -102,40 +102,66 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   const findMatchingSectorRates = (route: string) => {
     if (!route || route === "n/a") return []
     
-    console.log('Checking route:', route)
-    
-    // Extract origin and destination from route (e.g., "FRA -> DUS")
+    // Extract origin and destination from route (e.g., "FRA -> DUS" or "FRA → DUS")
     const routeMatch = route.match(/([A-Z]{3})\s*->\s*([A-Z]{3})/)
     if (!routeMatch) {
-      console.log('No route match found for:', route)
       return []
     }
     
     const [, origin, destination] = routeMatch
-    console.log('Extracted origin:', origin, 'destination:', destination)
-    console.log('Available sector rates:', sectorRatesData)
     
     const matchingRates = sectorRatesData.filter(rate => 
       rate.origin === origin && rate.destination === destination
     )
     
-    console.log('Matching rates found:', matchingRates)
     return matchingRates
   }
 
   // Get all available routes and their matching sector rates
   const getAvailableSectorRates = (beforeBT: string, inbound: string, outbound: string, afterBT: string) => {
-    const routes = [beforeBT, inbound, outbound, afterBT]
     const allSectorRates: any[] = []
     
-    console.log('Checking routes for sector rates:', routes)
+    // Extract routes from each column
+    const routes = []
     
+    // 1. before BT - extract route (e.g., "FRA -> DUS")
+    if (beforeBT && beforeBT !== "n/a") {
+      const beforeRoute = beforeBT.match(/([A-Z]{3})\s*->\s*([A-Z]{3})/)
+      if (beforeRoute) {
+        routes.push(`${beforeRoute[1]} -> ${beforeRoute[2]}`)
+      }
+    }
+    
+    // 2. inbound - extract route from flight info (e.g., "BT234, DUS → RIX" -> "DUS -> RIX")
+    if (inbound && inbound !== "n/a") {
+      const inboundRoute = inbound.match(/([A-Z]{3})\s*→\s*([A-Z]{3})/)
+      if (inboundRoute) {
+        routes.push(`${inboundRoute[1]} -> ${inboundRoute[2]}`)
+      }
+    }
+    
+    // 3. outbound - extract route from flight info (e.g., "BT633, RIX → LGW" -> "RIX -> LGW")
+    if (outbound && outbound !== "n/a") {
+      const outboundRoute = outbound.match(/([A-Z]{3})\s*→\s*([A-Z]{3})/)
+      if (outboundRoute) {
+        routes.push(`${outboundRoute[1]} -> ${outboundRoute[2]}`)
+      }
+    }
+    
+    // 4. after BT - extract route (e.g., "ROM -> LGW")
+    if (afterBT && afterBT !== "n/a") {
+      const afterRoute = afterBT.match(/([A-Z]{3})\s*->\s*([A-Z]{3})/)
+      if (afterRoute) {
+        routes.push(`${afterRoute[1]} -> ${afterRoute[2]}`)
+      }
+    }
+    
+    // Find matching sector rates for each route
     routes.forEach(route => {
       const matchingRates = findMatchingSectorRates(route)
       allSectorRates.push(...matchingRates)
     })
     
-    console.log('All found sector rates:', allSectorRates)
     return allSectorRates
   }
 
@@ -165,14 +191,14 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         .select('*')
         .eq('is_active', true)
 
-      if (sectorRatesError) throw sectorRatesError
+      if (sectorRatesError) {
+        console.error('Error loading sector rates:', sectorRatesError)
+        throw sectorRatesError
+      }
 
       setFlightData(uploadData || [])
       setFlightsData(flightsDbData || [])
       setSectorRatesData(sectorRatesDbData || [])
-      
-      // Debug logging
-      console.log('Loaded sector rates:', sectorRatesDbData)
     } catch (error) {
       console.error('Error loading flight data:', error)
       toast({
@@ -241,7 +267,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         afterBT = "n/a"
       }
 
-      // Get available sector rates for all routes
+      // Get available sector rates for all routes from the 4 columns
       const availableSectorRates = getAvailableSectorRates(
         beforeBT, 
         flight.inbound ? formatFlight(flight.inbound) : "n/a",
@@ -249,17 +275,6 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         afterBT
       )
 
-      // Also check the main route (origin -> destination)
-      const mainRouteRates = findMatchingSectorRates(`${originCode} → ${destinationCode}`)
-      const allRates = [...availableSectorRates, ...mainRouteRates]
-
-      console.log('Final applied rate calculation:', {
-        availableSectorRates,
-        mainRouteRates,
-        allRates,
-        originCode,
-        destinationCode
-      })
 
       return {
         origin: originCode,
@@ -268,10 +283,10 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         outbound: flight.outbound ? formatFlight(flight.outbound) : "n/a",
         afterBT: afterBT,
         destination: destinationCode,
-        appliedRate: allRates.length > 0 
-          ? allRates.map(rate => `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`).join(' | ')
+        appliedRate: availableSectorRates.length > 0 
+          ? availableSectorRates.map(rate => `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`).join(' | ')
           : "n/a",
-        availableSectorRates: allRates
+        availableSectorRates: availableSectorRates
       }
     })
 

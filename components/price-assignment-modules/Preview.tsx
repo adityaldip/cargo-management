@@ -41,7 +41,8 @@ const dummyGeneratedData = [
     outbound: "n/a",
     afterBT: "n/a",
     destination: "RIX",
-    appliedRate: "DUS → RIX, €3.00"
+    appliedRate: "DUS → RIX, €3.00",
+    availableSectorRates: []
   },
   {
     origin: "EVN",
@@ -50,7 +51,8 @@ const dummyGeneratedData = [
     outbound: "BT651, (RIX -> LGW)",
     afterBT: "(LGW -> CVT)",
     destination: "CVT",
-    appliedRate: "DUS → RIX, €3.00"
+    appliedRate: "DUS → RIX, €3.00",
+    availableSectorRates: []
   },
   {
     origin: "VIE",
@@ -59,7 +61,8 @@ const dummyGeneratedData = [
     outbound: "BT651, (RIX -> RMO)",
     afterBT: "(RMO -> KIV)",
     destination: "KIV",
-    appliedRate: "DUS → RIX, €3.00"
+    appliedRate: "DUS → RIX, €3.00",
+    availableSectorRates: []
   },
   {
     origin: "VNO",
@@ -68,7 +71,8 @@ const dummyGeneratedData = [
     outbound: "BT965 (VNO -> CDG)",
     afterBT: "(CDG -> SCL)",
     destination: "SCL",
-    appliedRate: "VNO → CDG, €3.00"
+    appliedRate: "VNO → CDG, €3.00",
+    availableSectorRates: []
   }
 ]
 
