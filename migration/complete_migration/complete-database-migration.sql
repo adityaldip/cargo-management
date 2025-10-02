@@ -219,6 +219,18 @@ CREATE TABLE public.sector_rates (
     CONSTRAINT check_different_airports CHECK (origin_airport_id != destination_airport_id)
 ) TABLESPACE pg_default;
 
+-- 12. Create flight_uploads table
+CREATE TABLE public.flight_uploads (
+    id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
+    origin CHARACTER VARYING(50) NOT NULL,
+    destination CHARACTER VARYING(50) NOT NULL,
+    inbound CHARACTER VARYING(50) NULL,
+    outbound CHARACTER VARYING(50) NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT flight_uploads_pkey PRIMARY KEY (id)
+) TABLESPACE pg_default;
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_customers_code ON public.customers USING btree (code) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_customers_is_active ON public.customers USING btree (is_active) TABLESPACE pg_default;
@@ -274,6 +286,12 @@ CREATE INDEX IF NOT EXISTS idx_sector_rates_destination_airport_id ON public.sec
 CREATE INDEX IF NOT EXISTS idx_sector_rates_is_active ON public.sector_rates USING btree (is_active) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_route ON public.sector_rates USING btree (origin, destination) TABLESPACE pg_default;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sector_rates_unique_route ON public.sector_rates USING btree (origin_airport_id, destination_airport_id) WHERE is_active = true TABLESPACE pg_default;
+
+CREATE INDEX IF NOT EXISTS idx_flight_uploads_origin ON public.flight_uploads USING btree (origin) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flight_uploads_destination ON public.flight_uploads USING btree (destination) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flight_uploads_inbound ON public.flight_uploads USING btree (inbound) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flight_uploads_outbound ON public.flight_uploads USING btree (outbound) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flight_uploads_created_at ON public.flight_uploads USING btree (created_at) TABLESPACE pg_default;
 
 -- Create triggers for updated_at columns
 CREATE TRIGGER update_customers_updated_at 
@@ -332,6 +350,11 @@ CREATE TRIGGER update_sector_rates_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_flight_uploads_updated_at 
+    BEFORE UPDATE ON public.flight_uploads 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_codes ENABLE ROW LEVEL SECURITY;
@@ -344,6 +367,7 @@ ALTER TABLE public.airport_code ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.flights ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sector_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.flight_uploads ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies (allow all operations for authenticated users)
 CREATE POLICY "Allow all operations for authenticated users" ON public.customers
@@ -379,6 +403,9 @@ CREATE POLICY "Allow all operations for authenticated users" ON public.invoices
 CREATE POLICY "Allow all operations for authenticated users" ON public.sector_rates
     FOR ALL USING (auth.role() = 'authenticated');
 
+CREATE POLICY "Allow all operations for authenticated users" ON public.flight_uploads
+    FOR ALL USING (auth.role() = 'authenticated');
+
 -- Grant permissions
 GRANT ALL ON public.customers TO authenticated;
 GRANT ALL ON public.customer_codes TO authenticated;
@@ -391,6 +418,7 @@ GRANT ALL ON public.airport_code TO authenticated;
 GRANT ALL ON public.flights TO authenticated;
 GRANT ALL ON public.invoices TO authenticated;
 GRANT ALL ON public.sector_rates TO authenticated;
+GRANT ALL ON public.flight_uploads TO authenticated;
 
 GRANT ALL ON public.customers TO service_role;
 GRANT ALL ON public.customer_codes TO service_role;
@@ -403,6 +431,7 @@ GRANT ALL ON public.airport_code TO service_role;
 GRANT ALL ON public.flights TO service_role;
 GRANT ALL ON public.invoices TO service_role;
 GRANT ALL ON public.sector_rates TO service_role;
+GRANT ALL ON public.flight_uploads TO service_role;
 
 -- Insert sample data
 INSERT INTO public.customers (name, code, email, phone, address, city, state, postal_code, country, contact_person, priority, total_shipments) VALUES

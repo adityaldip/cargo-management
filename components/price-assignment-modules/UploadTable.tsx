@@ -1,0 +1,303 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase"
+import { SweetAlert } from "@/components/ui/sweet-alert"
+import { AddFlightUploadModal } from "./AddFlightUploadModal"
+import { EditFlightUploadModal } from "./EditFlightUploadModal"
+import { Edit, Trash2 } from "lucide-react"
+
+interface UploadData {
+  id?: string
+  origin: string
+  destination: string
+  inbound: string
+  outbound: string
+  created_at?: string
+  updated_at?: string
+}
+
+interface UploadTableProps {
+  data: UploadData[]
+  onDataChange: (data: UploadData[]) => void
+}
+
+export function UploadTable({ data, onDataChange }: UploadTableProps) {
+  const [isUploading, setIsUploading] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
+  const [editRecord, setEditRecord] = useState<UploadData | null>(null)
+  const { toast } = useToast()
+
+  // Load data from database on component mount
+  useEffect(() => {
+    loadDataFromDatabase()
+  }, [])
+
+  const loadDataFromDatabase = async () => {
+    setIsLoading(true)
+    try {
+      const { data: dbData, error } = await supabase
+        .from('flight_uploads')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      onDataChange(dbData || [])
+    } catch (error) {
+      console.error('Error loading data:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load data from database.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleAddSuccess = () => {
+    // Reload data from database after successful creation
+    loadDataFromDatabase()
+  }
+
+  const handleEditSuccess = () => {
+    // Reload data from database after successful update
+    loadDataFromDatabase()
+  }
+
+  const handleEdit = (record: UploadData) => {
+    setEditRecord(record)
+    setShowEditModal(true)
+  }
+
+  const removeRow = (index: number) => {
+    setDeleteIndex(index)
+    setShowDeleteAlert(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (deleteIndex === null) return
+
+    const row = data[deleteIndex]
+    
+    try {
+      // If row has an ID, delete from database
+      if (row.id) {
+        const { error } = await supabase
+          .from('flight_uploads')
+          .delete()
+          .eq('id', row.id)
+
+        if (error) throw error
+      }
+
+      // Remove from local state
+      const newData = data.filter((_, i) => i !== deleteIndex)
+      onDataChange(newData)
+
+      toast({
+        title: "Deleted!",
+        description: "The record has been deleted.",
+      })
+    } catch (error) {
+      console.error('Error deleting record:', error)
+      toast({
+        title: "Error!",
+        description: "Failed to delete the record.",
+        variant: "destructive"
+      })
+    } finally {
+      setShowDeleteAlert(false)
+      setDeleteIndex(null)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setShowDeleteAlert(false)
+    setDeleteIndex(null)
+  }
+
+  const handleUpload = async () => {
+    setIsUploading(true)
+    try {
+      // Filter out rows with empty required fields
+      const validRows = data.filter(row => 
+        row.origin.trim() !== "" && row.destination.trim() !== ""
+      )
+
+      if (validRows.length === 0) {
+        toast({
+          title: "No Valid Data",
+          description: "Please enter at least origin and destination for one row.",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Save to database
+      const { error } = await supabase
+        .from('flight_uploads')
+        .upsert(validRows.map(row => ({
+          ...(row.id && { id: row.id }),
+          origin: row.origin,
+          destination: row.destination,
+          inbound: row.inbound || null,
+          outbound: row.outbound || null
+        })), {
+          onConflict: 'id'
+        })
+
+      if (error) throw error
+
+      // Reload data from database
+      await loadDataFromDatabase()
+
+      toast({
+        title: "Data Saved",
+        description: `${validRows.length} record(s) saved successfully.`,
+      })
+    } catch (error) {
+      console.error('Error saving data:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save data to database.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex justify-center items-center py-8">
+            <div className="text-sm text-gray-500">Loading data...</div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex justify-between items-center mb-3">
+            <Button 
+              className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-3"
+              onClick={handleUpload}
+              disabled={isUploading}
+            >
+              {isUploading ? "Uploading..." : "Upload"}
+            </Button>
+            <Button 
+                onClick={() => setShowAddModal(true)}
+                variant="outline" 
+                size="sm"
+                className="text-xs"
+              >
+                + Add Record
+              </Button>
+          </div>
+          <div>
+            <div className="text-sm text-gray-500 w-full flex justify-center items-center">
+              <p className="w-full text-center font-bold text-black">Form upload file</p>
+            </div>
+            <div className="w-full border-b border-black"></div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs py-2 min-w-[120px]">Origin</TableHead>
+                    <TableHead className="text-xs py-2 min-w-[120px]">Destination</TableHead>
+                    <TableHead className="text-xs py-2 min-w-[140px]">Inbound Flight</TableHead>
+                    <TableHead className="text-xs py-2 min-w-[140px]">Outbound Flight</TableHead>
+                    <TableHead className="text-xs py-2 min-w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.map((row, index) => (
+                    <TableRow key={row.id || index}>
+                      <TableCell className="py-2 text-sm">
+                        {row.origin}
+                      </TableCell>
+                      <TableCell className="py-2 text-sm">
+                        {row.destination}
+                      </TableCell>
+                      <TableCell className="py-2 text-sm">
+                        {row.inbound || "-"}
+                      </TableCell>
+                      <TableCell className="py-2 text-sm">
+                        {row.outbound || "-"}
+                      </TableCell>
+                      <TableCell className="py-2">
+                        <div className="flex gap-1">
+                          <Button
+                            onClick={() => handleEdit(row)}
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            onClick={() => removeRow(index)}
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Add Flight Upload Modal */}
+      <AddFlightUploadModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={handleAddSuccess}
+      />
+
+      {/* Edit Flight Upload Modal */}
+      <EditFlightUploadModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSuccess={handleEditSuccess}
+        record={editRecord}
+      />
+
+      {/* Sweet Alert for delete confirmation */}
+      <SweetAlert
+        isVisible={showDeleteAlert}
+        title="Are you sure?"
+        text="You won't be able to revert this!"
+        type="warning"
+        showCancelButton={true}
+        confirmButtonText="Yes, delete it!"
+        cancelButtonText="Cancel"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        onClose={handleDeleteCancel}
+      />
+    </>
+  )
+}
+
