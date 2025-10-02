@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
-import { airportCodeAPI } from "@/lib/api-client"
-import { AirportCode } from "./types"
+import { airportCodeAPI, flightsAPI } from "@/lib/api-client"
+import { AirportCode, Flight } from "./types"
 
 export function useAirportCodeData() {
   const [airportCodes, setAirportCodes] = useState<AirportCode[]>([])
@@ -160,6 +160,143 @@ export function useAirportCodeData() {
     deleteAirport,
     createAirport,
     updateAirport,
+    loadData,
+    refetch: () => loadData(true) // Force refresh
+  }
+}
+
+export function useFlightData() {
+  const [flights, setFlights] = useState<Flight[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
+
+  const fetchFlights = async () => {
+    try {
+      const { data: flightsData, error } = await flightsAPI.getAll()
+
+      if (error) {
+        setError(`Failed to fetch flights: ${error}`)
+        return
+      }
+
+      if (flightsData && Array.isArray(flightsData)) {
+        setFlights(flightsData)
+        setLastFetchTime(Date.now())
+      }
+    } catch (err) {
+      setError(`Failed to fetch flights: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  const toggleFlight = async (flightId: string) => {
+    const flight = flights.find(f => f.id === flightId)
+    if (!flight) return
+
+    try {
+      console.log('Toggling flight:', flightId, 'from', flight.is_active, 'to', !flight.is_active)
+      const { data: updatedFlight, error } = await flightsAPI.toggleActive(flightId, !flight.is_active)
+      console.log('Toggle result:', { updatedFlight, error })
+      
+      if (error) {
+        setError(`Failed to update flight: ${error}`)
+        return
+      }
+      
+      if (updatedFlight && typeof updatedFlight === 'object' && 'is_active' in updatedFlight) {
+        setFlights(prev => prev.map(f => 
+          f.id === flightId ? { ...f, is_active: (updatedFlight as any).is_active } : f
+        ))
+      }
+    } catch (err) {
+      console.error('Toggle flight error:', err)
+      setError(`Failed to update flight: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  const deleteFlight = async (flightId: string) => {
+    try {
+      const { error } = await flightsAPI.delete(flightId)
+      if (error) {
+        setError(`Failed to delete flight: ${error}`)
+        return
+      }
+      
+      setFlights(prev => prev.filter(flight => flight.id !== flightId))
+    } catch (err) {
+      setError(`Failed to delete flight: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  const createFlight = async (flightData: any) => {
+    try {
+      const { data: newFlight, error } = await flightsAPI.create(flightData)
+      if (error) {
+        setError(`Failed to create flight: ${error}`)
+        return { success: false, error }
+      }
+      
+      if (newFlight) {
+        setFlights(prev => [newFlight as Flight, ...prev])
+        return { success: true, data: newFlight }
+      }
+    } catch (err) {
+      const errorMessage = `Failed to create flight: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  const updateFlight = async (flightId: string, updates: any) => {
+    try {
+      const { data: updatedFlight, error } = await flightsAPI.update(flightId, updates)
+      if (error) {
+        setError(`Failed to update flight: ${error}`)
+        return { success: false, error }
+      }
+      
+      if (updatedFlight) {
+        setFlights(prev => prev.map(flight => 
+          flight.id === flightId ? updatedFlight as Flight : flight
+        ))
+        return { success: true, data: updatedFlight }
+      }
+    } catch (err) {
+      const errorMessage = `Failed to update flight: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  const loadData = useCallback(async (forceRefresh = false) => {
+    // Cache for 60 seconds to avoid unnecessary requests
+    const cacheTime = 60 * 1000
+    const now = Date.now()
+    
+    if (!forceRefresh && lastFetchTime > 0 && (now - lastFetchTime) < cacheTime) {
+      console.log('Using cached flights data, skipping fetch')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    await fetchFlights()
+    setLoading(false)
+  }, [lastFetchTime])
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  return {
+    flights,
+    loading,
+    error,
+    setError,
+    toggleFlight,
+    deleteFlight,
+    createFlight,
+    updateFlight,
     loadData,
     refetch: () => loadData(true) // Force refresh
   }

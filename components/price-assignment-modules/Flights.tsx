@@ -2,217 +2,387 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ErrorBanner } from "@/components/ui/status-banner"
+import { 
+  Plane, 
+  Plus,
+  RefreshCw,
+  Edit,
+  Trash2
+} from "lucide-react"
 import { Flight } from "./types"
-
-// Dummy data
-const dummyFlights: Flight[] = [
-  {
-    id: "1",
-    flightNumber: "AA123",
-    origin: "JFK",
-    destination: "LAX",
-    airline: "American Airlines",
-    aircraft: "Boeing 737",
-    departureTime: "2024-01-15 08:30",
-    arrivalTime: "2024-01-15 11:45",
-    status: "scheduled",
-    price: 450
-  },
-  {
-    id: "2",
-    flightNumber: "UA456",
-    origin: "LAX",
-    destination: "SFO",
-    airline: "United Airlines",
-    aircraft: "Airbus A320",
-    departureTime: "2024-01-15 14:20",
-    arrivalTime: "2024-01-15 15:35",
-    status: "delayed",
-    price: 320
-  },
-  {
-    id: "3",
-    flightNumber: "DL789",
-    origin: "SFO",
-    destination: "JFK",
-    airline: "Delta Airlines",
-    aircraft: "Boeing 777",
-    departureTime: "2024-01-15 18:00",
-    arrivalTime: "2024-01-16 06:15",
-    status: "scheduled",
-    price: 680
-  },
-  {
-    id: "4",
-    flightNumber: "SW234",
-    origin: "ORD",
-    destination: "DEN",
-    airline: "Southwest",
-    aircraft: "Boeing 737",
-    departureTime: "2024-01-15 10:15",
-    arrivalTime: "2024-01-15 12:30",
-    status: "completed",
-    price: 280
-  },
-  {
-    id: "5",
-    flightNumber: "BA567",
-    origin: "LHR",
-    destination: "CDG",
-    airline: "British Airways",
-    aircraft: "Airbus A320",
-    departureTime: "2024-01-15 16:45",
-    arrivalTime: "2024-01-15 19:20",
-    status: "scheduled",
-    price: 420
-  }
-]
-
-const statusColors = {
-  scheduled: "bg-blue-100 text-blue-800",
-  delayed: "bg-yellow-100 text-yellow-800",
-  cancelled: "bg-red-100 text-red-800",
-  completed: "bg-green-100 text-green-800"
-}
+import { useToast } from "@/hooks/use-toast"
+import { Skeleton } from "@/components/ui/skeleton"
+import { SweetAlert } from "@/components/ui/sweet-alert"
+import { useFlightData } from "./hooks"
+import { FlightModal } from "./FlightModal"
+import { FlightTable } from "./FlightTable"
 
 export function Flights() {
-  const [flights, setFlights] = useState<Flight[]>(dummyFlights)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [airlineFilter, setAirlineFilter] = useState<string>("all")
+  const { toast } = useToast()
+  const {
+    flights,
+    loading,
+    error,
+    setError,
+    toggleFlight,
+    deleteFlight,
+    createFlight,
+    updateFlight,
+    refetch
+  } = useFlightData()
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [flightSearchTerm, setFlightSearchTerm] = useState("")
+  const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null)
+  const [isFlightEditorOpen, setIsFlightEditorOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [togglingStatus, setTogglingStatus] = useState<Set<string>>(new Set())
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false)
+  const [flightToDelete, setFlightToDelete] = useState<Flight | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  const filteredFlights = flights.filter(flight => {
-    const matchesSearch = flight.flightNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         flight.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         flight.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         flight.airline.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesStatus = statusFilter === "all" || flight.status === statusFilter
-    const matchesAirline = airlineFilter === "all" || flight.airline === airlineFilter
-
-    return matchesSearch && matchesStatus && matchesAirline
+  // New flight form state
+  const [newFlightForm, setNewFlightForm] = useState({
+    flightNumber: "",
+    origin: "",
+    destination: "",
+    originAirportId: "",
+    destinationAirportId: "",
+    status: "scheduled"
   })
 
-  const uniqueAirlines = Array.from(new Set(flights.map(flight => flight.airline)))
+  // Remove the filteredFlights logic as it's now handled in FlightTable
+
+  const handleToggleFlight = async (flightId: string) => {
+    // Prevent multiple toggles on the same flight
+    if (togglingStatus.has(flightId)) {
+      return
+    }
+
+    try {
+      // Add to toggling set
+      setTogglingStatus(prev => new Set(prev).add(flightId))
+      setError(null)
+      
+      const flight = flights.find(f => f.id === flightId)
+      await toggleFlight(flightId)
+      
+      toast({
+        title: "Status Updated",
+        description: `Flight ${flight?.flightNumber} is now ${flight?.is_active ? 'inactive' : 'active'}`,
+      })
+    } catch (err) {
+      const errorMsg = `Failed to toggle flight: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive",
+      })
+    } finally {
+      // Remove from toggling set
+      setTogglingStatus(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(flightId)
+        return newSet
+      })
+    }
+  }
+
+  const handleEditFlight = (flight: Flight) => {
+    setSelectedFlight(flight)
+    setIsFlightEditorOpen(true)
+  }
+
+  const handleDeleteFlight = (flight: Flight) => {
+    setFlightToDelete(flight)
+    setShowDeleteAlert(true)
+  }
+
+  const confirmDeleteFlight = async () => {
+    if (!flightToDelete) return
+
+    setIsDeleting(true)
+    try {
+      await deleteFlight(flightToDelete.id)
+      
+      toast({
+        title: "Flight Deleted",
+        description: `Flight ${flightToDelete.flightNumber} has been deleted`,
+      })
+    } catch (err) {
+      const errorMsg = `Failed to delete flight: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteAlert(false)
+      setFlightToDelete(null)
+    }
+  }
+
+  const handleSaveFlight = async (flightData: any) => {
+    if (!flightData.flightNumber.trim() || !flightData.originAirportId || !flightData.destinationAirportId) {
+      setError('Please fill in all required fields')
+      return
+    }
+
+    setIsCreating(true)
+    setError(null)
+
+    try {
+      const isEditing = selectedFlight !== null
+      
+      if (isEditing) {
+        // Update existing flight
+        const result = await updateFlight(selectedFlight.id, {
+          flight_number: flightData.flightNumber.trim(),
+          origin: flightData.origin.trim(),
+          destination: flightData.destination.trim(),
+          origin_airport_id: flightData.originAirportId,
+          destination_airport_id: flightData.destinationAirportId,
+          status: flightData.status
+        })
+        
+        if (result?.success) {
+          handleCloseModal()
+          toast({
+            title: "Flight Updated",
+            description: `Flight ${flightData.flightNumber} has been updated successfully`,
+          })
+        } else {
+          setError(result?.error || 'Failed to update flight')
+          toast({
+            title: "Error",
+            description: result?.error || 'Failed to update flight',
+            variant: "destructive",
+          })
+        }
+      } else {
+        // Create new flight
+        const result = await createFlight({
+          flight_number: flightData.flightNumber.trim(),
+          origin: flightData.origin.trim(),
+          destination: flightData.destination.trim(),
+          origin_airport_id: flightData.originAirportId,
+          destination_airport_id: flightData.destinationAirportId,
+          status: flightData.status
+        })
+        
+        if (result?.success) {
+          handleCloseModal()
+          toast({
+            title: "Flight Created",
+            description: `Flight ${flightData.flightNumber} has been created successfully`,
+          })
+        } else {
+          setError(result?.error || 'Failed to create flight')
+          toast({
+            title: "Error",
+            description: result?.error || 'Failed to create flight',
+            variant: "destructive",
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Error saving flight:', err)
+      setError('Failed to save flight')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleCreateNewFlight = () => {
+    setSelectedFlight(null)
+    setNewFlightForm({
+      flightNumber: "",
+      origin: "",
+      destination: "",
+      originAirportId: "",
+      destinationAirportId: "",
+      status: "scheduled"
+    })
+    setIsFlightEditorOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setNewFlightForm({
+      flightNumber: "",
+      origin: "",
+      destination: "",
+      originAirportId: "",
+      destinationAirportId: "",
+      status: "scheduled"
+    })
+    setSelectedFlight(null)
+    setIsFlightEditorOpen(false)
+    setError(null)
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refetch()
+    setIsRefreshing(false)
+  }
+
+  if (loading) {
+  return (
+      <div className="max-w-3xl mx-auto">
+        <Card className="bg-white border-gray-200 shadow-sm">
+          <CardContent>
+            <div className="flex items-center justify-between pb-4">
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-6 w-6" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-8" />
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-8 w-24" />
+              </div>
+              
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center space-x-4">
+                    <Skeleton className="h-8 w-16" />
+                    <Skeleton className="h-4 w-12" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-6 w-12" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Flight Management</h2>
-        <Button>Add New Flight</Button>
-      </div>
+    <div className="max-w-3xl mx-auto">
+      {/* Error Display */}
+      {error && (
+        <ErrorBanner
+          message={error}
+          className="mb-4"
+          onClose={() => setError(null)}
+        />
+      )}
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
+      {/* Flight Management */}
+      <Card className="bg-white border-gray-200 shadow-sm">
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm font-medium">Search</label>
-              <Input
-                placeholder="Search flights..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Status</label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
+          <div className="flex items-center justify-between pb-2">
+            <CardTitle className="text-black flex items-center gap-2">
+              <Plane className="h-5 w-5" />
+              Flight Management
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleCreateNewFlight}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Flight
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </>
+                )}
+              </Button>
+              <Select value={statusFilter} onValueChange={(value: 'all' | 'active' | 'inactive') => setStatusFilter(value)}>
+                <SelectTrigger className="h-8 w-auto min-w-[100px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                  <SelectItem value="delayed">Delayed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Airline</label>
-              <Select value={airlineFilter} onValueChange={setAirlineFilter}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Airlines</SelectItem>
-                  {uniqueAirlines.map(airline => (
-                    <SelectItem key={airline} value={airline}>{airline}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button variant="outline" onClick={() => {
-                setSearchTerm("")
-                setStatusFilter("all")
-                setAirlineFilter("all")
-              }}>
-                Clear Filters
-              </Button>
             </div>
           </div>
+
+          {/* Flights Table */}
+          <FlightTable
+            flights={flights}
+            loading={loading}
+            flightSearchTerm={flightSearchTerm}
+            setFlightSearchTerm={setFlightSearchTerm}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            togglingStatus={togglingStatus}
+            onToggleFlight={handleToggleFlight}
+            onEditFlight={handleEditFlight}
+            onDeleteFlight={handleDeleteFlight}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
+          />
         </CardContent>
       </Card>
 
-      {/* Flights Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Flights ({filteredFlights.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Flight Number</TableHead>
-                  <TableHead>Route</TableHead>
-                  <TableHead>Airline</TableHead>
-                  <TableHead>Aircraft</TableHead>
-                  <TableHead>Departure</TableHead>
-                  <TableHead>Arrival</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredFlights.map((flight) => (
-                  <TableRow key={flight.id}>
-                    <TableCell className="font-medium">{flight.flightNumber}</TableCell>
-                    <TableCell>{flight.origin} → {flight.destination}</TableCell>
-                    <TableCell>{flight.airline}</TableCell>
-                    <TableCell>{flight.aircraft}</TableCell>
-                    <TableCell>{new Date(flight.departureTime).toLocaleString()}</TableCell>
-                    <TableCell>{new Date(flight.arrivalTime).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Badge className={statusColors[flight.status]}>
-                        {flight.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>${flight.price?.toLocaleString() || 'N/A'}</TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button size="sm" variant="outline">Edit</Button>
-                        <Button size="sm" variant="outline">Delete</Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Flight Modal */}
+      <FlightModal
+        isOpen={isFlightEditorOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveFlight}
+        selectedFlight={selectedFlight}
+        flightForm={newFlightForm}
+        setFlightForm={setNewFlightForm}
+        isCreating={isCreating}
+        error={error}
+      />
+
+      {/* Sweet Alert for Delete Confirmation */}
+      <SweetAlert
+        isVisible={showDeleteAlert}
+        title="Delete Flight"
+        text={`Are you sure you want to delete flight "${flightToDelete?.flightNumber}"? This action cannot be undone.`}
+        type="warning"
+        showCancelButton={true}
+        confirmButtonText="Yes, Delete!"
+        cancelButtonText="Cancel"
+        onConfirm={confirmDeleteFlight}
+        onCancel={() => {
+          setShowDeleteAlert(false)
+          setFlightToDelete(null)
+        }}
+        onClose={() => {
+          setShowDeleteAlert(false)
+          setFlightToDelete(null)
+        }}
+        disabled={isDeleting}
+      />
     </div>
   )
 }

@@ -14,7 +14,7 @@ interface PriceAssignmentTabState {
   resetToDefault: () => void
 }
 
-const DEFAULT_TAB: PriceAssignmentTabType = "flights"
+const DEFAULT_TAB: PriceAssignmentTabType = "airport-codes"
 const DEFAULT_VIEW: PriceAssignmentViewType = "main"
 
 export const usePriceAssignmentTabStore = create<PriceAssignmentTabState>()(

@@ -168,7 +168,24 @@ CREATE TABLE public.airport_code (
     CONSTRAINT airport_code_code_key UNIQUE (code)
 ) TABLESPACE pg_default;
 
--- 9. Create invoices table
+-- 9. Create flights table
+CREATE TABLE public.flights (
+    id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
+    flight_number CHARACTER VARYING(50) NOT NULL,
+    origin CHARACTER VARYING(10) NOT NULL,
+    destination CHARACTER VARYING(10) NOT NULL,
+    origin_airport_id UUID REFERENCES public.airport_code(id) ON DELETE RESTRICT,
+    destination_airport_id UUID REFERENCES public.airport_code(id) ON DELETE RESTRICT,
+    status CHARACTER VARYING(20) DEFAULT 'scheduled',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT flights_pkey PRIMARY KEY (id),
+    CONSTRAINT flights_flight_number_key UNIQUE (flight_number),
+    CONSTRAINT flights_origin_destination_different CHECK (origin_airport_id != destination_airport_id)
+) TABLESPACE pg_default;
+
+-- 10. Create invoices table
 CREATE TABLE public.invoices (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     invoice_number CHARACTER VARYING(100) NOT NULL,
@@ -222,6 +239,14 @@ CREATE INDEX IF NOT EXISTS idx_airport_code_code ON public.airport_code USING bt
 CREATE INDEX IF NOT EXISTS idx_airport_code_is_active ON public.airport_code USING btree (is_active) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_airport_code_is_eu ON public.airport_code USING btree (is_eu) TABLESPACE pg_default;
 
+CREATE INDEX IF NOT EXISTS idx_flights_flight_number ON public.flights USING btree (flight_number) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flights_origin ON public.flights USING btree (origin) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flights_destination ON public.flights USING btree (destination) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flights_origin_airport_id ON public.flights USING btree (origin_airport_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flights_destination_airport_id ON public.flights USING btree (destination_airport_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flights_status ON public.flights USING btree (status) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flights_is_active ON public.flights USING btree (is_active) TABLESPACE pg_default;
+
 CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON public.invoices USING btree (customer_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices USING btree (status) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_invoices_due_date ON public.invoices USING btree (due_date) TABLESPACE pg_default;
@@ -267,6 +292,11 @@ CREATE TRIGGER update_airport_code_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_flights_updated_at 
+    BEFORE UPDATE ON public.flights 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_invoices_updated_at 
     BEFORE UPDATE ON public.invoices 
     FOR EACH ROW 
@@ -281,6 +311,7 @@ ALTER TABLE public.rate_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cargo_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.column_mappings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.airport_code ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.flights ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies (allow all operations for authenticated users)
@@ -308,6 +339,9 @@ CREATE POLICY "Allow all operations for authenticated users" ON public.column_ma
 CREATE POLICY "Allow all operations for authenticated users" ON public.airport_code
     FOR ALL USING (auth.role() = 'authenticated');
 
+CREATE POLICY "Allow all operations for authenticated users" ON public.flights
+    FOR ALL USING (auth.role() = 'authenticated');
+
 CREATE POLICY "Allow all operations for authenticated users" ON public.invoices
     FOR ALL USING (auth.role() = 'authenticated');
 
@@ -320,6 +354,7 @@ GRANT ALL ON public.rate_rules TO authenticated;
 GRANT ALL ON public.cargo_data TO authenticated;
 GRANT ALL ON public.column_mappings TO authenticated;
 GRANT ALL ON public.airport_code TO authenticated;
+GRANT ALL ON public.flights TO authenticated;
 GRANT ALL ON public.invoices TO authenticated;
 
 GRANT ALL ON public.customers TO service_role;
@@ -330,6 +365,7 @@ GRANT ALL ON public.rate_rules TO service_role;
 GRANT ALL ON public.cargo_data TO service_role;
 GRANT ALL ON public.column_mappings TO service_role;
 GRANT ALL ON public.airport_code TO service_role;
+GRANT ALL ON public.flights TO service_role;
 GRANT ALL ON public.invoices TO service_role;
 
 -- Insert sample data
@@ -395,6 +431,48 @@ INSERT INTO public.airport_code (code, is_active, is_eu) VALUES
 ('SYD', false, false),
 ('DXB', true, false),
 ('SFO', true, false);
+
+-- Create a view for easier querying with airport code details
+CREATE OR REPLACE VIEW public.flights_with_airports AS
+SELECT 
+    f.id,
+    f.flight_number,
+    f.origin_airport_id,
+    f.destination_airport_id,
+    f.status,
+    f.is_active,
+    f.created_at,
+    f.updated_at,
+    origin.code as origin_code,
+    origin.is_eu as origin_is_eu,
+    destination.code as destination_code,
+    destination.is_eu as destination_is_eu
+FROM public.flights f
+LEFT JOIN public.airport_code origin ON f.origin_airport_id = origin.id
+LEFT JOIN public.airport_code destination ON f.destination_airport_id = destination.id;
+
+-- Grant permissions on the view
+GRANT ALL ON public.flights_with_airports TO authenticated;
+GRANT ALL ON public.flights_with_airports TO service_role;
+
+-- Add RLS policy for the view
+ALTER TABLE public.flights_with_airports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all operations for authenticated users" ON public.flights_with_airports
+    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Insert sample flights with airport relationships
+INSERT INTO public.flights (flight_number, origin, destination, origin_airport_id, destination_airport_id, status, is_active) VALUES
+('AA123', 'JFK', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'JFK'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 'scheduled', true),
+('UA456', 'LAX', 'SFO', (SELECT id FROM public.airport_code WHERE code = 'LAX'), (SELECT id FROM public.airport_code WHERE code = 'SFO'), 'delayed', true),
+('DL789', 'SFO', 'JFK', (SELECT id FROM public.airport_code WHERE code = 'SFO'), (SELECT id FROM public.airport_code WHERE code = 'JFK'), 'scheduled', false),
+('SW234', 'ORD', 'DEN', (SELECT id FROM public.airport_code WHERE code = 'ORD'), (SELECT id FROM public.airport_code WHERE code = 'DEN'), 'completed', true),
+('BA567', 'LHR', 'CDG', (SELECT id FROM public.airport_code WHERE code = 'LHR'), (SELECT id FROM public.airport_code WHERE code = 'CDG'), 'scheduled', true),
+('LH890', 'FRA', 'MAD', (SELECT id FROM public.airport_code WHERE code = 'FRA'), (SELECT id FROM public.airport_code WHERE code = 'MAD'), 'scheduled', true),
+('AF123', 'CDG', 'BCN', (SELECT id FROM public.airport_code WHERE code = 'CDG'), (SELECT id FROM public.airport_code WHERE code = 'BCN'), 'completed', true),
+('KL456', 'AMS', 'FCO', (SELECT id FROM public.airport_code WHERE code = 'AMS'), (SELECT id FROM public.airport_code WHERE code = 'FCO'), 'scheduled', true),
+('IB789', 'MAD', 'LIS', (SELECT id FROM public.airport_code WHERE code = 'MAD'), (SELECT id FROM public.airport_code WHERE code = 'LIS'), 'scheduled', true),
+('TP012', 'LIS', 'OPO', (SELECT id FROM public.airport_code WHERE code = 'LIS'), (SELECT id FROM public.airport_code WHERE code = 'OPO'), 'scheduled', true);
 
 -- Success message
 SELECT 'Complete Cargo Management System database setup completed successfully!' as message;

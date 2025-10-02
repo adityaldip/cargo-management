@@ -373,3 +373,47 @@ export const airportCodeAPI = {
   }
 }
 
+// Flights API operations
+export const flightsAPI = {
+  // Get all flights
+  async getAll() {
+    return apiRequest('/flights')
+  },
+
+  // Get flight by ID
+  async getById(id: string) {
+    return apiRequest(`/flights/${id}`)
+  },
+
+  // Create flight
+  async create(flightData: any) {
+    return apiRequest('/flights', {
+      method: 'POST',
+      body: JSON.stringify(flightData)
+    })
+  },
+
+  // Update flight
+  async update(id: string, updates: any) {
+    return apiRequest(`/flights/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    })
+  },
+
+  // Delete flight
+  async delete(id: string) {
+    return apiRequest(`/flights/${id}`, {
+      method: 'DELETE'
+    })
+  },
+
+  // Toggle active status
+  async toggleActive(id: string, isActive: boolean) {
+    return apiRequest(`/flights/${id}/toggle`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive })
+    })
+  }
+}
+

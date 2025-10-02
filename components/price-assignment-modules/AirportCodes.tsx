@@ -22,6 +22,7 @@ import { useAirportCodeData } from "./hooks"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SweetAlert } from "@/components/ui/sweet-alert"
+import { AirportCodeTable } from "./AirportCodeTable"
 
 
 export function AirportCodes() {
@@ -40,6 +41,7 @@ export function AirportCodes() {
   } = useAirportCodeData()
 
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [airportSearchTerm, setAirportSearchTerm] = useState("")
   const [selectedAirport, setSelectedAirport] = useState<AirportCode | null>(null)
   const [isAirportEditorOpen, setIsAirportEditorOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -56,13 +58,7 @@ export function AirportCodes() {
     isEU: false
   })
 
-  const filteredAirportCodes = airportCodes.filter(airport => {
-    const matchesStatus = statusFilter === "all" || 
-                         (statusFilter === "active" && airport.is_active) ||
-                         (statusFilter === "inactive" && !airport.is_active)
-
-    return matchesStatus
-  })
+  // Remove the filteredAirportCodes logic as it's now handled in AirportCodeTable
 
   const handleToggleAirport = async (airportId: string) => {
     // Prevent multiple toggles on the same airport
@@ -195,17 +191,17 @@ export function AirportCodes() {
           is_eu: airportData.isEU
         })
         
-        if (result.success) {
+        if (result?.success) {
           handleCloseModal()
           toast({
             title: "Airport Updated",
             description: `Airport ${airportData.code} has been updated successfully`,
           })
         } else {
-          setError(result.error || 'Failed to update airport')
+          setError(result?.error || 'Failed to update airport')
           toast({
             title: "Error",
-            description: result.error || 'Failed to update airport',
+            description: result?.error || 'Failed to update airport',
             variant: "destructive",
           })
         }
@@ -216,17 +212,17 @@ export function AirportCodes() {
           is_eu: airportData.isEU
         })
         
-        if (result.success) {
+        if (result?.success) {
           handleCloseModal()
           toast({
             title: "Airport Created",
             description: `Airport ${airportData.code} has been created successfully`,
           })
         } else {
-          setError(result.error || 'Failed to create airport')
+          setError(result?.error || 'Failed to create airport')
           toast({
             title: "Error",
-            description: result.error || 'Failed to create airport',
+            description: result?.error || 'Failed to create airport',
             variant: "destructive",
           })
         }
@@ -364,81 +360,22 @@ export function AirportCodes() {
 
           
           {/* Airport Codes Table */}
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>EU/Non EU</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAirportCodes.map((airport) => (
-                  <TableRow key={airport.id}>
-                    <TableCell>
-                      <div className="flex items-center space-x-1">
-                        <Switch
-                          checked={airport.is_active}
-                          onCheckedChange={() => handleToggleAirport(airport.id)}
-                          disabled={togglingStatus.has(airport.id)}
-                          className="scale-75"
-                        />
-                        {togglingStatus.has(airport.id) && (
-                          <div className="ml-2">
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600"></div>
-                          </div>
-                        )}
-                        <Badge className={airport.is_active ? "bg-green-100 text-green-800 text-xs" : "bg-gray-100 text-gray-800 text-xs"}>
-                          {airport.is_active ? "Active" : "Inactive"}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">{airport.code}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-1">
-                        <Switch
-                          checked={airport.is_eu}
-                          onCheckedChange={() => handleToggleEU(airport.id)}
-                          disabled={togglingEU.has(airport.id)}
-                          className="scale-75"
-                        />
-                        {togglingEU.has(airport.id) && (
-                          <div className="ml-2">
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                          </div>
-                        )}
-                        <Badge className={airport.is_eu ? "bg-blue-100 text-blue-800 text-xs" : "bg-gray-100 text-gray-800 text-xs"}>
-                          {airport.is_eu ? "EU" : "NON EU"}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-0">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => handleEditAirport(airport)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleDeleteAirport(airport)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <AirportCodeTable
+            airportCodes={airportCodes}
+            loading={loading}
+            airportSearchTerm={airportSearchTerm}
+            setAirportSearchTerm={setAirportSearchTerm}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            togglingStatus={togglingStatus}
+            togglingEU={togglingEU}
+            onToggleAirport={handleToggleAirport}
+            onToggleEU={handleToggleEU}
+            onEditAirport={handleEditAirport}
+            onDeleteAirport={handleDeleteAirport}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
+          />
         </CardContent>
       </Card>
 

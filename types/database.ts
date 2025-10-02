@@ -411,6 +411,44 @@ export interface Database {
           updated_at?: string
         }
       }
+      flights: {
+        Row: {
+          id: string
+          flight_number: string
+          origin: string
+          destination: string
+          origin_airport_id: string
+          destination_airport_id: string
+          status: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          flight_number: string
+          origin: string
+          destination: string
+          origin_airport_id: string
+          destination_airport_id: string
+          status?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          flight_number?: string
+          origin?: string
+          destination?: string
+          origin_airport_id?: string
+          destination_airport_id?: string
+          status?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

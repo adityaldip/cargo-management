@@ -4,12 +4,10 @@ export interface Flight {
   flightNumber: string
   origin: string
   destination: string
-  airline: string
-  aircraft: string
-  departureTime: string
-  arrivalTime: string
+  originAirportId: string
+  destinationAirportId: string
   status: 'scheduled' | 'delayed' | 'cancelled' | 'completed'
-  price?: number
+  is_active: boolean
 }
 
 export interface AirportCode {

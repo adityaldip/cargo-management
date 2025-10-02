@@ -913,3 +913,72 @@ export const airportCodeOperations = {
   },
 }
 
+// Flight Operations
+export const flightOperations = {
+  // Get all flights
+  async getAll() {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('flights')
+        .select('*')
+        .order('created_at', { ascending: false })
+    )
+  },
+
+  // Get flight by ID
+  async getById(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('flights')
+        .select('*')
+        .eq('id', id)
+        .single()
+    )
+  },
+
+  // Create new flight
+  async create(flight: Tables['flights']['Insert']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('flights')
+        .insert(flight)
+        .select()
+        .single()
+    )
+  },
+
+  // Update flight
+  async update(id: string, updates: Tables['flights']['Update']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('flights')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Delete flight
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('flights')
+        .delete()
+        .eq('id', id)
+    )
+  },
+
+  // Toggle flight active status
+  async toggleActive(id: string, isActive: boolean) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('flights')
+        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+}
+
