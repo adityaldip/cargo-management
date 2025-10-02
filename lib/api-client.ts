@@ -322,3 +322,54 @@ export const rateRulesAPI = {
   },
 }
 
+export const airportCodeAPI = {
+  // Get all airport codes
+  async getAll() {
+    return apiRequest('/airport-codes')
+  },
+
+  // Get airport code by ID
+  async getById(id: string) {
+    return apiRequest(`/airport-codes/${id}`)
+  },
+
+  // Create airport code
+  async create(airportCodeData: any) {
+    return apiRequest('/airport-codes', {
+      method: 'POST',
+      body: JSON.stringify(airportCodeData)
+    })
+  },
+
+  // Update airport code
+  async update(id: string, updates: any) {
+    return apiRequest(`/airport-codes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    })
+  },
+
+  // Delete airport code
+  async delete(id: string) {
+    return apiRequest(`/airport-codes/${id}`, {
+      method: 'DELETE'
+    })
+  },
+
+  // Toggle active status
+  async toggleActive(id: string, isActive: boolean) {
+    return apiRequest(`/airport-codes/${id}/toggle`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive })
+    })
+  },
+
+  // Toggle EU status
+  async toggleEU(id: string, isEU: boolean) {
+    return apiRequest(`/airport-codes/${id}/toggle-eu`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_eu: isEU })
+    })
+  }
+}
+

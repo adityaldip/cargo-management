@@ -832,3 +832,84 @@ export const utilityOperations = {
   },
 }
 
+// Airport Code Operations
+export const airportCodeOperations = {
+  // Get all airport codes
+  async getAll() {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('airport_code')
+        .select('*')
+        .order('code', { ascending: true })
+    )
+  },
+
+  // Get airport code by ID
+  async getById(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('airport_code')
+        .select('*')
+        .eq('id', id)
+        .single()
+    )
+  },
+
+  // Create new airport code
+  async create(airportCode: Tables['airport_code']['Insert']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('airport_code')
+        .insert(airportCode)
+        .select()
+        .single()
+    )
+  },
+
+  // Update airport code
+  async update(id: string, updates: Tables['airport_code']['Update']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('airport_code')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Delete airport code
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('airport_code')
+        .delete()
+        .eq('id', id)
+    )
+  },
+
+  // Toggle active status
+  async toggleActive(id: string, isActive: boolean) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('airport_code')
+        .update({ is_active: isActive })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Toggle EU status
+  async toggleEU(id: string, isEU: boolean) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('airport_code')
+        .update({ is_eu: isEU })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+}
+

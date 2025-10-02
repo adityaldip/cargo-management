@@ -7,6 +7,7 @@ import { ReviewMergedExcel } from "@/components/review-merged-excel"
 import { ReviewCustomers } from "@/components/review-customers"
 import { AssignCustomers } from "@/components/assign-customers-modules"
 import { AssignRates } from "@/components/assign-rates-modules"
+import { PriceAssignment } from "@/components/price-assignment-modules"
 import { ReviewRates } from "@/components/review-rates"
 import { ReviewInvoices } from "@/components/review-invoices"
 import { Reporting } from "@/components/reporting"
@@ -95,7 +96,15 @@ export function MailProcessingDashboard() {
             data={mergedData}
             savedRateConditions={savedPriorityConditions}
             onSaveRateConditions={setSavedPriorityConditions}
-            onContinue={() => setActiveStep("review-invoices")}
+            onContinue={() => setActiveStep("price-assignment")}
+          />
+        )
+      case "price-assignment":
+        return (
+          <PriceAssignment
+            data={null}
+            onSave={(data) => console.log('Price assignment data saved:', data)}
+            onExecute={() => setActiveStep("review-invoices")}
           />
         )
       case "review-rates":

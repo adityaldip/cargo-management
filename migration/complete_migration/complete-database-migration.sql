@@ -156,7 +156,19 @@ CREATE TABLE public.column_mappings (
     CONSTRAINT column_mappings_original_name_key UNIQUE (original_name)
 ) TABLESPACE pg_default;
 
--- 8. Create invoices table
+-- 8. Create airport_code table
+CREATE TABLE public.airport_code (
+    id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
+    code CHARACTER VARYING(255) NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    is_eu BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT airport_code_pkey PRIMARY KEY (id),
+    CONSTRAINT airport_code_code_key UNIQUE (code)
+) TABLESPACE pg_default;
+
+-- 9. Create invoices table
 CREATE TABLE public.invoices (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     invoice_number CHARACTER VARYING(100) NOT NULL,
@@ -206,6 +218,10 @@ CREATE INDEX IF NOT EXISTS idx_cargo_data_rate_value ON public.cargo_data USING 
 CREATE INDEX IF NOT EXISTS idx_cargo_data_assigned_customer ON public.cargo_data USING btree (assigned_customer) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_cargo_data_customer_code_id ON public.cargo_data USING btree (customer_code_id) TABLESPACE pg_default;
 
+CREATE INDEX IF NOT EXISTS idx_airport_code_code ON public.airport_code USING btree (code) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_airport_code_is_active ON public.airport_code USING btree (is_active) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_airport_code_is_eu ON public.airport_code USING btree (is_eu) TABLESPACE pg_default;
+
 CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON public.invoices USING btree (customer_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices USING btree (status) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_invoices_due_date ON public.invoices USING btree (due_date) TABLESPACE pg_default;
@@ -246,6 +262,11 @@ CREATE TRIGGER update_column_mappings_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_airport_code_updated_at 
+    BEFORE UPDATE ON public.airport_code 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_invoices_updated_at 
     BEFORE UPDATE ON public.invoices 
     FOR EACH ROW 
@@ -259,6 +280,7 @@ ALTER TABLE public.customer_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rate_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cargo_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.column_mappings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.airport_code ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies (allow all operations for authenticated users)
@@ -283,6 +305,9 @@ CREATE POLICY "Allow all operations for authenticated users" ON public.cargo_dat
 CREATE POLICY "Allow all operations for authenticated users" ON public.column_mappings
     FOR ALL USING (auth.role() = 'authenticated');
 
+CREATE POLICY "Allow all operations for authenticated users" ON public.airport_code
+    FOR ALL USING (auth.role() = 'authenticated');
+
 CREATE POLICY "Allow all operations for authenticated users" ON public.invoices
     FOR ALL USING (auth.role() = 'authenticated');
 
@@ -294,6 +319,7 @@ GRANT ALL ON public.customer_rules TO authenticated;
 GRANT ALL ON public.rate_rules TO authenticated;
 GRANT ALL ON public.cargo_data TO authenticated;
 GRANT ALL ON public.column_mappings TO authenticated;
+GRANT ALL ON public.airport_code TO authenticated;
 GRANT ALL ON public.invoices TO authenticated;
 
 GRANT ALL ON public.customers TO service_role;
@@ -303,6 +329,7 @@ GRANT ALL ON public.customer_rules TO service_role;
 GRANT ALL ON public.rate_rules TO service_role;
 GRANT ALL ON public.cargo_data TO service_role;
 GRANT ALL ON public.column_mappings TO service_role;
+GRANT ALL ON public.airport_code TO service_role;
 GRANT ALL ON public.invoices TO service_role;
 
 -- Insert sample data
@@ -357,6 +384,17 @@ INSERT INTO public.rate_rules (name, description, priority, conditions, actions,
  '[{"field": "weight", "operator": "greater_than", "value": "50"}, {"field": "mail_category", "operator": "equals", "value": "B"}]'::jsonb,
  '{"assignRate": "' || (SELECT id FROM public.rates WHERE name = 'Heavy Cargo Discount') || '"}'::jsonb,
  (SELECT id FROM public.rates WHERE name = 'Heavy Cargo Discount'));
+
+-- Insert sample airport codes
+INSERT INTO public.airport_code (code, is_active, is_eu) VALUES
+('JFK', true, false),
+('LAX', true, false),
+('LHR', true, false),
+('CDG', true, true),
+('NRT', true, false),
+('SYD', false, false),
+('DXB', true, false),
+('SFO', true, false);
 
 -- Success message
 SELECT 'Complete Cargo Management System database setup completed successfully!' as message;

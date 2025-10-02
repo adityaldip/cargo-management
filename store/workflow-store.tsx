@@ -8,6 +8,7 @@ type WorkflowStep =
   | "review-merged-excel"
   | "assign-customers"
   | "assign-rates"
+  | "price-assignment"
   | "review-rates"
   | "review-invoices"
   | "reporting"

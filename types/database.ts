@@ -385,6 +385,32 @@ export interface Database {
           updated_at?: string
         }
       }
+      airport_code: {
+        Row: {
+          id: string
+          code: string
+          is_active: boolean
+          is_eu: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          is_active?: boolean
+          is_eu?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          is_active?: boolean
+          is_eu?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
