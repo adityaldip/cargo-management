@@ -417,3 +417,47 @@ export const flightsAPI = {
   }
 }
 
+// Sector Rates API operations
+export const sectorRatesAPI = {
+  // Get all sector rates
+  async getAll() {
+    return apiRequest('/sector-rates')
+  },
+
+  // Get sector rate by ID
+  async getById(id: string) {
+    return apiRequest(`/sector-rates/${id}`)
+  },
+
+  // Create sector rate
+  async create(sectorRateData: any) {
+    return apiRequest('/sector-rates', {
+      method: 'POST',
+      body: JSON.stringify(sectorRateData)
+    })
+  },
+
+  // Update sector rate
+  async update(id: string, updates: any) {
+    return apiRequest(`/sector-rates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    })
+  },
+
+  // Delete sector rate
+  async delete(id: string) {
+    return apiRequest(`/sector-rates/${id}`, {
+      method: 'DELETE'
+    })
+  },
+
+  // Toggle active status
+  async toggleActive(id: string, isActive: boolean) {
+    return apiRequest(`/sector-rates/${id}/toggle`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive })
+    })
+  }
+}
+

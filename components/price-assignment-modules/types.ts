@@ -23,12 +23,13 @@ export interface SectorRate {
   id: string
   origin: string
   destination: string
-  baseRate: number
-  currency: string
-  effectiveDate: string
-  expiryDate?: string
-  isActive: boolean
-  notes?: string
+  origin_airport_id: string
+  destination_airport_id: string
+  sector_rate: number
+  flight_num_preview?: string
+  is_active: boolean
+  created_at?: string
+  updated_at?: string
 }
 
 export interface PriceAssignmentData {

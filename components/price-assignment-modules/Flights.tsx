@@ -137,6 +137,22 @@ export function Flights() {
       return
     }
 
+    // Check for duplicate flight number before creating
+    if (!selectedFlight) {
+      const existingFlight = flights.find(flight => 
+        flight.flightNumber.toLowerCase() === flightData.flightNumber.trim().toLowerCase()
+      )
+      if (existingFlight) {
+        setError(`Flight number "${flightData.flightNumber}" already exists. Please choose a different flight number.`)
+        toast({
+          title: "Duplicate Flight Number",
+          description: `Flight "${flightData.flightNumber}" already exists. Please use a different flight number.`,
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
     setIsCreating(true)
     setError(null)
 
@@ -161,10 +177,11 @@ export function Flights() {
             description: `Flight ${flightData.flightNumber} has been updated successfully`,
           })
         } else {
-          setError(result?.error || 'Failed to update flight')
+          const errorMessage = result?.error || 'Failed to update flight'
+          setError(errorMessage)
           toast({
             title: "Error",
-            description: result?.error || 'Failed to update flight',
+            description: errorMessage,
             variant: "destructive",
           })
         }
@@ -186,17 +203,36 @@ export function Flights() {
             description: `Flight ${flightData.flightNumber} has been created successfully`,
           })
         } else {
-          setError(result?.error || 'Failed to create flight')
+          const errorMessage = result?.error || 'Failed to create flight'
+          setError(errorMessage)
           toast({
             title: "Error",
-            description: result?.error || 'Failed to create flight',
+            description: errorMessage,
             variant: "destructive",
           })
         }
       }
     } catch (err) {
       console.error('Error saving flight:', err)
-      setError('Failed to save flight')
+      let errorMessage = 'Failed to save flight'
+      
+      // Handle specific database errors
+      if (err instanceof Error) {
+        if (err.message.includes('duplicate key value violates unique constraint')) {
+          errorMessage = `Flight number "${flightData.flightNumber}" already exists. Please choose a different flight number.`
+        } else if (err.message.includes('violates foreign key constraint')) {
+          errorMessage = 'Invalid airport selection. Please check your origin and destination airports.'
+        } else {
+          errorMessage = err.message
+        }
+      }
+      
+      setError(errorMessage)
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setIsCreating(false)
     }
@@ -361,6 +397,7 @@ export function Flights() {
         setFlightForm={setNewFlightForm}
         isCreating={isCreating}
         error={error}
+        existingFlights={flights}
       />
 
       {/* Sweet Alert for Delete Confirmation */}

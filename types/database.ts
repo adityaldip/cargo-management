@@ -449,6 +449,44 @@ export interface Database {
           updated_at?: string
         }
       }
+      sector_rates: {
+        Row: {
+          id: string
+          origin: string
+          destination: string
+          origin_airport_id: string
+          destination_airport_id: string
+          sector_rate: number
+          flight_num_preview: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          origin: string
+          destination: string
+          origin_airport_id: string
+          destination_airport_id: string
+          sector_rate: number
+          flight_num_preview: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          origin?: string
+          destination?: string
+          origin_airport_id?: string
+          destination_airport_id?: string
+          sector_rate?: number
+          flight_num_preview?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

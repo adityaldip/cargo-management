@@ -2,74 +2,103 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowUp, ArrowDown, Edit, Trash2, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { AirportCode } from "./types"
+import { SectorRate, Flight } from "./types"
 
-interface AirportCodeTableProps {
-  airportCodes: AirportCode[]
+interface SectorRateTableProps {
+  sectorRates: SectorRate[]
+  flights: Flight[]
   loading: boolean
-  airportSearchTerm: string
-  setAirportSearchTerm: (term: string) => void
+  sectorRateSearchTerm: string
+  setSectorRateSearchTerm: (term: string) => void
   statusFilter: 'all' | 'active' | 'inactive'
   setStatusFilter: (filter: 'all' | 'active' | 'inactive') => void
   togglingStatus: Set<string>
-  togglingEU: Set<string>
-  onToggleAirport: (airportId: string) => void
-  onToggleEU: (airportId: string) => void
-  onEditAirport: (airport: AirportCode) => void
-  onDeleteAirport: (airport: AirportCode) => void
+  onToggleSectorRate: (id: string) => void
+  onEditSectorRate: (sectorRate: SectorRate) => void
+  onDeleteSectorRate: (sectorRate: SectorRate) => void
   onRefresh: () => void
   isRefreshing: boolean
 }
 
-export function AirportCodeTable({
-  airportCodes,
+export function SectorRateTable({
+  sectorRates,
+  flights,
   loading,
-  airportSearchTerm,
-  setAirportSearchTerm,
+  sectorRateSearchTerm,
+  setSectorRateSearchTerm,
   statusFilter,
   setStatusFilter,
   togglingStatus,
-  togglingEU,
-  onToggleAirport,
-  onToggleEU,
-  onEditAirport,
-  onDeleteAirport,
+  onToggleSectorRate,
+  onEditSectorRate,
+  onDeleteSectorRate,
   onRefresh,
   isRefreshing
-}: AirportCodeTableProps) {
+}: SectorRateTableProps) {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-  const [sortField, setSortField] = useState<'code' | 'is_eu'>('code')
+  const [sortField, setSortField] = useState<'origin' | 'destination' | 'sectorRate' | 'flightPreview'>('origin')
   const [itemsPerPage, setItemsPerPage] = useState(20)
   const [showAll, setShowAll] = useState(false)
+
+  // Get flights for a specific route
+  const getFlightsForRoute = (origin: string, destination: string): Flight[] => {
+    return flights.filter(flight => 
+      flight.origin === origin && 
+      flight.destination === destination && 
+      flight.is_active
+    )
+  }
+
+  // Get flight numbers as a string for display
+  const getFlightNumbersForRoute = (origin: string, destination: string): string => {
+    const routeFlights = getFlightsForRoute(origin, destination)
+    if (routeFlights.length === 0) {
+      return 'No flights'
+    }
+    if (routeFlights.length === 1) {
+      return routeFlights[0].flightNumber
+    }
+    return routeFlights.map(flight => flight.flightNumber).join(', ')
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount)
+  }
 
   // Debounce search term for better performance
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearchTerm(airportSearchTerm)
+      setDebouncedSearchTerm(sectorRateSearchTerm)
     }, 300) // 300ms delay
 
     return () => clearTimeout(timer)
-  }, [airportSearchTerm])
+  }, [sectorRateSearchTerm])
 
-  // Memoized filtered airport codes for better performance
-  const filteredAirportCodes = useMemo(() => {
-    return airportCodes
-      .filter(airport => {
+  // Memoized filtered sector rates for better performance
+  const filteredSectorRates = useMemo(() => {
+    return sectorRates
+      .filter(sectorRate => {
         // Search filter
-        const matchesSearch = airport.code.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+        const flightNumbers = getFlightNumbersForRoute(sectorRate.origin, sectorRate.destination)
+        const matchesSearch = sectorRate.origin.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+          sectorRate.destination.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+          flightNumbers.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
         
         // Status filter
         const matchesStatus = statusFilter === 'all' || 
-          (statusFilter === 'active' && airport.is_active) ||
-          (statusFilter === 'inactive' && !airport.is_active)
+          (statusFilter === 'active' && sectorRate.is_active) ||
+          (statusFilter === 'inactive' && !sectorRate.is_active)
         
         return matchesSearch && matchesStatus
       })
@@ -77,26 +106,34 @@ export function AirportCodeTable({
         let comparison = 0
         
         switch (sortField) {
-          case 'code':
-            comparison = a.code.localeCompare(b.code)
+          case 'origin':
+            comparison = a.origin.localeCompare(b.origin)
             break
-          case 'is_eu':
-            comparison = a.is_eu === b.is_eu ? 0 : (a.is_eu ? 1 : -1)
+          case 'destination':
+            comparison = a.destination.localeCompare(b.destination)
+            break
+          case 'sectorRate':
+            comparison = a.sector_rate - b.sector_rate
+            break
+          case 'flightPreview':
+            const aPreview = getFlightNumbersForRoute(a.origin, a.destination)
+            const bPreview = getFlightNumbersForRoute(b.origin, b.destination)
+            comparison = aPreview.localeCompare(bPreview)
             break
           default:
-            comparison = a.code.localeCompare(b.code)
+            comparison = a.origin.localeCompare(b.origin)
         }
         
         return sortOrder === 'asc' ? comparison : -comparison
       })
-  }, [airportCodes, debouncedSearchTerm, statusFilter, sortOrder, sortField])
+  }, [sectorRates, debouncedSearchTerm, statusFilter, sortOrder, sortField, flights])
 
   // Pagination logic with performance optimization
-  const totalItems = filteredAirportCodes.length
-  const displayItems = showAll ? filteredAirportCodes : filteredAirportCodes.slice(0, itemsPerPage)
-  const hasMoreItems = filteredAirportCodes.length > itemsPerPage
+  const totalItems = filteredSectorRates.length
+  const displayItems = showAll ? filteredSectorRates : filteredSectorRates.slice(0, itemsPerPage)
+  const hasMoreItems = filteredSectorRates.length > itemsPerPage
 
-  const handleSortToggle = (field: 'code' | 'is_eu') => {
+  const handleSortToggle = (field: 'origin' | 'destination' | 'sectorRate' | 'flightPreview') => {
     if (sortField === field) {
       setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
     } else {
@@ -127,16 +164,16 @@ export function AirportCodeTable({
 
   return (
     <div>
-      {/* Search Controls */}
+      {/* Search Controls - Hidden for now */}
       {/* <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="flex-1 relative">
           <Input
-            placeholder="Search airport codes..."
-            value={airportSearchTerm}
-            onChange={(e) => setAirportSearchTerm(e.target.value)}
+            placeholder="Search sector rates by origin, destination, or flight numbers..."
+            value={sectorRateSearchTerm}
+            onChange={(e) => setSectorRateSearchTerm(e.target.value)}
             className="w-full pr-8"
           />
-          {airportSearchTerm !== debouncedSearchTerm && (
+          {sectorRateSearchTerm !== debouncedSearchTerm && (
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
             </div>
@@ -145,9 +182,9 @@ export function AirportCodeTable({
       </div> */}
       
       {/* Results Summary */}
-      {filteredAirportCodes.length > 0 && (
+      {filteredSectorRates.length > 0 && (
         <div className="mb-3 text-sm text-gray-600">
-          Showing {filteredAirportCodes.length} airport code{filteredAirportCodes.length !== 1 ? 's' : ''}
+          Showing {filteredSectorRates.length} sector rate{filteredSectorRates.length !== 1 ? 's' : ''}
           {statusFilter !== 'all' && ` (${statusFilter} only)`}
           {debouncedSearchTerm && ` matching "${debouncedSearchTerm}"`}
         </div>
@@ -162,11 +199,11 @@ export function AirportCodeTable({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleSortToggle('code')}
+                  onClick={() => handleSortToggle('origin')}
                   className="h-6 px-1 text-xs font-medium hover:bg-gray-100"
                 >
-                  Code
-                  {sortField === 'code' && (
+                  Origin
+                  {sortField === 'origin' && (
                     sortOrder === 'asc' ? (
                       <ArrowUp className="h-3 w-3 ml-1" />
                     ) : (
@@ -179,11 +216,45 @@ export function AirportCodeTable({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleSortToggle('is_eu')}
+                  onClick={() => handleSortToggle('destination')}
                   className="h-6 px-1 text-xs font-medium hover:bg-gray-100"
                 >
-                  EU/Non EU
-                  {sortField === 'is_eu' && (
+                  Destination
+                  {sortField === 'destination' && (
+                    sortOrder === 'asc' ? (
+                      <ArrowUp className="h-3 w-3 ml-1" />
+                    ) : (
+                      <ArrowDown className="h-3 w-3 ml-1" />
+                    )
+                  )}
+                </Button>
+              </TableHead>
+              <TableHead className="h-8 py-1 text-xs">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSortToggle('sectorRate')}
+                  className="h-6 px-1 text-xs font-medium hover:bg-gray-100"
+                >
+                  Rate
+                  {sortField === 'sectorRate' && (
+                    sortOrder === 'asc' ? (
+                      <ArrowUp className="h-3 w-3 ml-1" />
+                    ) : (
+                      <ArrowDown className="h-3 w-3 ml-1" />
+                    )
+                  )}
+                </Button>
+              </TableHead>
+              <TableHead className="h-8 py-1 text-xs">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSortToggle('flightPreview')}
+                  className="h-6 px-1 text-xs font-medium hover:bg-gray-100"
+                >
+                  Flight
+                  {sortField === 'flightPreview' && (
                     sortOrder === 'asc' ? (
                       <ArrowUp className="h-3 w-3 ml-1" />
                     ) : (
@@ -196,18 +267,18 @@ export function AirportCodeTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayItems.map((airport) => (
-              <TableRow key={airport.id} className="">
+            {displayItems.map((sectorRate) => (
+              <TableRow key={sectorRate.id} className="">
                 <TableCell className="py-1 px-1">
                   <div className="flex items-center gap-1">
                     <div className="relative">
                       <Switch
-                        checked={airport.is_active}
-                        onCheckedChange={() => onToggleAirport(airport.id)}
-                        disabled={togglingStatus.has(airport.id)}
+                        checked={sectorRate.is_active}
+                        onCheckedChange={() => onToggleSectorRate(sectorRate.id)}
+                        disabled={togglingStatus.has(sectorRate.id)}
                         className="scale-75"
                       />
-                      {togglingStatus.has(airport.id) && (
+                      {togglingStatus.has(sectorRate.id) && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
                         </div>
@@ -215,40 +286,37 @@ export function AirportCodeTable({
                     </div>
                     <span className={cn(
                       "text-xs font-medium",
-                      airport.is_active ? "text-green-600" : "text-gray-400"
+                      sectorRate.is_active ? "text-green-600" : "text-gray-400"
                     )}>
                     </span>
                   </div>
                 </TableCell>
                 <TableCell className="py-1 px-2">
                   <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
-                    {airport.code}
+                    {sectorRate.origin}
                   </Badge>
                 </TableCell>
                 <TableCell className="py-1 px-2">
-                  <div className="flex items-center gap-1">
-                    <Switch
-                      checked={airport.is_eu}
-                      onCheckedChange={() => onToggleEU(airport.id)}
-                      disabled={togglingEU.has(airport.id)}
-                      className="scale-75"
-                    />
-                    {togglingEU.has(airport.id) && (
-                      <div className="ml-2">
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                      </div>
-                    )}
-                    <Badge className={airport.is_eu ? "bg-blue-100 text-blue-800 text-xs" : "bg-gray-100 text-gray-800 text-xs"}>
-                      {airport.is_eu ? "EU" : "NON EU"}
-                    </Badge>
+                  <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
+                    {sectorRate.destination}
+                  </Badge>
+                </TableCell>
+                <TableCell className="py-1 px-2">
+                  <div>
+                    <p className="font-medium text-black text-sm leading-tight">{formatCurrency(sectorRate.sector_rate)}</p>
                   </div>
+                </TableCell>
+                <TableCell className="py-1 px-2">
+                  <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5">
+                    {getFlightNumbersForRoute(sectorRate.origin, sectorRate.destination)}
+                  </Badge>
                 </TableCell>
                 <TableCell className="py-1 px-2">
                   <div className="flex gap-0">
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => onEditAirport(airport)}
+                      onClick={() => onEditSectorRate(sectorRate)}
                       className="h-6 w-6 p-0"
                     >
                       <Edit className="h-3 w-3" />
@@ -256,7 +324,7 @@ export function AirportCodeTable({
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => onDeleteAirport(airport)}
+                      onClick={() => onDeleteSectorRate(sectorRate)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -270,7 +338,7 @@ export function AirportCodeTable({
       </div>
 
       {/* Performance Controls */}
-      {filteredAirportCodes.length > 0 && (
+      {filteredSectorRates.length > 0 && (
         <div className="flex items-center justify-between mt-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Show</span>
@@ -319,9 +387,9 @@ export function AirportCodeTable({
         </div>
       )}
 
-      {filteredAirportCodes.length === 0 && (
+      {filteredSectorRates.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-gray-500">No airport codes found matching your search criteria</p>
+          <p className="text-gray-500">No sector rates found matching your search criteria</p>
         </div>
       )}
     </div>

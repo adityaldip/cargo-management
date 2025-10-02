@@ -2,184 +2,318 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ErrorBanner } from "@/components/ui/status-banner"
+import { 
+  DollarSign, 
+  Plus,
+  RefreshCw
+} from "lucide-react"
 import { SectorRate } from "./types"
-
-// Dummy data
-const dummySectorRates: SectorRate[] = [
-  {
-    id: "1",
-    origin: "JFK",
-    destination: "LAX",
-    baseRate: 450,
-    currency: "USD",
-    effectiveDate: "2024-01-01",
-    expiryDate: "2024-12-31",
-    isActive: true,
-    notes: "Transcontinental route"
-  },
-  {
-    id: "2",
-    origin: "LAX",
-    destination: "SFO",
-    baseRate: 320,
-    currency: "USD",
-    effectiveDate: "2024-01-01",
-    expiryDate: "2024-12-31",
-    isActive: true,
-    notes: "Short domestic route"
-  },
-  {
-    id: "3",
-    origin: "LHR",
-    destination: "CDG",
-    baseRate: 180,
-    currency: "EUR",
-    effectiveDate: "2024-01-01",
-    expiryDate: "2024-12-31",
-    isActive: true,
-    notes: "European short-haul"
-  },
-  {
-    id: "4",
-    origin: "JFK",
-    destination: "LHR",
-    baseRate: 850,
-    currency: "USD",
-    effectiveDate: "2024-01-01",
-    expiryDate: "2024-12-31",
-    isActive: true,
-    notes: "Transatlantic route"
-  },
-  {
-    id: "5",
-    origin: "NRT",
-    destination: "LAX",
-    baseRate: 1200,
-    currency: "USD",
-    effectiveDate: "2024-01-01",
-    expiryDate: "2024-12-31",
-    isActive: true,
-    notes: "Transpacific route"
-  },
-  {
-    id: "6",
-    origin: "SYD",
-    destination: "LAX",
-    baseRate: 1500,
-    currency: "AUD",
-    effectiveDate: "2024-01-01",
-    expiryDate: "2024-12-31",
-    isActive: false,
-    notes: "Long-haul international"
-  },
-  {
-    id: "7",
-    origin: "DXB",
-    destination: "LHR",
-    baseRate: 650,
-    currency: "USD",
-    effectiveDate: "2024-01-01",
-    expiryDate: "2024-12-31",
-    isActive: true,
-    notes: "Middle East to Europe"
-  },
-  {
-    id: "8",
-    origin: "SFO",
-    destination: "NRT",
-    baseRate: 1100,
-    currency: "USD",
-    effectiveDate: "2024-01-01",
-    expiryDate: "2024-12-31",
-    isActive: true,
-    notes: "Pacific route"
-  }
-]
+import { useToast } from "@/hooks/use-toast"
+import { Skeleton } from "@/components/ui/skeleton"
+import { SweetAlert } from "@/components/ui/sweet-alert"
+import { useSectorRateData, useAirportCodeData, useFlightData } from "./hooks"
+import { SectorRateModal } from "./SectorRateModal"
+import { SectorRateTable } from "./SectorRateTable"
 
 export function SectorRates() {
-  const [sectorRates, setSectorRates] = useState<SectorRate[]>(dummySectorRates)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [currencyFilter, setCurrencyFilter] = useState<string>("all")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const { toast } = useToast()
+  const {
+    sectorRates,
+    loading,
+    error,
+    setError,
+    toggleSectorRate,
+    deleteSectorRate,
+    createSectorRate,
+    updateSectorRate,
+    refetch
+  } = useSectorRateData()
+  
+  const { airportCodes } = useAirportCodeData()
+  const { flights } = useFlightData()
+  
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [sectorRateSearchTerm, setSectorRateSearchTerm] = useState("")
+  const [selectedSectorRate, setSelectedSectorRate] = useState<SectorRate | null>(null)
+  const [isSectorRateEditorOpen, setIsSectorRateEditorOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [togglingStatus, setTogglingStatus] = useState<Set<string>>(new Set())
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false)
+  const [sectorRateToDelete, setSectorRateToDelete] = useState<SectorRate | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  const filteredSectorRates = sectorRates.filter(rate => {
-    const matchesSearch = rate.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         rate.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         rate.notes?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesCurrency = currencyFilter === "all" || rate.currency === currencyFilter
-    const matchesStatus = statusFilter === "all" || 
-                         (statusFilter === "active" && rate.isActive) ||
-                         (statusFilter === "inactive" && !rate.isActive)
-
-    return matchesSearch && matchesCurrency && matchesStatus
+  // New sector rate form state
+  const [newSectorRateForm, setNewSectorRateForm] = useState({
+    origin: "",
+    destination: "",
+    originAirportId: "",
+    destinationAirportId: "",
+    sectorRate: ""
   })
 
-  const uniqueCurrencies = Array.from(new Set(sectorRates.map(rate => rate.currency)))
+  const handleToggleSectorRate = async (sectorRateId: string) => {
+    // Prevent multiple toggles on the same sector rate
+    if (togglingStatus.has(sectorRateId)) {
+      return
+    }
 
-  const toggleActiveStatus = (id: string) => {
-    setSectorRates(prev => 
-      prev.map(rate => 
-        rate.id === id 
-          ? { ...rate, isActive: !rate.isActive }
-          : rate
-      )
+    try {
+      // Add to toggling set
+      setTogglingStatus(prev => new Set(prev).add(sectorRateId))
+      setError(null)
+      
+      const sectorRate = sectorRates.find(s => s.id === sectorRateId)
+      await toggleSectorRate(sectorRateId)
+      
+      toast({
+        title: "Status Updated",
+        description: `Sector rate ${sectorRate?.origin} → ${sectorRate?.destination} is now ${sectorRate?.is_active ? 'inactive' : 'active'}`,
+      })
+    } catch (err) {
+      const errorMsg = `Failed to toggle sector rate: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive",
+      })
+    } finally {
+      // Remove from toggling set
+      setTogglingStatus(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(sectorRateId)
+        return newSet
+      })
+    }
+  }
+
+  const handleEditSectorRate = (sectorRate: SectorRate) => {
+    setSelectedSectorRate(sectorRate)
+    setIsSectorRateEditorOpen(true)
+  }
+
+  const handleDeleteSectorRate = (sectorRate: SectorRate) => {
+    setSectorRateToDelete(sectorRate)
+    setShowDeleteAlert(true)
+  }
+
+  const confirmDeleteSectorRate = async () => {
+    if (!sectorRateToDelete) return
+
+    setIsDeleting(true)
+    try {
+      await deleteSectorRate(sectorRateToDelete.id)
+      
+      toast({
+        title: "Sector Rate Deleted",
+        description: `Sector rate ${sectorRateToDelete.origin} → ${sectorRateToDelete.destination} has been deleted`,
+      })
+    } catch (err) {
+      const errorMsg = `Failed to delete sector rate: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMsg)
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteAlert(false)
+      setSectorRateToDelete(null)
+    }
+  }
+
+  const handleSaveSectorRate = async (sectorRateData: any) => {
+    if (!sectorRateData.originAirportId || !sectorRateData.destinationAirportId || !sectorRateData.sectorRate) {
+      setError('Please fill in all required fields')
+      return
+    }
+
+    setIsCreating(true)
+    setError(null)
+
+    try {
+      const isEditing = selectedSectorRate !== null
+      
+      if (isEditing) {
+        // Update existing sector rate
+        const result = await updateSectorRate(selectedSectorRate.id, {
+          origin: sectorRateData.origin,
+          destination: sectorRateData.destination,
+          origin_airport_id: sectorRateData.originAirportId,
+          destination_airport_id: sectorRateData.destinationAirportId,
+          sector_rate: sectorRateData.sectorRate
+        })
+        
+        if (result?.success) {
+          handleCloseModal()
+          toast({
+            title: "Sector Rate Updated",
+            description: `Sector rate ${sectorRateData.origin} → ${sectorRateData.destination} has been updated successfully`,
+          })
+        } else {
+          setError(result?.error || 'Failed to update sector rate')
+          toast({
+            title: "Error",
+            description: result?.error || 'Failed to update sector rate',
+            variant: "destructive",
+          })
+        }
+      } else {
+        // Create new sector rate
+        const result = await createSectorRate({
+          origin: sectorRateData.origin,
+          destination: sectorRateData.destination,
+          origin_airport_id: sectorRateData.originAirportId,
+          destination_airport_id: sectorRateData.destinationAirportId,
+          sector_rate: sectorRateData.sectorRate
+        })
+        
+        if (result?.success) {
+          handleCloseModal()
+          toast({
+            title: "Sector Rate Created",
+            description: `Sector rate ${sectorRateData.origin} → ${sectorRateData.destination} has been created successfully`,
+          })
+        } else {
+          setError(result?.error || 'Failed to create sector rate')
+          toast({
+            title: "Error",
+            description: result?.error || 'Failed to create sector rate',
+            variant: "destructive",
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Error saving sector rate:', err)
+      setError('Failed to save sector rate')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleCreateNewSectorRate = () => {
+    setSelectedSectorRate(null)
+    setNewSectorRateForm({
+      origin: "",
+      destination: "",
+      originAirportId: "",
+      destinationAirportId: "",
+      sectorRate: ""
+    })
+    setIsSectorRateEditorOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setNewSectorRateForm({
+      origin: "",
+      destination: "",
+      originAirportId: "",
+      destinationAirportId: "",
+      sectorRate: ""
+    })
+    setSelectedSectorRate(null)
+    setIsSectorRateEditorOpen(false)
+    setError(null)
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refetch()
+    setIsRefreshing(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <Card className="bg-white border-gray-200 shadow-sm">
+        <CardContent>
+            <div className="flex items-center justify-between pb-4">
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-6 w-6" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-8" />
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-8 w-24" />
+              </div>
+              
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center space-x-4">
+                    <Skeleton className="h-8 w-16" />
+                    <Skeleton className="h-4 w-12" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-6 w-12" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency
-    }).format(amount)
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Sector Rates Management</h2>
-        <Button>Add New Rate</Button>
-      </div>
+    <div className="max-w-3xl mx-auto">
+      {/* Error Display */}
+      {error && (
+        <ErrorBanner
+          message={error}
+          className="mb-4"
+          onClose={() => setError(null)}
+        />
+      )}
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
+      {/* Sector Rate Management */}
+      <Card className="bg-white border-gray-200 shadow-sm">
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm font-medium">Search</label>
-              <Input
-                placeholder="Search routes..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Currency</label>
-              <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Currencies</SelectItem>
-                  {uniqueCurrencies.map(currency => (
-                    <SelectItem key={currency} value={currency}>{currency}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Status</label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
+          <div className="flex items-center justify-between pb-2">
+            <CardTitle className="text-black flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Sector Rate Management
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleCreateNewSectorRate}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Sector Rate
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </>
+                )}
+              </Button>
+              <Select value={statusFilter} onValueChange={(value: 'all' | 'active' | 'inactive') => setStatusFilter(value)}>
+                <SelectTrigger className="h-8 w-auto min-w-[100px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -189,74 +323,60 @@ export function SectorRates() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end">
-              <Button variant="outline" onClick={() => {
-                setSearchTerm("")
-                setCurrencyFilter("all")
-                setStatusFilter("all")
-              }}>
-                Clear Filters
-              </Button>
-            </div>
           </div>
+
+          {/* Sector Rates Table */}
+          <SectorRateTable
+            sectorRates={sectorRates}
+            flights={flights}
+            loading={loading}
+            sectorRateSearchTerm={sectorRateSearchTerm}
+            setSectorRateSearchTerm={setSectorRateSearchTerm}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            togglingStatus={togglingStatus}
+            onToggleSectorRate={handleToggleSectorRate}
+            onEditSectorRate={handleEditSectorRate}
+            onDeleteSectorRate={handleDeleteSectorRate}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
+          />
         </CardContent>
       </Card>
 
-      {/* Sector Rates Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Sector Rates ({filteredSectorRates.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Route</TableHead>
-                  <TableHead>Base Rate</TableHead>
-                  <TableHead>Currency</TableHead>
-                  <TableHead>Effective Date</TableHead>
-                  <TableHead>Expiry Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSectorRates.map((rate) => (
-                  <TableRow key={rate.id}>
-                    <TableCell className="font-medium">{rate.origin} → {rate.destination}</TableCell>
-                    <TableCell>{formatCurrency(rate.baseRate, rate.currency)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{rate.currency}</Badge>
-                    </TableCell>
-                    <TableCell>{new Date(rate.effectiveDate).toLocaleDateString()}</TableCell>
-                    <TableCell>{rate.expiryDate ? new Date(rate.expiryDate).toLocaleDateString() : 'N/A'}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={rate.isActive}
-                          onCheckedChange={() => toggleActiveStatus(rate.id)}
-                        />
-                        <Badge className={rate.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
-                          {rate.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">{rate.notes || 'N/A'}</TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button size="sm" variant="outline">Edit</Button>
-                        <Button size="sm" variant="outline">Delete</Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Sector Rate Modal */}
+      <SectorRateModal
+        isOpen={isSectorRateEditorOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveSectorRate}
+        selectedSectorRate={selectedSectorRate}
+        sectorRateForm={newSectorRateForm}
+        setSectorRateForm={setNewSectorRateForm}
+        isCreating={isCreating}
+        error={error}
+        airportCodes={airportCodes}
+      />
+
+      {/* Sweet Alert for Delete Confirmation */}
+      <SweetAlert
+        isVisible={showDeleteAlert}
+        title="Delete Sector Rate"
+        text={`Are you sure you want to delete sector rate "${sectorRateToDelete?.origin} → ${sectorRateToDelete?.destination}"? This action cannot be undone.`}
+        type="warning"
+        showCancelButton={true}
+        confirmButtonText="Yes, Delete!"
+        cancelButtonText="Cancel"
+        onConfirm={confirmDeleteSectorRate}
+        onCancel={() => {
+          setShowDeleteAlert(false)
+          setSectorRateToDelete(null)
+        }}
+        onClose={() => {
+          setShowDeleteAlert(false)
+          setSectorRateToDelete(null)
+        }}
+        disabled={isDeleting}
+      />
     </div>
   )
 }

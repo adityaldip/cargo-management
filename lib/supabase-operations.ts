@@ -982,3 +982,72 @@ export const flightOperations = {
   },
 }
 
+// Sector Rate Operations
+export const sectorRateOperations = {
+  // Get all sector rates
+  async getAll() {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('sector_rates')
+        .select('*')
+        .order('created_at', { ascending: false })
+    )
+  },
+
+  // Get sector rate by ID
+  async getById(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('sector_rates')
+        .select('*')
+        .eq('id', id)
+        .single()
+    )
+  },
+
+  // Create new sector rate
+  async create(sectorRate: Tables['sector_rates']['Insert']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('sector_rates')
+        .insert(sectorRate)
+        .select()
+        .single()
+    )
+  },
+
+  // Update sector rate
+  async update(id: string, updates: Tables['sector_rates']['Update']) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('sector_rates')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+
+  // Delete sector rate
+  async delete(id: string) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('sector_rates')
+        .delete()
+        .eq('id', id)
+    )
+  },
+
+  // Toggle sector rate active status
+  async toggleActive(id: string, isActive: boolean) {
+    return safeSupabaseOperation(() =>
+      supabase
+        .from('sector_rates')
+        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+    )
+  },
+}
+

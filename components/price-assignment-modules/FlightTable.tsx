@@ -133,7 +133,7 @@ export function FlightTable({
   return (
     <div>
       {/* Search Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      {/* <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="flex-1 relative">
           <Input
             placeholder="Search flights by number, origin, destination, or status..."
@@ -147,7 +147,7 @@ export function FlightTable({
             </div>
           )}
         </div>
-      </div>
+      </div> */}
       
       {/* Results Summary */}
       {filteredFlights.length > 0 && (

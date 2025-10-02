@@ -32,8 +32,32 @@ export const supabaseAdmin = createClient<Database>(supabaseUrl, supabaseService
 // Helper function to handle Supabase errors
 export function handleSupabaseError(error: any) {
   console.error('Supabase error:', error)
+  
+  let userFriendlyMessage = error.message || 'An unexpected error occurred'
+  
+  // Handle specific database constraint errors
+  if (error.message) {
+    if (error.message.includes('duplicate key value violates unique constraint')) {
+      if (error.message.includes('flights_flight_number_key')) {
+        userFriendlyMessage = 'This flight number already exists. Please choose a different flight number.'
+      } else if (error.message.includes('customers_code_key')) {
+        userFriendlyMessage = 'This customer code already exists. Please choose a different code.'
+      } else if (error.message.includes('airport_code_code_key')) {
+        userFriendlyMessage = 'This airport code already exists. Please choose a different code.'
+      } else {
+        userFriendlyMessage = 'This record already exists. Please check for duplicates.'
+      }
+    } else if (error.message.includes('violates foreign key constraint')) {
+      userFriendlyMessage = 'Invalid reference. Please check your selections.'
+    } else if (error.message.includes('violates check constraint')) {
+      userFriendlyMessage = 'Invalid data provided. Please check your input values.'
+    } else if (error.message.includes('null value in column')) {
+      userFriendlyMessage = 'Required field is missing. Please fill in all required fields.'
+    }
+  }
+  
   return {
-    error: error.message || 'An unexpected error occurred',
+    error: userFriendlyMessage,
     details: error.details || null,
   }
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
-import { airportCodeAPI, flightsAPI } from "@/lib/api-client"
-import { AirportCode, Flight } from "./types"
+import { airportCodeAPI, flightsAPI, sectorRatesAPI } from "@/lib/api-client"
+import { AirportCode, Flight, SectorRate } from "./types"
 
 export function useAirportCodeData() {
   const [airportCodes, setAirportCodes] = useState<AirportCode[]>([])
@@ -297,6 +297,143 @@ export function useFlightData() {
     deleteFlight,
     createFlight,
     updateFlight,
+    loadData,
+    refetch: () => loadData(true) // Force refresh
+  }
+}
+
+export function useSectorRateData() {
+  const [sectorRates, setSectorRates] = useState<SectorRate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
+
+  const fetchSectorRates = async () => {
+    try {
+      const { data: sectorRatesData, error } = await sectorRatesAPI.getAll()
+
+      if (error) {
+        setError(`Failed to fetch sector rates: ${error}`)
+        return
+      }
+
+      if (sectorRatesData && Array.isArray(sectorRatesData)) {
+        setSectorRates(sectorRatesData)
+        setLastFetchTime(Date.now())
+      }
+    } catch (err) {
+      setError(`Failed to fetch sector rates: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  const toggleSectorRate = async (sectorRateId: string) => {
+    const sectorRate = sectorRates.find(s => s.id === sectorRateId)
+    if (!sectorRate) return
+
+    try {
+      console.log('Toggling sector rate:', sectorRateId, 'from', sectorRate.is_active, 'to', !sectorRate.is_active)
+      const { data: updatedSectorRate, error } = await sectorRatesAPI.toggleActive(sectorRateId, !sectorRate.is_active)
+      console.log('Toggle result:', { updatedSectorRate, error })
+      
+      if (error) {
+        setError(`Failed to update sector rate: ${error}`)
+        return
+      }
+      
+      if (updatedSectorRate && typeof updatedSectorRate === 'object' && 'is_active' in updatedSectorRate) {
+        setSectorRates(prev => prev.map(s => 
+          s.id === sectorRateId ? { ...s, is_active: (updatedSectorRate as any).is_active } : s
+        ))
+      }
+    } catch (err) {
+      console.error('Toggle sector rate error:', err)
+      setError(`Failed to update sector rate: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  const deleteSectorRate = async (sectorRateId: string) => {
+    try {
+      const { error } = await sectorRatesAPI.delete(sectorRateId)
+      if (error) {
+        setError(`Failed to delete sector rate: ${error}`)
+        return
+      }
+      
+      setSectorRates(prev => prev.filter(sectorRate => sectorRate.id !== sectorRateId))
+    } catch (err) {
+      setError(`Failed to delete sector rate: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  const createSectorRate = async (sectorRateData: any) => {
+    try {
+      const { data: newSectorRate, error } = await sectorRatesAPI.create(sectorRateData)
+      if (error) {
+        setError(`Failed to create sector rate: ${error}`)
+        return { success: false, error }
+      }
+      
+      if (newSectorRate) {
+        setSectorRates(prev => [newSectorRate as SectorRate, ...prev])
+        return { success: true, data: newSectorRate }
+      }
+    } catch (err) {
+      const errorMessage = `Failed to create sector rate: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  const updateSectorRate = async (sectorRateId: string, updates: any) => {
+    try {
+      const { data: updatedSectorRate, error } = await sectorRatesAPI.update(sectorRateId, updates)
+      if (error) {
+        setError(`Failed to update sector rate: ${error}`)
+        return { success: false, error }
+      }
+      
+      if (updatedSectorRate) {
+        setSectorRates(prev => prev.map(sectorRate => 
+          sectorRate.id === sectorRateId ? updatedSectorRate as SectorRate : sectorRate
+        ))
+        return { success: true, data: updatedSectorRate }
+      }
+    } catch (err) {
+      const errorMessage = `Failed to update sector rate: ${err instanceof Error ? err.message : 'Unknown error'}`
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  const loadData = useCallback(async (forceRefresh = false) => {
+    // Cache for 60 seconds to avoid unnecessary requests
+    const cacheTime = 60 * 1000
+    const now = Date.now()
+    
+    if (!forceRefresh && lastFetchTime > 0 && (now - lastFetchTime) < cacheTime) {
+      console.log('Using cached sector rates data, skipping fetch')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    await fetchSectorRates()
+    setLoading(false)
+  }, [lastFetchTime])
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  return {
+    sectorRates,
+    loading,
+    error,
+    setError,
+    toggleSectorRate,
+    deleteSectorRate,
+    createSectorRate,
+    updateSectorRate,
     loadData,
     refetch: () => loadData(true) // Force refresh
   }

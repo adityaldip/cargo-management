@@ -25,6 +25,7 @@ interface FlightModalProps {
   setFlightForm: (form: any) => void
   isCreating: boolean
   error: string | null
+  existingFlights?: Flight[]
 }
 
 export function FlightModal({
@@ -35,10 +36,12 @@ export function FlightModal({
   flightForm,
   setFlightForm,
   isCreating,
-  error
+  error,
+  existingFlights = []
 }: FlightModalProps) {
   const [airportCodes, setAirportCodes] = useState<AirportCode[]>([])
   const [loadingAirports, setLoadingAirports] = useState(false)
+  const [isDuplicateFlight, setIsDuplicateFlight] = useState(false)
   const [internalForm, setInternalForm] = useState({
     flightNumber: "",
     origin: "",
@@ -48,12 +51,28 @@ export function FlightModal({
     status: "scheduled"
   })
 
+  // Check for duplicate flight number
+  const checkDuplicateFlight = (flightNumber: string) => {
+    if (!flightNumber.trim() || selectedFlight) return false
+    
+    const duplicate = existingFlights.find(flight => 
+      flight.flightNumber.toLowerCase() === flightNumber.trim().toLowerCase()
+    )
+    return !!duplicate
+  }
+
   // Fetch airport codes when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchAirportCodes()
     }
   }, [isOpen])
+
+  // Check for duplicates when flight number changes
+  useEffect(() => {
+    const isDuplicate = checkDuplicateFlight(internalForm.flightNumber)
+    setIsDuplicateFlight(isDuplicate)
+  }, [internalForm.flightNumber, selectedFlight, existingFlights])
 
   // Update internal form when selectedFlight changes (for editing)
   useEffect(() => {
@@ -132,6 +151,12 @@ export function FlightModal({
     if (!internalForm.flightNumber.trim() || !internalForm.originAirportId || !internalForm.destinationAirportId) {
       return
     }
+    
+    // Prevent saving if there's a duplicate flight number
+    if (isDuplicateFlight) {
+      return
+    }
+    
     onSave(internalForm)
   }
 
@@ -175,9 +200,14 @@ export function FlightModal({
               id="flightNumber"
               value={internalForm.flightNumber}
               onChange={(e) => setInternalForm({ ...internalForm, flightNumber: e.target.value })}
-              className="col-span-3"
+              className={`col-span-3 ${isDuplicateFlight ? 'border-red-500' : ''}`}
               placeholder="e.g., AA123"
             />
+            {isDuplicateFlight && (
+              <p className="col-span-4 text-sm text-red-500 mt-1">
+                ⚠️ This flight number already exists. Please choose a different one.
+              </p>
+            )}
           </div>
           
           <div className="grid grid-cols-4 items-center gap-4">
@@ -204,7 +234,12 @@ export function FlightModal({
                   .filter(airport => airport.id !== internalForm.destinationAirportId)
                   .map((airport) => (
                     <SelectItem key={airport.id} value={airport.id}>
-                      {airport.code} {airport.is_eu ? "(EU)" : "(Non-EU)"}
+                      <div className="flex items-center justify-between w-full">
+                        <span>{airport.code}</span>
+                        <span className="text-xs text-gray-500 ml-2">
+                          {airport.is_eu ? 'EU' : 'Non-EU'}
+                        </span>
+                      </div>
                     </SelectItem>
                   ))}
               </SelectContent>
@@ -235,7 +270,12 @@ export function FlightModal({
                   .filter(airport => airport.id !== internalForm.originAirportId)
                   .map((airport) => (
                     <SelectItem key={airport.id} value={airport.id}>
-                      {airport.code} {airport.is_eu ? "(EU)" : "(Non-EU)"}
+                      <div className="flex items-center justify-between w-full">
+                        <span>{airport.code}</span>
+                        <span className="text-xs text-gray-500 ml-2">
+                          {airport.is_eu ? 'EU' : 'Non-EU'}
+                        </span>
+                      </div>
                     </SelectItem>
                   ))}
               </SelectContent>
@@ -251,7 +291,7 @@ export function FlightModal({
           <Button 
             type="button" 
             onClick={handleSave}
-            disabled={isCreating}
+            disabled={isCreating || isDuplicateFlight}
           >
             {isCreating ? 'Saving...' : (selectedFlight ? 'Update' : 'Create')}
           </Button>

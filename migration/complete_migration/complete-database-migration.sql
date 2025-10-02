@@ -203,6 +203,22 @@ CREATE TABLE public.invoices (
     CONSTRAINT invoices_invoice_number_key UNIQUE (invoice_number)
 ) TABLESPACE pg_default;
 
+-- 11. Create sector_rates table
+CREATE TABLE public.sector_rates (
+    id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
+    origin CHARACTER VARYING(10) NOT NULL,
+    destination CHARACTER VARYING(10) NOT NULL,
+    origin_airport_id UUID NOT NULL REFERENCES public.airport_code(id) ON DELETE CASCADE,
+    destination_airport_id UUID NOT NULL REFERENCES public.airport_code(id) ON DELETE CASCADE,
+    sector_rate NUMERIC(10,2) NOT NULL CHECK (sector_rate > 0),
+    flight_num_preview VARCHAR(20) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT sector_rates_pkey PRIMARY KEY (id),
+    CONSTRAINT check_different_airports CHECK (origin_airport_id != destination_airport_id)
+) TABLESPACE pg_default;
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_customers_code ON public.customers USING btree (code) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_customers_is_active ON public.customers USING btree (is_active) TABLESPACE pg_default;
@@ -250,6 +266,14 @@ CREATE INDEX IF NOT EXISTS idx_flights_is_active ON public.flights USING btree (
 CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON public.invoices USING btree (customer_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices USING btree (status) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_invoices_due_date ON public.invoices USING btree (due_date) TABLESPACE pg_default;
+
+CREATE INDEX IF NOT EXISTS idx_sector_rates_origin ON public.sector_rates USING btree (origin) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_destination ON public.sector_rates USING btree (destination) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_origin_airport_id ON public.sector_rates USING btree (origin_airport_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_destination_airport_id ON public.sector_rates USING btree (destination_airport_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_is_active ON public.sector_rates USING btree (is_active) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_route ON public.sector_rates USING btree (origin, destination) TABLESPACE pg_default;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sector_rates_unique_route ON public.sector_rates USING btree (origin_airport_id, destination_airport_id) WHERE is_active = true TABLESPACE pg_default;
 
 -- Create triggers for updated_at columns
 CREATE TRIGGER update_customers_updated_at 
@@ -302,6 +326,12 @@ CREATE TRIGGER update_invoices_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_sector_rates_updated_at ON public.sector_rates;
+CREATE TRIGGER update_sector_rates_updated_at 
+    BEFORE UPDATE ON public.sector_rates 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_codes ENABLE ROW LEVEL SECURITY;
@@ -313,6 +343,7 @@ ALTER TABLE public.column_mappings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.airport_code ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.flights ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sector_rates ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies (allow all operations for authenticated users)
 CREATE POLICY "Allow all operations for authenticated users" ON public.customers
@@ -345,6 +376,9 @@ CREATE POLICY "Allow all operations for authenticated users" ON public.flights
 CREATE POLICY "Allow all operations for authenticated users" ON public.invoices
     FOR ALL USING (auth.role() = 'authenticated');
 
+CREATE POLICY "Allow all operations for authenticated users" ON public.sector_rates
+    FOR ALL USING (auth.role() = 'authenticated');
+
 -- Grant permissions
 GRANT ALL ON public.customers TO authenticated;
 GRANT ALL ON public.customer_codes TO authenticated;
@@ -356,6 +390,7 @@ GRANT ALL ON public.column_mappings TO authenticated;
 GRANT ALL ON public.airport_code TO authenticated;
 GRANT ALL ON public.flights TO authenticated;
 GRANT ALL ON public.invoices TO authenticated;
+GRANT ALL ON public.sector_rates TO authenticated;
 
 GRANT ALL ON public.customers TO service_role;
 GRANT ALL ON public.customer_codes TO service_role;
@@ -367,6 +402,7 @@ GRANT ALL ON public.column_mappings TO service_role;
 GRANT ALL ON public.airport_code TO service_role;
 GRANT ALL ON public.flights TO service_role;
 GRANT ALL ON public.invoices TO service_role;
+GRANT ALL ON public.sector_rates TO service_role;
 
 -- Insert sample data
 INSERT INTO public.customers (name, code, email, phone, address, city, state, postal_code, country, contact_person, priority, total_shipments) VALUES
@@ -430,7 +466,16 @@ INSERT INTO public.airport_code (code, is_active, is_eu) VALUES
 ('NRT', true, false),
 ('SYD', false, false),
 ('DXB', true, false),
-('SFO', true, false);
+('SFO', true, false),
+('ORD', true, false),
+('DEN', true, false),
+('FRA', true, true),
+('MAD', true, true),
+('BCN', true, true),
+('AMS', true, true),
+('FCO', true, true),
+('LIS', true, true),
+('OPO', true, true);
 
 -- Create a view for easier querying with airport code details
 CREATE OR REPLACE VIEW public.flights_with_airports AS
@@ -473,6 +518,17 @@ INSERT INTO public.flights (flight_number, origin, destination, origin_airport_i
 ('KL456', 'AMS', 'FCO', (SELECT id FROM public.airport_code WHERE code = 'AMS'), (SELECT id FROM public.airport_code WHERE code = 'FCO'), 'scheduled', true),
 ('IB789', 'MAD', 'LIS', (SELECT id FROM public.airport_code WHERE code = 'MAD'), (SELECT id FROM public.airport_code WHERE code = 'LIS'), 'scheduled', true),
 ('TP012', 'LIS', 'OPO', (SELECT id FROM public.airport_code WHERE code = 'LIS'), (SELECT id FROM public.airport_code WHERE code = 'OPO'), 'scheduled', true);
+
+-- Insert sample sector rates
+INSERT INTO public.sector_rates (origin, destination, origin_airport_id, destination_airport_id, sector_rate, flight_num_preview, is_active) VALUES
+('JFK', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'JFK'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 450.00, 'AA123', true),
+('LAX', 'SFO', (SELECT id FROM public.airport_code WHERE code = 'LAX'), (SELECT id FROM public.airport_code WHERE code = 'SFO'), 320.00, 'UA456', true),
+('LHR', 'CDG', (SELECT id FROM public.airport_code WHERE code = 'LHR'), (SELECT id FROM public.airport_code WHERE code = 'CDG'), 180.00, 'BA567', true),
+('JFK', 'LHR', (SELECT id FROM public.airport_code WHERE code = 'JFK'), (SELECT id FROM public.airport_code WHERE code = 'LHR'), 850.00, 'AA123', true),
+('NRT', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'NRT'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 1200.00, 'JL789', true),
+('SYD', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'SYD'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 1500.00, 'QF456', false),
+('DXB', 'LHR', (SELECT id FROM public.airport_code WHERE code = 'DXB'), (SELECT id FROM public.airport_code WHERE code = 'LHR'), 650.00, 'EK123', true),
+('SFO', 'NRT', (SELECT id FROM public.airport_code WHERE code = 'SFO'), (SELECT id FROM public.airport_code WHERE code = 'NRT'), 1100.00, 'UA789', true);
 
 -- Success message
 SELECT 'Complete Cargo Management System database setup completed successfully!' as message;
