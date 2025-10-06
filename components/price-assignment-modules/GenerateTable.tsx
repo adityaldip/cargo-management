@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -28,6 +29,13 @@ interface FlightUploadData {
   after_bt_from?: string
   after_bt_to?: string
   applied_rate?: string
+  sector_rate_id?: string
+  sector_rate?: {
+    id: string
+    origin: string
+    destination: string
+    sector_rate: number
+  }
   is_converted?: boolean
   created_at?: string
   updated_at?: string
@@ -44,6 +52,12 @@ interface GeneratedData {
   sectorRates: string
   availableSectorRates: any[]
   isConverted?: boolean
+  selectedSectorRate?: {
+    id: string
+    origin: string
+    destination: string
+    sector_rate: number
+  }
   convertedData?: {
     converted_origin?: string
     converted_destination?: string
@@ -52,6 +66,7 @@ interface GeneratedData {
     after_bt_from?: string
     after_bt_to?: string
     applied_rate?: string
+    sector_rate_id?: string
     inbound?: string
     outbound?: string
   }
@@ -143,62 +158,28 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     return matchingRates
   }
 
-  // Get all available routes and their matching sector rates
+  // Get all available sector rates from the database
   const getAvailableSectorRates = (beforeBT: string, inbound: string, outbound: string, afterBT: string) => {
-    const allSectorRates: any[] = []
-    
-    // Extract routes from each column
-    const routes = []
-    
-    // 1. before BT - extract route (e.g., "FRA -> DUS")
-    if (beforeBT && beforeBT !== "n/a") {
-      const beforeRoute = beforeBT.match(/([A-Z]{3})\s*->\s*([A-Z]{3})/)
-      if (beforeRoute) {
-        routes.push(`${beforeRoute[1]} -> ${beforeRoute[2]}`)
-      }
-    }
-    
-    // 2. inbound - extract route from flight info (e.g., "BT234, DUS → RIX" -> "DUS -> RIX")
-    if (inbound && inbound !== "n/a") {
-      const inboundRoute = inbound.match(/([A-Z]{3})\s*→\s*([A-Z]{3})/)
-      if (inboundRoute) {
-        routes.push(`${inboundRoute[1]} -> ${inboundRoute[2]}`)
-      }
-    }
-    
-    // 3. outbound - extract route from flight info (e.g., "BT633, RIX → LGW" -> "RIX -> LGW")
-    if (outbound && outbound !== "n/a") {
-      const outboundRoute = outbound.match(/([A-Z]{3})\s*→\s*([A-Z]{3})/)
-      if (outboundRoute) {
-        routes.push(`${outboundRoute[1]} -> ${outboundRoute[2]}`)
-      }
-    }
-    
-    // 4. after BT - extract route (e.g., "ROM -> LGW")
-    if (afterBT && afterBT !== "n/a") {
-      const afterRoute = afterBT.match(/([A-Z]{3})\s*->\s*([A-Z]{3})/)
-      if (afterRoute) {
-        routes.push(`${afterRoute[1]} -> ${afterRoute[2]}`)
-      }
-    }
-    
-    // Find matching sector rates for each route
-    routes.forEach(route => {
-      const matchingRates = findMatchingSectorRates(route)
-      allSectorRates.push(...matchingRates)
-    })
-    
-    return allSectorRates
+    // Return all active sector rates from the database
+    return sectorRatesData || []
   }
 
   // Load flight data from database
   const loadFlightData = async () => {
     setIsLoading(true)
     try {
-      // Load flight uploads
+      // Load flight uploads with sector rate information
       const { data: uploadData, error: uploadError } = await supabase
         .from('flight_uploads')
-        .select('*')
+        .select(`
+          *,
+          sector_rate:sector_rates(
+            id,
+            origin,
+            destination,
+            sector_rate
+          )
+        `)
         .order('created_at', { ascending: false })
 
       if (uploadError) throw uploadError
@@ -211,11 +192,12 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
 
       if (flightsError) throw flightsError
 
-      // Load sector rates data
+      // Load all active sector rates
       const { data: sectorRatesDbData, error: sectorRatesError } = await supabase
         .from('sector_rates')
         .select('*')
         .eq('is_active', true)
+        .order('origin', { ascending: true })
 
       if (sectorRatesError) {
         console.error('Error loading sector rates:', sectorRatesError)
@@ -310,9 +292,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         outbound: flight.is_converted ? "-" : (flight.outbound ? formatFlight(flight.outbound) : "n/a"),
         afterBT: flight.is_converted ? "-" : afterBT,
         destination: flight.is_converted ? "-" : destinationCode,
-        sectorRates: flight.is_converted ? "-" : (availableSectorRates.length > 0 
-          ? availableSectorRates.map(rate => `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`).join(' | ')
-          : "n/a"),
+        sectorRates: flight.is_converted ? "-" : "All rates available",
         availableSectorRates: availableSectorRates,
         isConverted: flight.is_converted || false,
         convertedData: flight.is_converted ? {
@@ -323,8 +303,15 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           after_bt_from: flight.after_bt_from,
           after_bt_to: flight.after_bt_to,
           applied_rate: flight.applied_rate,
+          sector_rate_id: flight.sector_rate_id,
           inbound: flight.inbound,
           outbound: flight.outbound
+        } : undefined,
+        selectedSectorRate: flight.sector_rate_id ? {
+          id: flight.sector_rate_id,
+          origin: flight.sector_rate?.origin || '',
+          destination: flight.sector_rate?.destination || '',
+          sector_rate: flight.sector_rate?.sector_rate || 0
         } : undefined
       }
     })
@@ -366,6 +353,31 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       ...prev,
       [recordId]: false
     }))
+  }
+
+  // Handle sector rate selection change
+  const handleSectorRateChange = async (recordId: string, selectedRateId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('flight_uploads')
+        .update({ 
+          sector_rate_id: selectedRateId === "none" ? null : selectedRateId,
+          applied_rate: selectedRateId === "none" ? null : null // Clear old text field
+        })
+        .eq('id', recordId)
+
+      if (error) throw error
+
+      // Refresh data to show updated rate
+      loadFlightData()
+    } catch (error) {
+      console.error('Error updating sector rate:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update sector rate.",
+        variant: "destructive"
+      })
+    }
   }
 
   const handleProcessAssignment = async () => {
@@ -467,7 +479,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                 {generatedData.map((row, index) => (
                 <TableRow 
                   key={index}
-                  className="cursor-pointer hover:bg-gray-50"
+                  className="cursor-pointer hover:bg-gray-50 h-8"
                   onClick={() => {
                     setSelectedOrigin(row.origin)
                     // Find the original flight data from flightData
@@ -476,7 +488,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                     setShowConvertModal(true)
                   }}
                 >
-                  <TableCell className="py-1">
+                  <TableCell className="py-1 h-8">
                     {row.convertedData?.converted_origin ? (
                       <span className="text-xs">
                         {row.convertedData.converted_origin}
@@ -484,7 +496,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                     ) : (
                       <Button
                         size="sm"
-                        className="h-6 text-xs px-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+                        className="h-5 text-xs px-1 bg-yellow-500 hover:bg-yellow-600 text-white"
                         onClick={(e) => {
                           e.stopPropagation() // Prevent row click
                           setSelectedOrigin(row.origin)
@@ -498,47 +510,58 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                       </Button>
                     )}
                   </TableCell>
-                  <TableCell className="py-1">
+                  <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.before_bt_from && row.convertedData?.before_bt_to
                         ? `${row.convertedData.before_bt_from} → ${row.convertedData.before_bt_to}`
                         : "-"}
                     </span>
                   </TableCell>
-                  <TableCell className="py-1">
+                  <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.inbound
                         ? row.convertedData.inbound
                         : "-"}
                     </span>
                   </TableCell>
-                  <TableCell className="py-1">
+                  <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.outbound
                         ? row.convertedData.outbound
                         : "-"}
                     </span>
                   </TableCell>
-                  <TableCell className="py-1">
+                  <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.after_bt_from && row.convertedData?.after_bt_to
                         ? `${row.convertedData.after_bt_from} → ${row.convertedData.after_bt_to}`
                         : "-"}
                     </span>
                   </TableCell>
-                  <TableCell className="py-1">
+                  <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.converted_destination
                         ? row.convertedData.converted_destination
                         : "-"}
                     </span>
                   </TableCell>
-                  <TableCell className="py-1">
-                    <span className="text-xs">
-                      {row.isConverted && row.convertedData?.applied_rate
-                        ? row.convertedData.applied_rate
-                        : "-"}
-                    </span>
+                  <TableCell className="py-1 h-8">
+                    <Select 
+                      value={row.selectedSectorRate?.id || "none"} 
+                      onValueChange={(value) => handleSectorRateChange(row.id || "", value === "none" ? "" : value)}
+                    >
+                      <SelectTrigger className="h-6 text-xs">
+                        <SelectValue placeholder="Select rate" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {row.availableSectorRates.map((rate, rateIndex) => (
+                          <SelectItem key={`${rate.id}-${rateIndex}`} value={rate.id}>
+                            {rate.origin} → {rate.destination}, €{rate.sector_rate}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                 </TableRow>
                 ))}

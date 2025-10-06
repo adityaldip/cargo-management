@@ -233,6 +233,7 @@ CREATE TABLE public.flight_uploads (
     after_bt_from CHARACTER VARYING(10) NULL,
     after_bt_to CHARACTER VARYING(10) NULL,
     applied_rate TEXT NULL,
+    sector_rate_id UUID NULL REFERENCES public.sector_rates(id) ON DELETE SET NULL,
     is_converted BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -250,6 +251,7 @@ COMMENT ON COLUMN public.flight_uploads.before_bt_to IS 'Before BT destination a
 COMMENT ON COLUMN public.flight_uploads.after_bt_from IS 'After BT origin airport code';
 COMMENT ON COLUMN public.flight_uploads.after_bt_to IS 'After BT destination airport code';
 COMMENT ON COLUMN public.flight_uploads.applied_rate IS 'Applied rate information from sector rates';
+COMMENT ON COLUMN public.flight_uploads.sector_rate_id IS 'Foreign key reference to sector_rates table for applied rate';
 COMMENT ON COLUMN public.flight_uploads.is_converted IS 'Whether this record has been converted using ConvertModal';
 
 -- Create indexes for better performance
@@ -319,6 +321,7 @@ CREATE INDEX IF NOT EXISTS idx_flight_uploads_before_bt_to ON public.flight_uplo
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_after_bt_from ON public.flight_uploads USING btree (after_bt_from) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_after_bt_to ON public.flight_uploads USING btree (after_bt_to) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_is_converted ON public.flight_uploads USING btree (is_converted) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flight_uploads_sector_rate_id ON public.flight_uploads USING btree (sector_rate_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_created_at ON public.flight_uploads USING btree (created_at) TABLESPACE pg_default;
 
 -- Create triggers for updated_at columns

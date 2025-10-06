@@ -240,26 +240,26 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
                 </TableHeader>
                 <TableBody>
                   {data.map((row, index) => (
-                    <TableRow key={row.id || index}>
-                      <TableCell className="py-1 text-xs">
+                    <TableRow key={row.id || index} className="h-8">
+                      <TableCell className="py-1 text-xs h-8">
                         {row.origin}
                       </TableCell>
-                      <TableCell className="py-1 text-xs">
+                      <TableCell className="py-1 text-xs h-8">
                         {row.destination}
                       </TableCell>
-                      <TableCell className="py-1 text-xs">
+                      <TableCell className="py-1 text-xs h-8">
                         {row.inbound || "-"}
                       </TableCell>
-                      <TableCell className="py-1 text-xs">
+                      <TableCell className="py-1 text-xs h-8">
                         {row.outbound || "-"}
                       </TableCell>
-                      <TableCell className="py-1">
+                      <TableCell className="py-1 h-8">
                         <div className="flex gap-0.5">
                           <Button
                             onClick={() => handleEdit(row)}
                             variant="ghost"
                             size="sm"
-                            className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            className="h-5 w-5 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           >
                             <Edit className="h-3 w-3" />
                           </Button>
@@ -267,7 +267,7 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
                             onClick={() => removeRow(index)}
                             variant="ghost"
                             size="sm"
-                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
