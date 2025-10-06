@@ -33,6 +33,7 @@ export function MailProcessingDashboard() {
   const [mailSystemData, setMailSystemData] = useState<ProcessedData | null>(null)
   const [mergedData, setMergedData] = useState<ProcessedData | null>(null)
   const [savedPriorityConditions, setSavedPriorityConditions] = useState<FilterCondition[]>([])
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     if (mailAgentData || mailSystemData) {
@@ -120,8 +121,18 @@ export function MailProcessingDashboard() {
 
   return (
     <div className="min-h-screen bg-white text-black">
-      <WorkflowNavigation activeStep={activeStep} onStepChange={setActiveStep} isProcessing={isProcessing} isClearingData={isClearingData} isExporting={isExporting} isBulkDeleting={isBulkDeleting} isExecutingRules={isExecutingRules} isMappingAndSaving={isMappingAndSaving} />
-      <div className="ml-60 min-h-screen">
+      <WorkflowNavigation 
+        activeStep={activeStep} 
+        onStepChange={setActiveStep} 
+        isProcessing={isProcessing} 
+        isClearingData={isClearingData} 
+        isExporting={isExporting} 
+        isBulkDeleting={isBulkDeleting} 
+        isExecutingRules={isExecutingRules} 
+        isMappingAndSaving={isMappingAndSaving}
+        onCollapseChange={setIsSidebarCollapsed}
+      />
+      <div className={`min-h-screen transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-16' : 'ml-60'}`}>
         <div className="container mx-auto px-2 py-1">
         {savedPriorityConditions.length > 0 && (
           <Card className="bg-white border-gray-200 shadow-sm mb-4">

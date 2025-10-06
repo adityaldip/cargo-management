@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { FileUp, Users, DollarSign, FileSpreadsheet, Receipt, UserCheck, Calculator, BarChart3, Menu, X, Coins } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { FileUp, Users, DollarSign, FileSpreadsheet, Receipt, UserCheck, Calculator, BarChart3, Menu, X, Coins, ChevronLeft, ChevronRight } from "lucide-react"
 
 type WorkflowStep = 
   | "import-mail-agent"
@@ -25,16 +26,23 @@ interface WorkflowNavigationProps {
   isBulkDeleting?: boolean
   isExecutingRules?: boolean
   isMappingAndSaving?: boolean
+  onCollapseChange?: (isCollapsed: boolean) => void
 }
 
-export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false, isBulkDeleting = false, isExecutingRules = false, isMappingAndSaving = false }: WorkflowNavigationProps) {
+export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false, isBulkDeleting = false, isExecutingRules = false, isMappingAndSaving = false, onCollapseChange }: WorkflowNavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
   
   // Track hydration to prevent className mismatches
   useEffect(() => {
     setIsHydrated(true)
   }, [])
+
+  // Notify parent component when collapse state changes
+  useEffect(() => {
+    onCollapseChange?.(isCollapsed)
+  }, [isCollapsed, onCollapseChange])
   
   const steps = [
     { id: "import-mail-agent", label: "Import Mail Agent", icon: FileUp, tooltip: "Upload and verify mail agent Excel files for processing", lighterColor: true },
@@ -43,9 +51,9 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
     // { id: "review-customers", label: "Review Customers", icon: Users, tooltip: "Analyze customer performance and individual data breakdown" },
     { id: "assign-customers", label: "Assign Contractees", icon: UserCheck, tooltip: "Configure automated rules for cargo processing and team assignment" },
     { id: "assign-rates", label: "Assign Rates", icon: Calculator, tooltip: "Configure automated rate assignment rules and pricing calculations" },
-    { id: "price-assignment", label: "Price Assignment", icon: Coins, tooltip: "Manage flight pricing, airport codes, and sector rates" },
+    { id: "price-assignment", label: "Price Assignment", icon: Coins, tooltip: "Manage flight pricing, airport codes, and sector rates", hasBadge: true, badgeText: "new" },
     // { id: "review-rates", label: "Review Rates", icon: DollarSign, tooltip: "Configure pricing for your routes and manage rate plans." },
-    { id: "review-invoices", label: "Review Invoices", icon: Receipt, tooltip: "Review and manage generated invoices from processed cargo data" },
+    { id: "review-invoices", label: "Review Invoices", icon: Receipt, tooltip: "Review and manage generated invoices from processed cargo data"},
     { id: "reporting", label: "Reporting", icon: BarChart3, tooltip: "View comprehensive reports and analytics for cargo data", lighterColor: true },
   ]
 
@@ -69,6 +77,18 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
         {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
       </Button>
 
+      {/* Desktop Toggle Button - only show when sidebar is collapsed */}
+      {isCollapsed && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="fixed top-4 left-4 z-50 hidden lg:flex bg-white border-gray-200 shadow-sm"
+          onClick={() => setIsCollapsed(false)}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      )}
+
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -78,21 +98,32 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed left-0 top-0 h-full bg-white border-r border-gray-100 z-40 transition-transform duration-300 ease-in-out w-60 lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside className={`fixed left-0 top-0 h-full bg-white border-r border-gray-100 z-40 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-16' : 'w-60'} lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="flex flex-col h-full">
           {/* Logo Header */}
           <div className="p-2 pt-16 lg:pt-2">
             <div className="flex items-center justify-between">
-              <div></div>
-              {/* Close button for mobile */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="lg:hidden"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              {!isCollapsed && <div></div>}
+              <div className="flex items-center gap-2">
+                {/* Toggle button for desktop */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden lg:flex h-8 w-8"
+                  onClick={() => setIsCollapsed(!isCollapsed)}
+                >
+                  {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                </Button>
+                {/* Close button for mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="lg:hidden"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -124,7 +155,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                     <TooltipTrigger asChild>
                       <div
                         onClick={() => handleStepChange(step.id as WorkflowStep)}
-                        className={`flex items-center px-3 py-2.5 rounded-lg transition-colors ${
+                        className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 rounded-lg transition-colors ${
                           isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules || isMappingAndSaving
                             ? "cursor-not-allowed opacity-50 text-gray-400" 
                             : isActive 
@@ -135,15 +166,24 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                         }`}
                       >
                         <Icon className="h-4 w-4 flex-shrink-0" />
-                        <span className="ml-3 text-sm font-medium truncate">{step.label}</span>
-                        {(isProcessing || isExporting || isExecutingRules || isMappingAndSaving) && (
+                        {!isCollapsed && (
+                          <>
+                            <span className="ml-3 text-sm font-medium truncate">{step.label}</span>
+                            {step.hasBadge && step.badgeText && (
+                              <Badge variant="secondary" className="ml-2 text-xs px-1.5 py-0.5 bg-gray-100 text-gray-800 border-gray-200">
+                                {step.badgeText}
+                              </Badge>
+                            )}
+                          </>
+                        )}
+                        {(isProcessing || isExporting || isExecutingRules || isMappingAndSaving) && !isCollapsed && (
                           <div className="ml-auto">
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400"></div>
                           </div>
                         )}
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent side="right" className="bg-black text-white text-xs whitespace-nowrap hidden lg:block">
+                    <TooltipContent side="right" className={`bg-black text-white text-xs whitespace-nowrap ${isCollapsed ? 'block' : 'hidden lg:block'}`}>
                       <p>
                         {isProcessing 
                           ? "Navigation is disabled - processing is in progress" 

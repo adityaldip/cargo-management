@@ -79,7 +79,7 @@ export function PriceAssignment({ data, onSave, onExecute }: PriceAssignmentProp
                 : "text-gray-600 hover:text-black hover:bg-gray-50"
             }
           >
-            Preview
+            Upload File
           </Button>
         </div>
       </div>
