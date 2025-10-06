@@ -178,21 +178,34 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="p-3">
-          <div className="flex justify-center items-center py-8">
-            <div className="text-sm text-gray-500">Loading data...</div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="p-1">
+        <div className="flex justify-between items-center mb-1">
+          <div className="h-8 w-16 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-8 w-20 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="text-xs text-gray-500 w-full flex justify-center items-center mb-1">
+          <p className="w-full text-center font-bold text-black">Form upload file</p>
+        </div>
+        <div className="w-full border-b border-black mb-2"></div>
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="flex space-x-2">
+              <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-24 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-24 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-12 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+      </div>
     )
   }
 
   return (
     <>
-      <Card>
-        <CardContent className="p-3">
-          <div className="flex justify-between items-center mb-3">
+      <div className="p-1">
+          <div className="flex justify-between items-center mb-1">
             <Button 
               className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-3"
               onClick={handleUpload}
@@ -210,7 +223,7 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
               </Button>
           </div>
           <div>
-            <div className="text-sm text-gray-500 w-full flex justify-center items-center">
+            <div className="text-xs text-gray-500 w-full flex justify-center items-center">
               <p className="w-full text-center font-bold text-black">Form upload file</p>
             </div>
             <div className="w-full border-b border-black"></div>
@@ -218,45 +231,45 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs py-2 min-w-[120px]">Origin</TableHead>
-                    <TableHead className="text-xs py-2 min-w-[120px]">Destination</TableHead>
-                    <TableHead className="text-xs py-2 min-w-[140px]">Inbound Flight</TableHead>
-                    <TableHead className="text-xs py-2 min-w-[140px]">Outbound Flight</TableHead>
-                    <TableHead className="text-xs py-2 min-w-[100px]">Actions</TableHead>
+                    <TableHead className="text-xs py-1 min-w-[80px]">Origin</TableHead>
+                    <TableHead className="text-xs py-1 min-w-[80px]">Destination</TableHead>
+                    <TableHead className="text-xs py-1 min-w-[100px]">Inbound Flight</TableHead>
+                    <TableHead className="text-xs py-1 min-w-[100px]">Outbound Flight</TableHead>
+                    <TableHead className="text-xs py-1 min-w-[60px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.map((row, index) => (
                     <TableRow key={row.id || index}>
-                      <TableCell className="py-2 text-sm">
+                      <TableCell className="py-1 text-xs">
                         {row.origin}
                       </TableCell>
-                      <TableCell className="py-2 text-sm">
+                      <TableCell className="py-1 text-xs">
                         {row.destination}
                       </TableCell>
-                      <TableCell className="py-2 text-sm">
+                      <TableCell className="py-1 text-xs">
                         {row.inbound || "-"}
                       </TableCell>
-                      <TableCell className="py-2 text-sm">
+                      <TableCell className="py-1 text-xs">
                         {row.outbound || "-"}
                       </TableCell>
-                      <TableCell className="py-2">
-                        <div className="flex gap-1">
+                      <TableCell className="py-1">
+                        <div className="flex gap-0.5">
                           <Button
                             onClick={() => handleEdit(row)}
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           >
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-3 w-3" />
                           </Button>
                           <Button
                             onClick={() => removeRow(index)}
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </TableCell>
@@ -266,8 +279,7 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
               </Table>
             </div>
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Add Flight Upload Modal */}
       <AddFlightUploadModal

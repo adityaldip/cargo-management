@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Check, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -351,103 +352,123 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="p-3">
-          <div className="flex justify-center items-center py-8">
-            <div className="text-sm text-gray-500">Loading flight data...</div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="p-1">
+        <div className="flex justify-end items-center mb-1">
+          <div className="h-8 w-20 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="text-xs text-gray-500 w-full flex justify-center items-center mb-1">
+          <p className="w-full text-center font-bold text-black">System Generated</p>
+        </div>
+        <div className="w-full border-b border-black mb-2"></div>
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="flex space-x-2">
+              <div className="h-6 w-12 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-12 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-24 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+      </div>
     )
   }
 
   return (
-    <Card>
-      <CardContent className="p-3">
-      <div className="flex justify-between items-center mb-3">
-          <Button 
-            className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-3"
-            onClick={handleProcessAssignment}
-            disabled={isProcessing || flightData.length === 0}
-          >
-            {isProcessing ? "Processing..." : "Generate"}
-          </Button>
-        </div>
+    <div className="p-1">
+      <div className="flex justify-end items-center mb-1">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <Button 
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-3"
+                  onClick={handleProcessAssignment}
+                  disabled={isProcessing || flightData.length === 0}
+                >
+                  {isProcessing ? "Processing..." : "Generate"}
+                </Button>
+              </div>
+            </TooltipTrigger>
+            {(isProcessing || flightData.length === 0) && (
+              <TooltipContent>
+                <p>This is disabled</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      </div>
         {/* Processing Status */}
         {isProcessing && (
-          <div className="mb-4">
+          <div className="mb-2">
             <Progress value={(processingStep / processingSteps.length) * 100} className="w-full" />
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="text-xs text-gray-600 mt-1">
               {processingSteps[processingStep - 1] || "Starting..."}
             </p>
           </div>
         )}
-        <div className="text-sm text-gray-500 w-full flex justify-center items-center">
+        <div className="text-xs text-gray-500 w-full flex justify-center items-center">
           <p className="w-full text-center font-bold text-black">System Generated</p>
         </div>
         <div className="w-full border-b border-black"></div>
         <div className="overflow-x-auto">
-          {generatedData.length === 0 ? (
-            <div className="flex justify-center items-center py-8">
-              <div className="text-sm text-gray-500">
-                No flight data available. Please add some flight uploads first.
-              </div>
-            </div>
-          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs py-2 min-w-[80px]">Origin</TableHead>
-                  <TableHead className="text-xs py-2 min-w-[120px]">before BT</TableHead>
-                  <TableHead className="text-xs py-2 min-w-[140px]">inbound</TableHead>
-                  <TableHead className="text-xs py-2 min-w-[140px]">outbound</TableHead>
-                  <TableHead className="text-xs py-2 min-w-[120px]">after BT</TableHead>
-                  <TableHead className="text-xs py-2 min-w-[80px]">Destination</TableHead>
-                  <TableHead className="text-xs py-2 min-w-[160px]">Applied Rate</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[60px]">Origin</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[80px]">before BT</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[100px]">inbound</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[100px]">outbound</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[80px]">after BT</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[60px]">Destination</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[120px]">Applied Rate</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {generatedData.map((row, index) => (
                 <TableRow key={index}>
-                  <TableCell className="py-2 text-sm">{row.origin}</TableCell>
-                  <TableCell className="py-2">
+                  <TableCell className="py-1 text-xs">{row.origin}</TableCell>
+                  <TableCell className="py-1">
                     {row.beforeBT !== "n/a" ? (
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs px-2 py-1">
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs px-1 py-0.5">
                         {row.beforeBT}
                       </Badge>
                     ) : ( 
-                      <span className="text-sm">n/a</span>
+                      <span className="text-xs">n/a</span>
                     )}
                   </TableCell>
-                  <TableCell className="py-2">
+                  <TableCell className="py-1">
                     {row.inbound !== "n/a" ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs px-2 py-1">
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs px-1 py-0.5">
                         {row.inbound}
                       </Badge>
                     ) : (
-                      <span className="text-sm">n/a</span>
+                      <span className="text-xs">n/a</span>
                     )}
                   </TableCell>
-                  <TableCell className="py-2">
+                  <TableCell className="py-1">
                     {row.outbound !== "n/a" ? (
-                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs px-2 py-1">
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs px-1 py-0.5">
                         {row.outbound}
                       </Badge>
                     ) : (
-                      <span className="text-sm">n/a</span>
+                      <span className="text-xs">n/a</span>
                     )}
                   </TableCell>
-                  <TableCell className="py-2">
+                  <TableCell className="py-1">
                     {row.afterBT !== "n/a" ? (
-                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs px-2 py-1">
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs px-1 py-0.5">
                         {row.afterBT}
                       </Badge>
                     ) : (
-                      <span className="text-sm">n/a</span>
+                      <span className="text-xs">n/a</span>
                     )}
                   </TableCell>
-                  <TableCell className="py-2 text-sm">{row.destination}</TableCell>
-                  <TableCell className="py-2">
+                  <TableCell className="py-1 text-xs">{row.destination}</TableCell>
+                  <TableCell className="py-1">
                     {row.availableSectorRates.length > 0 ? (
                       <Popover 
                         open={openRateSelects[`record-${index}`]} 
@@ -458,7 +479,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                             variant="outline"
                             role="combobox"
                             aria-expanded={openRateSelects[`record-${index}`]}
-                            className="h-8 text-xs border-gray-200 justify-between font-normal w-full"
+                            className="h-6 text-xs border-gray-200 justify-between font-normal w-full"
                           >
                             <span className="truncate">
                               {(() => {
@@ -474,29 +495,29 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                                 return "No rates available"
                               })()}
                             </span>
-                            <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                            <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-80 p-0" side="bottom" align="start">
+                        <PopoverContent className="w-60 p-0" side="bottom" align="start">
                           <Command>
-                            <CommandInput placeholder="Search sector rates..." className="h-8 text-xs" />
+                            <CommandInput placeholder="Search sector rates..." className="h-6 text-xs" />
                             <CommandEmpty>No rates found.</CommandEmpty>
-                            <CommandGroup className="max-h-64 overflow-auto">
+                            <CommandGroup className="max-h-48 overflow-auto">
                               {row.availableSectorRates.map((rate, rateIndex) => (
                                 <CommandItem
                                   key={`${rate.origin}-${rate.destination}-${rateIndex}`}
                                   value={`${rate.origin} ${rate.destination} ${rate.sector_rate}`}
                                   onSelect={() => handleRateSelection(index, rate)}
-                                  className="text-xs"
+                                  className="text-xs py-1"
                                 >
                                   <Check
                                     className={cn(
-                                      "mr-2 h-3 w-3",
+                                      "mr-1 h-3 w-3",
                                       selectedRates[`record-${index}`]?.id === rate.id ? "opacity-100" : "opacity-0"
                                     )}
                                   />
-                                  <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
-                                    <span className="font-medium text-sm truncate flex-1 min-w-0">
+                                  <div className="flex items-center justify-between min-w-0 flex-1 gap-1">
+                                    <span className="font-medium text-xs truncate flex-1 min-w-0">
                                       {rate.origin} → {rate.destination}
                                     </span>
                                     <span className="text-gray-500 text-xs flex-shrink-0">
@@ -510,8 +531,8 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                         </PopoverContent>
                       </Popover>
                     ) : (
-                      <div className="flex items-center gap-1">
-                        <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 text-xs px-2 py-1">
+                      <div className="flex items-center gap-0.5">
+                        <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 text-xs px-1 py-0.5">
                           n/a
                         </Badge>
                       </div>
@@ -521,9 +542,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                 ))}
               </TableBody>
             </Table>
-          )}
         </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

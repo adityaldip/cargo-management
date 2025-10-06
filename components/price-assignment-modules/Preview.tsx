@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { UploadTable } from "./UploadTable"
 import { GenerateTable } from "./GenerateTable"
 
@@ -88,21 +89,27 @@ export function Preview() {
 
   return (
     <div className="space-y-4">
-      {/* Upload and Generate Sections - Inline with 40-60 split */}
-      <div className="grid grid-cols-10 gap-3">
-        {/* Upload Section - 40% */}
-        <div className="col-span-4">
-          <UploadTable 
-            data={uploadData} 
-            onDataChange={handleUploadDataChange} 
-          />
-        </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Flight Data Preview</CardTitle>
+        </CardHeader>
+        <CardContent className="p-2">
+          <div className="grid grid-cols-10 gap-1">
+            {/* Upload Section - 40% */}
+            <div className="col-span-4">
+              <UploadTable 
+                data={uploadData} 
+                onDataChange={handleUploadDataChange} 
+              />
+            </div>
 
-        {/* Generate Section - 60% */}
-        <div className="col-span-6">
-          <GenerateTable data={dummyGeneratedData} refreshTrigger={refreshGenerateTable} />
-        </div>
-      </div>
+            {/* Generate Section - 60% */}
+            <div className="col-span-6">
+              <GenerateTable data={dummyGeneratedData} refreshTrigger={refreshGenerateTable} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
