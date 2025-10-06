@@ -21,19 +21,40 @@ interface FlightUploadData {
   destination: string
   inbound: string
   outbound: string
+  converted_origin?: string
+  converted_destination?: string
+  before_bt_from?: string
+  before_bt_to?: string
+  after_bt_from?: string
+  after_bt_to?: string
+  applied_rate?: string
+  is_converted?: boolean
   created_at?: string
   updated_at?: string
 }
 
 interface GeneratedData {
+  id?: string
   origin: string
   beforeBT: string
   inbound: string
   outbound: string
   afterBT: string
   destination: string
-  appliedRate: string
+  sectorRates: string
   availableSectorRates: any[]
+  isConverted?: boolean
+  convertedData?: {
+    converted_origin?: string
+    converted_destination?: string
+    before_bt_from?: string
+    before_bt_to?: string
+    after_bt_from?: string
+    after_bt_to?: string
+    applied_rate?: string
+    inbound?: string
+    outbound?: string
+  }
 }
 
 interface GenerateTableProps {
@@ -53,6 +74,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   const [selectedRates, setSelectedRates] = useState<Record<string, any>>({})
   const [showConvertModal, setShowConvertModal] = useState(false)
   const [selectedOrigin, setSelectedOrigin] = useState("")
+  const [selectedFlightData, setSelectedFlightData] = useState<any>(null)
   const { toast } = useToast()
 
   const processingSteps = [
@@ -281,16 +303,29 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
 
 
       return {
+        id: flight.id,
         origin: originCode,
-        beforeBT: beforeBT,
-        inbound: flight.inbound ? formatFlight(flight.inbound) : "n/a",
-        outbound: flight.outbound ? formatFlight(flight.outbound) : "n/a",
-        afterBT: afterBT,
-        destination: destinationCode,
-        appliedRate: availableSectorRates.length > 0 
+        beforeBT: flight.is_converted ? "-" : beforeBT,
+        inbound: flight.is_converted ? "-" : (flight.inbound ? formatFlight(flight.inbound) : "n/a"),
+        outbound: flight.is_converted ? "-" : (flight.outbound ? formatFlight(flight.outbound) : "n/a"),
+        afterBT: flight.is_converted ? "-" : afterBT,
+        destination: flight.is_converted ? "-" : destinationCode,
+        sectorRates: flight.is_converted ? "-" : (availableSectorRates.length > 0 
           ? availableSectorRates.map(rate => `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`).join(' | ')
-          : "n/a",
-        availableSectorRates: availableSectorRates
+          : "n/a"),
+        availableSectorRates: availableSectorRates,
+        isConverted: flight.is_converted || false,
+        convertedData: flight.is_converted ? {
+          converted_origin: flight.converted_origin,
+          converted_destination: flight.converted_destination,
+          before_bt_from: flight.before_bt_from,
+          before_bt_to: flight.before_bt_to,
+          after_bt_from: flight.after_bt_from,
+          after_bt_to: flight.after_bt_to,
+          applied_rate: flight.applied_rate,
+          inbound: flight.inbound,
+          outbound: flight.outbound
+        } : undefined
       }
     })
 
@@ -425,43 +460,85 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                   <TableHead className="text-xs py-1 min-w-[100px]">outbound</TableHead>
                   <TableHead className="text-xs py-1 min-w-[80px]">after BT</TableHead>
                   <TableHead className="text-xs py-1 min-w-[60px]">Destination</TableHead>
-                  <TableHead className="text-xs py-1 min-w-[120px]">Applied Rate</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[120px]">Sector Rates</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {generatedData.map((row, index) => (
-                <TableRow key={index}>
+                <TableRow 
+                  key={index}
+                  className="cursor-pointer hover:bg-gray-50"
+                  onClick={() => {
+                    setSelectedOrigin(row.origin)
+                    // Find the original flight data from flightData
+                    const originalFlight = flightData.find(flight => flight.id === row.id)
+                    setSelectedFlightData(originalFlight)
+                    setShowConvertModal(true)
+                  }}
+                >
                   <TableCell className="py-1">
-                    <div className="flex items-center gap-2">
+                    {row.convertedData?.converted_origin ? (
+                      <span className="text-xs">
+                        {row.convertedData.converted_origin}
+                      </span>
+                    ) : (
                       <Button
                         size="sm"
                         className="h-6 text-xs px-2 bg-yellow-500 hover:bg-yellow-600 text-white"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation() // Prevent row click
                           setSelectedOrigin(row.origin)
+                          // Find the original flight data from flightData
+                          const originalFlight = flightData.find(flight => flight.id === row.id)
+                          setSelectedFlightData(originalFlight)
                           setShowConvertModal(true)
                         }}
                       >
                         Convert
                       </Button>
-                    </div>
+                    )}
                   </TableCell>
                   <TableCell className="py-1">
-                    <span className="text-xs text-gray-400">-</span>
+                    <span className="text-xs">
+                      {row.isConverted && row.convertedData?.before_bt_from && row.convertedData?.before_bt_to
+                        ? `${row.convertedData.before_bt_from} → ${row.convertedData.before_bt_to}`
+                        : "-"}
+                    </span>
                   </TableCell>
                   <TableCell className="py-1">
-                    <span className="text-xs text-gray-400">-</span>
+                    <span className="text-xs">
+                      {row.isConverted && row.convertedData?.inbound
+                        ? row.convertedData.inbound
+                        : "-"}
+                    </span>
                   </TableCell>
                   <TableCell className="py-1">
-                    <span className="text-xs text-gray-400">-</span>
+                    <span className="text-xs">
+                      {row.isConverted && row.convertedData?.outbound
+                        ? row.convertedData.outbound
+                        : "-"}
+                    </span>
                   </TableCell>
                   <TableCell className="py-1">
-                    <span className="text-xs text-gray-400">-</span>
+                    <span className="text-xs">
+                      {row.isConverted && row.convertedData?.after_bt_from && row.convertedData?.after_bt_to
+                        ? `${row.convertedData.after_bt_from} → ${row.convertedData.after_bt_to}`
+                        : "-"}
+                    </span>
                   </TableCell>
                   <TableCell className="py-1">
-                    <span className="text-xs text-gray-400">-</span>
+                    <span className="text-xs">
+                      {row.isConverted && row.convertedData?.converted_destination
+                        ? row.convertedData.converted_destination
+                        : "-"}
+                    </span>
                   </TableCell>
                   <TableCell className="py-1">
-                    <span className="text-xs text-gray-400">-</span>
+                    <span className="text-xs">
+                      {row.isConverted && row.convertedData?.applied_rate
+                        ? row.convertedData.applied_rate
+                        : "-"}
+                    </span>
                   </TableCell>
                 </TableRow>
                 ))}
@@ -474,6 +551,12 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           isOpen={showConvertModal}
           onClose={() => setShowConvertModal(false)}
           origin={selectedOrigin}
+          recordId={selectedFlightData?.id}
+          originalFlightData={selectedFlightData}
+          onDataSaved={() => {
+            loadFlightData() // Refresh data when saved
+            setShowConvertModal(false)
+          }}
         />
     </div>
   )

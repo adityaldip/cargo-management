@@ -143,7 +143,7 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
       }
 
       // Save to database
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('flight_uploads')
         .upsert(validRows.map(row => ({
           ...(row.id && { id: row.id }),
