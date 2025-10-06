@@ -13,6 +13,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Check, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ConvertModal } from "./ConvertModal"
 
 interface FlightUploadData {
   id?: string
@@ -50,6 +51,8 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [openRateSelects, setOpenRateSelects] = useState<Record<string, boolean>>({})
   const [selectedRates, setSelectedRates] = useState<Record<string, any>>({})
+  const [showConvertModal, setShowConvertModal] = useState(false)
+  const [selectedOrigin, setSelectedOrigin] = useState("")
   const { toast } = useToast()
 
   const processingSteps = [
@@ -387,34 +390,32 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                 <Button 
                   className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-3"
                   onClick={handleProcessAssignment}
-                  disabled={isProcessing || flightData.length === 0}
+                  disabled={true}
                 >
-                  {isProcessing ? "Processing..." : "Generate"}
+                  Generate
                 </Button>
               </div>
             </TooltipTrigger>
-            {(isProcessing || flightData.length === 0) && (
-              <TooltipContent>
-                <p>This is disabled</p>
-              </TooltipContent>
-            )}
+            <TooltipContent>
+              <p>This is disabled</p>
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </div>
-        {/* Processing Status */}
-        {isProcessing && (
-          <div className="mb-2">
-            <Progress value={(processingStep / processingSteps.length) * 100} className="w-full" />
-            <p className="text-xs text-gray-600 mt-1">
-              {processingSteps[processingStep - 1] || "Starting..."}
-            </p>
-          </div>
-        )}
-        <div className="text-xs text-gray-500 w-full flex justify-center items-center">
-          <p className="w-full text-center font-bold text-black">System Generated</p>
+      {/* Processing Status */}
+      {isProcessing && (
+        <div className="mb-2">
+          <Progress value={(processingStep / processingSteps.length) * 100} className="w-full" />
+          <p className="text-xs text-gray-600 mt-1">
+            {processingSteps[processingStep - 1] || "Starting..."}
+          </p>
         </div>
-        <div className="w-full border-b border-black"></div>
-        <div className="overflow-x-auto">
+      )}
+      <div className="text-xs text-gray-500 w-full flex justify-center items-center">
+        <p className="w-full text-center font-bold text-black">System Generated</p>
+      </div>
+      <div className="w-full border-b border-black"></div>
+      <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -430,119 +431,50 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
               <TableBody>
                 {generatedData.map((row, index) => (
                 <TableRow key={index}>
-                  <TableCell className="py-1 text-xs">{row.origin}</TableCell>
                   <TableCell className="py-1">
-                    {row.beforeBT !== "n/a" ? (
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs px-1 py-0.5">
-                        {row.beforeBT}
-                      </Badge>
-                    ) : ( 
-                      <span className="text-xs">n/a</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="py-1">
-                    {row.inbound !== "n/a" ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs px-1 py-0.5">
-                        {row.inbound}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs">n/a</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="py-1">
-                    {row.outbound !== "n/a" ? (
-                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs px-1 py-0.5">
-                        {row.outbound}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs">n/a</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="py-1">
-                    {row.afterBT !== "n/a" ? (
-                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs px-1 py-0.5">
-                        {row.afterBT}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs">n/a</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="py-1 text-xs">{row.destination}</TableCell>
-                  <TableCell className="py-1">
-                    {row.availableSectorRates.length > 0 ? (
-                      <Popover 
-                        open={openRateSelects[`record-${index}`]} 
-                        onOpenChange={(open) => setOpenRateSelects(prev => ({ ...prev, [`record-${index}`]: open }))}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="h-6 text-xs px-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+                        onClick={() => {
+                          setSelectedOrigin(row.origin)
+                          setShowConvertModal(true)
+                        }}
                       >
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={openRateSelects[`record-${index}`]}
-                            className="h-6 text-xs border-gray-200 justify-between font-normal w-full"
-                          >
-                            <span className="truncate">
-                              {(() => {
-                                const selectedRate = selectedRates[`record-${index}`]
-                                if (selectedRate) {
-                                  return `${selectedRate.origin} → ${selectedRate.destination}, €${selectedRate.sector_rate}`
-                                }
-                                // Fallback to first available rate
-                                const firstRate = row.availableSectorRates[0]
-                                if (firstRate) {
-                                  return `${firstRate.origin} → ${firstRate.destination}, €${firstRate.sector_rate}`
-                                }
-                                return "No rates available"
-                              })()}
-                            </span>
-                            <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-60 p-0" side="bottom" align="start">
-                          <Command>
-                            <CommandInput placeholder="Search sector rates..." className="h-6 text-xs" />
-                            <CommandEmpty>No rates found.</CommandEmpty>
-                            <CommandGroup className="max-h-48 overflow-auto">
-                              {row.availableSectorRates.map((rate, rateIndex) => (
-                                <CommandItem
-                                  key={`${rate.origin}-${rate.destination}-${rateIndex}`}
-                                  value={`${rate.origin} ${rate.destination} ${rate.sector_rate}`}
-                                  onSelect={() => handleRateSelection(index, rate)}
-                                  className="text-xs py-1"
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-1 h-3 w-3",
-                                      selectedRates[`record-${index}`]?.id === rate.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <div className="flex items-center justify-between min-w-0 flex-1 gap-1">
-                                    <span className="font-medium text-xs truncate flex-1 min-w-0">
-                                      {rate.origin} → {rate.destination}
-                                    </span>
-                                    <span className="text-gray-500 text-xs flex-shrink-0">
-                                      €{rate.sector_rate}
-                                    </span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    ) : (
-                      <div className="flex items-center gap-0.5">
-                        <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 text-xs px-1 py-0.5">
-                          n/a
-                        </Badge>
-                      </div>
-                    )}
+                        Convert
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <span className="text-xs text-gray-400">-</span>
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <span className="text-xs text-gray-400">-</span>
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <span className="text-xs text-gray-400">-</span>
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <span className="text-xs text-gray-400">-</span>
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <span className="text-xs text-gray-400">-</span>
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <span className="text-xs text-gray-400">-</span>
                   </TableCell>
                 </TableRow>
                 ))}
               </TableBody>
             </Table>
         </div>
+
+        {/* Convert Modal */}
+        <ConvertModal
+          isOpen={showConvertModal}
+          onClose={() => setShowConvertModal(false)}
+          origin={selectedOrigin}
+        />
     </div>
   )
 }
