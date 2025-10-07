@@ -91,6 +91,20 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     return match ? match[1] : ""
   }
 
+  // Check if Before BT should be disabled
+  const isBeforeBTDisabled = () => {
+    if (!formData.origin || !formData.inbound) return false
+    const inboundOrigin = extractOriginFromInbound(formData.inbound)
+    return formData.origin === inboundOrigin
+  }
+
+  // Check if After BT should be disabled
+  const isAfterBTDisabled = () => {
+    if (!formData.destination || !formData.outbound) return false
+    const outboundDestination = extractDestinationFromOutbound(formData.outbound)
+    return formData.destination === outboundDestination
+  }
+
   // Find matching flight option for a flight number
   const findMatchingFlightOption = (flightNumber: string) => {
     if (!flightNumber || !flights.length) return ""
@@ -174,6 +188,38 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
       validateForm()
     }
   }, [formData])
+
+  // Clear Before BT fields when they become disabled
+  useEffect(() => {
+    if (isBeforeBTDisabled()) {
+      setFormData(prev => ({
+        ...prev,
+        beforeBTFrom: "",
+        beforeBTTo: ""
+      }))
+      setOpenSelects(prev => ({
+        ...prev,
+        beforeBTFrom: false,
+        beforeBTTo: false
+      }))
+    }
+  }, [formData.origin, formData.inbound])
+
+  // Clear After BT fields when they become disabled
+  useEffect(() => {
+    if (isAfterBTDisabled()) {
+      setFormData(prev => ({
+        ...prev,
+        afterBTFrom: "",
+        afterBTTo: ""
+      }))
+      setOpenSelects(prev => ({
+        ...prev,
+        afterBTFrom: false,
+        afterBTTo: false
+      }))
+    }
+  }, [formData.destination, formData.outbound])
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -474,23 +520,27 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                   variant="outline"
                   role="combobox"
                   aria-expanded={openSelects.beforeBTFrom}
-                  className="w-full justify-between"
-                  onClick={() => setOpenSelects({
-                    origin: false,
-                    beforeBTFrom: !openSelects.beforeBTFrom,
-                    beforeBTTo: false,
-                    inbound: false,
-                    outbound: false,
-                    afterBTFrom: false,
-                    afterBTTo: false,
-                    destination: false,
-                    sectorRates: false
-                  })}
+                  className={`w-full justify-between ${isBeforeBTDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => {
+                    if (isBeforeBTDisabled()) return
+                    setOpenSelects({
+                      origin: false,
+                      beforeBTFrom: !openSelects.beforeBTFrom,
+                      beforeBTTo: false,
+                      inbound: false,
+                      outbound: false,
+                      afterBTFrom: false,
+                      afterBTTo: false,
+                      destination: false,
+                      sectorRates: false
+                    })
+                  }}
+                  disabled={isBeforeBTDisabled()}
                 >
                   {formData.beforeBTFrom || "From"}
                   <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
-                {openSelects.beforeBTFrom && (
+                {openSelects.beforeBTFrom && !isBeforeBTDisabled() && (
                   <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
                     <div className="p-2">
                       <Input
@@ -550,23 +600,27 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                   variant="outline"
                   role="combobox"
                   aria-expanded={openSelects.beforeBTTo}
-                  className="w-full justify-between"
-                  onClick={() => setOpenSelects({
-                    origin: false,
-                    beforeBTFrom: false,
-                    beforeBTTo: !openSelects.beforeBTTo,
-                    inbound: false,
-                    outbound: false,
-                    afterBTFrom: false,
-                    afterBTTo: false,
-                    destination: false,
-                    sectorRates: false
-                  })}
+                  className={`w-full justify-between ${isBeforeBTDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => {
+                    if (isBeforeBTDisabled()) return
+                    setOpenSelects({
+                      origin: false,
+                      beforeBTFrom: false,
+                      beforeBTTo: !openSelects.beforeBTTo,
+                      inbound: false,
+                      outbound: false,
+                      afterBTFrom: false,
+                      afterBTTo: false,
+                      destination: false,
+                      sectorRates: false
+                    })
+                  }}
+                  disabled={isBeforeBTDisabled()}
                 >
                   {formData.beforeBTTo || "To"}
                   <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
-                {openSelects.beforeBTTo && (
+                {openSelects.beforeBTTo && !isBeforeBTDisabled() && (
                   <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
                     <div className="p-2">
                       <Input
@@ -820,23 +874,27 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                   variant="outline"
                   role="combobox"
                   aria-expanded={openSelects.afterBTFrom}
-                  className="w-full justify-between"
-                  onClick={() => setOpenSelects({
-                    origin: false,
-                    beforeBTFrom: false,
-                    beforeBTTo: false,
-                    inbound: false,
-                    outbound: false,
-                    afterBTFrom: !openSelects.afterBTFrom,
-                    afterBTTo: false,
-                    destination: false,
-                    sectorRates: false
-                  })}
+                  className={`w-full justify-between ${isAfterBTDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => {
+                    if (isAfterBTDisabled()) return
+                    setOpenSelects({
+                      origin: false,
+                      beforeBTFrom: false,
+                      beforeBTTo: false,
+                      inbound: false,
+                      outbound: false,
+                      afterBTFrom: !openSelects.afterBTFrom,
+                      afterBTTo: false,
+                      destination: false,
+                      sectorRates: false
+                    })
+                  }}
+                  disabled={isAfterBTDisabled()}
                 >
                   {formData.afterBTFrom || "From"}
                   <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
-                {openSelects.afterBTFrom && (
+                {openSelects.afterBTFrom && !isAfterBTDisabled() && (
                   <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
                     <div className="p-2">
                       <Input
@@ -896,23 +954,27 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                   variant="outline"
                   role="combobox"
                   aria-expanded={openSelects.afterBTTo}
-                  className="w-full justify-between"
-                  onClick={() => setOpenSelects({
-                    origin: false,
-                    beforeBTFrom: false,
-                    beforeBTTo: false,
-                    inbound: false,
-                    outbound: false,
-                    afterBTFrom: false,
-                    afterBTTo: !openSelects.afterBTTo,
-                    destination: false,
-                    sectorRates: false
-                  })}
+                  className={`w-full justify-between ${isAfterBTDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => {
+                    if (isAfterBTDisabled()) return
+                    setOpenSelects({
+                      origin: false,
+                      beforeBTFrom: false,
+                      beforeBTTo: false,
+                      inbound: false,
+                      outbound: false,
+                      afterBTFrom: false,
+                      afterBTTo: !openSelects.afterBTTo,
+                      destination: false,
+                      sectorRates: false
+                    })
+                  }}
+                  disabled={isAfterBTDisabled()}
                 >
                   {formData.afterBTTo || "To"}
                   <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
-                {openSelects.afterBTTo && (
+                {openSelects.afterBTTo && !isAfterBTDisabled() && (
                   <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
                     <div className="p-2">
                       <Input
@@ -993,7 +1055,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
               <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
             {openSelects.destination && (
-              <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+              <div className="absolute bottom-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mb-1">
                 <div className="p-2">
                   <Input
                     placeholder="Search destination..."
@@ -1071,7 +1133,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
               <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
             {openSelects.sectorRates && (
-              <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+              <div className="absolute bottom-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mb-1">
                 <div className="p-2">
                   <Input
                     placeholder="Search sector rates..."
