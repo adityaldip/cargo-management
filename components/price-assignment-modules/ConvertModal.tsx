@@ -199,11 +199,11 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
           destination: destination,
           inbound: inbound,
           outbound: outbound,
-          // Auto-set Before BT fields
+          // Auto-set Before BT fields only if inbound exists
           beforeBTFrom: origin,
-          beforeBTTo: inboundOrigin,
-          // Auto-set After BT fields
-          afterBTFrom: outboundDestination
+          beforeBTTo: inboundOrigin || "",
+          // Auto-set After BT fields only if outbound exists
+          afterBTFrom: outboundDestination || ""
         }))
       }
     } else {
@@ -228,11 +228,11 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         destination: destination,
         inbound: inbound,
         outbound: outbound,
-        // Auto-set Before BT fields
+        // Auto-set Before BT fields only if inbound exists
         beforeBTFrom: origin,
-        beforeBTTo: inboundOrigin,
-        // Auto-set After BT fields
-        afterBTFrom: outboundDestination
+        beforeBTTo: inboundOrigin || "",
+        // Auto-set After BT fields only if outbound exists
+        afterBTFrom: outboundDestination || ""
       }))
     }
   }, [originalFlightData, isOpen, flights])
@@ -244,7 +244,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     }
   }, [formData])
 
-  // Clear Before BT fields when they become disabled
+  // Clear Before BT fields when they become disabled (only if inbound is selected and origin matches inbound origin)
   useEffect(() => {
     if (isBeforeBTDisabled()) {
       setFormData(prev => ({
@@ -260,7 +260,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     }
   }, [formData.origin, formData.inbound])
 
-  // Clear After BT fields when they become disabled
+  // Clear After BT fields when they become disabled (only if outbound is selected and destination matches outbound destination)
   useEffect(() => {
     if (isAfterBTDisabled()) {
       setFormData(prev => ({
@@ -390,22 +390,30 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
   const validateForm = () => {
     const errors: string[] = []
     
+    // Origin and destination are required
+    if (!formData.origin) {
+      errors.push('Origin is required')
+    }
+    if (!formData.destination) {
+      errors.push('Destination is required')
+    }
+    
     // Origin and destination cannot be the same
     if (formData.origin && formData.destination && formData.origin === formData.destination) {
       errors.push('Origin and destination cannot be the same')
     }
     
-    // Before BT from and to cannot be the same
+    // Before BT from and to cannot be the same (only if both are filled)
     if (formData.beforeBTFrom && formData.beforeBTTo && formData.beforeBTFrom === formData.beforeBTTo) {
       errors.push('Before BT "from" and "to" cannot be the same')
     }
     
-    // Inbound and outbound cannot be the same
+    // Inbound and outbound cannot be the same (only if both are filled)
     if (formData.inbound && formData.outbound && formData.inbound === formData.outbound) {
       errors.push('Inbound and outbound flights cannot be the same')
     }
     
-    // After BT from and to cannot be the same
+    // After BT from and to cannot be the same (only if both are filled)
     if (formData.afterBTFrom && formData.afterBTTo && formData.afterBTFrom === formData.afterBTTo) {
       errors.push('After BT "from" and "to" cannot be the same')
     }
@@ -430,13 +438,13 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
       const updateData = {
         converted_origin: formData.origin,
         converted_destination: formData.destination,
-        before_bt_from: formData.beforeBTFrom,
-        before_bt_to: formData.beforeBTTo,
-        inbound: extractFlightNumber(formData.inbound),
-        outbound: extractFlightNumber(formData.outbound),
-        after_bt_from: formData.afterBTFrom,
-        after_bt_to: formData.afterBTTo,
-        applied_rate: formData.sectorRates,
+        before_bt_from: formData.beforeBTFrom || null,
+        before_bt_to: formData.beforeBTTo || null,
+        inbound: formData.inbound ? extractFlightNumber(formData.inbound) : null,
+        outbound: formData.outbound ? extractFlightNumber(formData.outbound) : null,
+        after_bt_from: formData.afterBTFrom || null,
+        after_bt_to: formData.afterBTTo || null,
+        applied_rate: formData.sectorRates || null,
         is_converted: true
       }
       
