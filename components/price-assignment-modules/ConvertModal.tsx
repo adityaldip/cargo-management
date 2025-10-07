@@ -77,6 +77,20 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     return code.toUpperCase()
   }
 
+  // Extract origin from inbound flight string (e.g., "BT344, DUS → RIX" -> "DUS")
+  const extractOriginFromInbound = (inboundString: string): string => {
+    if (!inboundString) return ""
+    const match = inboundString.match(/, ([A-Z]{3}) →/)
+    return match ? match[1] : ""
+  }
+
+  // Extract destination from outbound flight string (e.g., "BT644, LGX → VNO" -> "VNO")
+  const extractDestinationFromOutbound = (outboundString: string): string => {
+    if (!outboundString) return ""
+    const match = outboundString.match(/→ ([A-Z]{3})/)
+    return match ? match[1] : ""
+  }
+
   // Find matching flight option for a flight number
   const findMatchingFlightOption = (flightNumber: string) => {
     if (!flightNumber || !flights.length) return ""
@@ -103,12 +117,24 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         loadExistingConvertedData()
       } else if (originalFlightData) {
         // Convert mode - pre-populate from original flight data
+        const origin = extractAirportCode(originalFlightData.origin)
+        const destination = extractAirportCode(originalFlightData.destination)
+        const inbound = findMatchingFlightOption(originalFlightData.inbound || "")
+        const inboundOrigin = extractOriginFromInbound(inbound)
+        const outbound = findMatchingFlightOption(originalFlightData.outbound || "")
+        const outboundDestination = extractDestinationFromOutbound(outbound)
+        
         setFormData(prev => ({
           ...prev,
-          origin: extractAirportCode(originalFlightData.origin),
-          destination: extractAirportCode(originalFlightData.destination),
-          inbound: findMatchingFlightOption(originalFlightData.inbound || ""),
-          outbound: findMatchingFlightOption(originalFlightData.outbound || "")
+          origin: origin,
+          destination: destination,
+          inbound: inbound,
+          outbound: outbound,
+          // Auto-set Before BT fields
+          beforeBTFrom: origin,
+          beforeBTTo: inboundOrigin,
+          // Auto-set After BT fields
+          afterBTFrom: outboundDestination
         }))
       }
     } else {
@@ -120,12 +146,24 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
   // Reset form data when originalFlightData changes
   useEffect(() => {
     if (originalFlightData && isOpen) {
+      const origin = extractAirportCode(originalFlightData.origin)
+      const destination = extractAirportCode(originalFlightData.destination)
+      const inbound = findMatchingFlightOption(originalFlightData.inbound || "")
+      const inboundOrigin = extractOriginFromInbound(inbound)
+      const outbound = findMatchingFlightOption(originalFlightData.outbound || "")
+      const outboundDestination = extractDestinationFromOutbound(outbound)
+      
       setFormData(prev => ({
         ...prev,
-        origin: extractAirportCode(originalFlightData.origin),
-        destination: extractAirportCode(originalFlightData.destination),
-        inbound: findMatchingFlightOption(originalFlightData.inbound || ""),
-        outbound: findMatchingFlightOption(originalFlightData.outbound || "")
+        origin: origin,
+        destination: destination,
+        inbound: inbound,
+        outbound: outbound,
+        // Auto-set Before BT fields
+        beforeBTFrom: origin,
+        beforeBTTo: inboundOrigin,
+        // Auto-set After BT fields
+        afterBTFrom: outboundDestination
       }))
     }
   }, [originalFlightData, isOpen, flights])
@@ -392,14 +430,16 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                           className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation()
-                            setFormData(prev => {
-                              const newData = { ...prev, origin: airport.code }
-                              // If origin becomes same as destination, clear destination
-                              if (airport.code === prev.destination) {
-                                newData.destination = ""
-                              }
-                              return newData
-                            })
+                              setFormData(prev => {
+                                const newData = { ...prev, origin: airport.code }
+                                // If origin becomes same as destination, clear destination
+                                if (airport.code === prev.destination) {
+                                  newData.destination = ""
+                                }
+                                // Auto-set Before BT From to origin
+                                newData.beforeBTFrom = airport.code
+                                return newData
+                              })
                             setOpenSelects(prev => ({ ...prev, origin: false }))
                             setSearchTerms(prev => ({ ...prev, origin: "" }))
                           }}
@@ -641,6 +681,11 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                                 if (flightValue === prev.outbound) {
                                   newData.outbound = ""
                                 }
+                                // Auto-set Before BT To to inbound origin
+                                const inboundOrigin = extractOriginFromInbound(flightValue)
+                                if (inboundOrigin) {
+                                  newData.beforeBTTo = inboundOrigin
+                                }
                                 return newData
                               })
                               setOpenSelects(prev => ({ ...prev, inbound: false }))
@@ -729,6 +774,11 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                                 // If outbound becomes same as inbound, clear inbound
                                 if (flightValue === prev.inbound) {
                                   newData.inbound = ""
+                                }
+                                // Auto-set After BT From to outbound destination
+                                const outboundDestination = extractDestinationFromOutbound(flightValue)
+                                if (outboundDestination) {
+                                  newData.afterBTFrom = outboundDestination
                                 }
                                 return newData
                               })
