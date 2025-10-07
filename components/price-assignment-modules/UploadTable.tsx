@@ -34,7 +34,78 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
   const [showEditModal, setShowEditModal] = useState(false)
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
   const [editRecord, setEditRecord] = useState<UploadData | null>(null)
+  const [flights, setFlights] = useState<any[]>([])
   const { toast } = useToast()
+
+  // Extract flight number from inbound/outbound string (e.g., "BT344, DUS → RIX" -> "BT344" or "BT344" -> "BT344")
+  const extractFlightNumber = (flightString: string): string => {
+    if (!flightString) return ""
+    
+    // Try to match format with comma first (e.g., "BT344, DUS → RIX")
+    let match = flightString.match(/^([A-Z0-9]+),/)
+    if (match) return match[1]
+    
+    // If no comma, try to match just the flight number (e.g., "BT344")
+    match = flightString.match(/^([A-Z0-9]+)$/)
+    if (match) return match[1]
+    
+    // If neither pattern matches, return empty string
+    return ""
+  }
+
+  // Check if flight exists in flights table
+  const isFlightValid = (flightString: string): boolean => {
+    // If no flight string, consider valid (empty is okay)
+    if (!flightString || flightString.trim() === "" || flightString === "-") return true
+    
+    // If flights data not loaded yet, consider valid (to avoid false positives during loading)
+    if (!flights.length) return true
+    
+    const flightNumber = extractFlightNumber(flightString)
+    
+    // If can't extract flight number from the string, consider invalid
+    if (!flightNumber) {
+      console.log(`Invalid flight format: "${flightString}" - cannot extract flight number`)
+      return false
+    }
+    
+    const isValid = flights.some(flight => 
+      flight.flight_number?.toLowerCase() === flightNumber.toLowerCase()
+    )
+    
+    if (!isValid) {
+      console.log(`Flight "${flightNumber}" not found in flights table. Available flights:`, flights.map(f => f.flight_number))
+    }
+    
+    return isValid
+  }
+
+  // Get flight display text with origin → destination if flight exists
+  const getFlightDisplayText = (flightString: string): string => {
+    // If no flight string, return dash
+    if (!flightString || flightString.trim() === "" || flightString === "-") return "-"
+    
+    // If flights data not loaded yet, return original string
+    if (!flights.length) return flightString
+    
+    const flightNumber = extractFlightNumber(flightString)
+    
+    // If can't extract flight number, return original string
+    if (!flightNumber) return flightString
+    
+    // Find the flight in the database
+    const flight = flights.find(f => 
+      f.flight_number?.toLowerCase() === flightNumber.toLowerCase()
+    )
+    
+    // If flight found, return formatted string with origin → destination
+    if (flight) {
+      return `${flightNumber}, ${flight.origin} → ${flight.destination}`
+    }
+    
+    // If flight not found, return original string
+    return flightString
+  }
 
   // Load data from database on component mount
   useEffect(() => {
@@ -44,12 +115,23 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
   const loadDataFromDatabase = async () => {
     setIsLoading(true)
     try {
+      // Load flight uploads data
       const { data: dbData, error } = await supabase
         .from('flight_uploads')
         .select('*')
         .order('created_at', { ascending: false })
 
       if (error) throw error
+
+      // Load flights data for validation
+      const { data: flightsData, error: flightsError } = await supabase
+        .from('flights')
+        .select('*')
+        .eq('is_active', true)
+
+      if (flightsError) throw flightsError
+
+      setFlights(flightsData || [])
       onDataChange(dbData || [])
     } catch (error) {
       console.error('Error loading data:', error)
@@ -248,10 +330,14 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
                         {row.destination}
                       </TableCell>
                       <TableCell className="py-1 text-xs h-8">
-                        {row.inbound || "-"}
+                        <span className={!isFlightValid(row.inbound) ? "text-red-500" : ""}>
+                          {getFlightDisplayText(row.inbound)}
+                        </span>
                       </TableCell>
                       <TableCell className="py-1 text-xs h-8">
-                        {row.outbound || "-"}
+                        <span className={!isFlightValid(row.outbound) ? "text-red-500" : ""}>
+                          {getFlightDisplayText(row.outbound)}
+                        </span>
                       </TableCell>
                       <TableCell className="py-1 h-8">
                         <div className="flex gap-0.5">
