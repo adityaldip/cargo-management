@@ -158,10 +158,89 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     return matchingRates
   }
 
-  // Get all available sector rates from the database
+  // Extract route from flight string (e.g., "BT344, DXB → LAX" -> "DXB → LAX")
+  const extractRouteFromFlight = (flightString: string): string | null => {
+    if (!flightString || flightString === "n/a") return null
+    
+    // Try to match format with comma and arrow (e.g., "BT344, DXB → LAX")
+    const match = flightString.match(/, ([A-Z]{3}) → ([A-Z]{3})/)
+    if (match) {
+      return `${match[1]} → ${match[2]}`
+    }
+    
+    return null
+  }
+
+  // Extract route from connection string (e.g., "FRA → DXB" -> "FRA → DXB")
+  const extractRouteFromConnection = (connectionString: string): string | null => {
+    if (!connectionString || connectionString === "n/a" || connectionString === "-") return null
+    
+    // Check if it's already in the correct format
+    const match = connectionString.match(/([A-Z]{3}) → ([A-Z]{3})/)
+    if (match) {
+      return connectionString
+    }
+    
+    return null
+  }
+
+  // Find matching sector rates for a route
+  const findSectorRatesForRoute = (route: string) => {
+    if (!route) return []
+    
+    const routeMatch = route.match(/([A-Z]{3}) → ([A-Z]{3})/)
+    if (!routeMatch) return []
+    
+    const [, origin, destination] = routeMatch
+    
+    return sectorRatesData.filter(rate => 
+      rate.origin === origin && rate.destination === destination
+    )
+  }
+
+  // Get all available sector rates from routes in before BT, inbound, outbound, after BT
   const getAvailableSectorRates = (beforeBT: string, inbound: string, outbound: string, afterBT: string) => {
-    // Return all active sector rates from the database
-    return sectorRatesData || []
+    const allRates: any[] = []
+    
+    // Extract routes from each column
+    const beforeBTRoute = extractRouteFromConnection(beforeBT)
+    const inboundRoute = extractRouteFromFlight(inbound)
+    const outboundRoute = extractRouteFromFlight(outbound)
+    const afterBTRoute = extractRouteFromConnection(afterBT)
+    
+    console.log('Extracted routes:', { beforeBTRoute, inboundRoute, outboundRoute, afterBTRoute })
+    
+    // Find sector rates for each route
+    if (beforeBTRoute) {
+      const rates = findSectorRatesForRoute(beforeBTRoute)
+      console.log(`Before BT route "${beforeBTRoute}" found ${rates.length} rates:`, rates)
+      allRates.push(...rates)
+    }
+    if (inboundRoute) {
+      const rates = findSectorRatesForRoute(inboundRoute)
+      console.log(`Inbound route "${inboundRoute}" found ${rates.length} rates:`, rates)
+      allRates.push(...rates)
+    }
+    if (outboundRoute) {
+      const rates = findSectorRatesForRoute(outboundRoute)
+      console.log(`Outbound route "${outboundRoute}" found ${rates.length} rates:`, rates)
+      allRates.push(...rates)
+    }
+    if (afterBTRoute) {
+      const rates = findSectorRatesForRoute(afterBTRoute)
+      console.log(`After BT route "${afterBTRoute}" found ${rates.length} rates:`, rates)
+      allRates.push(...rates)
+    }
+    
+    // Remove duplicates and sort by rate (highest first)
+    const uniqueRates = allRates.filter((rate, index, self) => 
+      index === self.findIndex(r => r.id === rate.id)
+    )
+    
+    const sortedRates = uniqueRates.sort((a, b) => b.sector_rate - a.sector_rate)
+    console.log('Final filtered rates:', sortedRates)
+    
+    return sortedRates
   }
 
   // Load flight data from database
@@ -242,42 +321,44 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       const originCode = extractAirportCode(flight.origin)
       const destinationCode = extractAirportCode(flight.destination)
       
-      // Build beforeBT - start with origin
-      let beforeBT = originCode
+      // Build beforeBT - show origin → inbound origin when inbound flight exists
+      let beforeBT = "n/a"
       
-      // Check inbound flight route - if origin doesn't match inbound flight's origin, add connection
       if (flight.inbound) {
         const inboundRoute = getFlightRoute(flight.inbound)
         if (inboundRoute) {
-          if (inboundRoute.origin !== originCode) {
+          // Only show connection if origin is different from inbound origin
+          if (originCode !== inboundRoute.origin) {
             beforeBT = `${originCode} -> ${inboundRoute.origin}`
+          } else {
+            // Same origin, no connection needed
+            beforeBT = "-"
+            console.log(`Same origin detected: ${originCode} === ${inboundRoute.origin}, setting beforeBT to "-"`)
           }
         } else {
           // Flight not found in flights table
           beforeBT = "n/a"
         }
-      } else {
-        // No inbound flight
-        beforeBT = "n/a"
       }
       
-      // Build afterBT - start with destination
-      let afterBT = destinationCode
+      // Build afterBT - show outbound destination → destination when outbound flight exists
+      let afterBT = "n/a"
       
-      // Check outbound flight route - if destination doesn't match outbound flight's destination, add connection
       if (flight.outbound) {
         const outboundRoute = getFlightRoute(flight.outbound)
         if (outboundRoute) {
-          if (outboundRoute.destination !== destinationCode) {
-            afterBT = `${destinationCode} -> ${outboundRoute.destination}`
+          // Only show connection if destination is different from outbound destination
+          if (destinationCode !== outboundRoute.destination) {
+            afterBT = `${outboundRoute.destination} -> ${destinationCode}`
+          } else {
+            // Same destination, no connection needed
+            afterBT = "-"
+            console.log(`Same destination detected: ${destinationCode} === ${outboundRoute.destination}, setting afterBT to "-"`)
           }
         } else {
           // Flight not found in flights table
           afterBT = "n/a"
         }
-      } else {
-        // No outbound flight
-        afterBT = "n/a"
       }
 
       // Get available sector rates for all routes from the 4 columns
@@ -292,10 +373,10 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       return {
         id: flight.id,
         origin: originCode,
-        beforeBT: flight.is_converted ? "-" : beforeBT,
+        beforeBT: beforeBT,
         inbound: flight.is_converted ? "-" : (flight.inbound ? formatFlight(flight.inbound) : "n/a"),
         outbound: flight.is_converted ? "-" : (flight.outbound ? formatFlight(flight.outbound) : "n/a"),
-        afterBT: flight.is_converted ? "-" : afterBT,
+        afterBT: afterBT,
         destination: flight.is_converted ? "-" : destinationCode,
         sectorRates: flight.is_converted ? "-" : "All rates available",
         availableSectorRates: availableSectorRates,
@@ -334,18 +415,45 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     }
   }, [flightData, flightsData, sectorRatesData])
 
-  // Auto-select first rate when data is generated
+  // Auto-select highest rate when data is generated
   useEffect(() => {
     if (generatedData.length > 0) {
       const newSelections: Record<string, any> = {}
+      const updatePromises: Promise<any>[] = []
+      
       generatedData.forEach((record, index) => {
         const recordId = `record-${index}`
-        if (record.availableSectorRates.length > 0 && !selectedRates[recordId]) {
-          newSelections[recordId] = record.availableSectorRates[0]
+        if (record.availableSectorRates.length > 0) {
+          // Always select the highest rate (first in sorted array)
+          const highestRate = record.availableSectorRates[0]
+          newSelections[recordId] = highestRate
+          console.log(`Auto-selecting highest rate for record ${index}:`, highestRate)
+          
+          // Save to database
+          if (record.id) {
+            const updatePromise = (supabase as any)
+              .from('flight_uploads')
+              .update({ 
+                sector_rate_id: highestRate.id,
+                applied_rate: `${highestRate.origin} → ${highestRate.destination}, €${highestRate.sector_rate}`
+              })
+              .eq('id', record.id)
+            
+            updatePromises.push(updatePromise)
+          }
         }
       })
+      
       if (Object.keys(newSelections).length > 0) {
-        setSelectedRates(prev => ({ ...prev, ...newSelections }))
+        setSelectedRates(newSelections)
+        console.log('Updated selected rates:', newSelections)
+        
+        // Save all updates to database
+        Promise.all(updatePromises).then(() => {
+          console.log('All rate selections saved to database')
+        }).catch(error => {
+          console.error('Error saving rate selections:', error)
+        })
       }
     }
   }, [generatedData])
@@ -366,6 +474,29 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   // Handle sector rate selection change
   const handleSectorRateChange = async (recordId: string, selectedRateId: string) => {
     try {
+      // Find the record index to update selectedRates state
+      const recordIndex = generatedData.findIndex(record => record.id === recordId)
+      const recordKey = `record-${recordIndex}`
+      
+      // Update selectedRates state immediately for UI responsiveness
+      if (selectedRateId === "none") {
+        setSelectedRates(prev => {
+          const newRates = { ...prev }
+          delete newRates[recordKey]
+          return newRates
+        })
+      } else {
+        // Find the selected rate from available rates
+        const record = generatedData.find(r => r.id === recordId)
+        const selectedRate = record?.availableSectorRates.find(rate => rate.id === selectedRateId)
+        if (selectedRate) {
+          setSelectedRates(prev => ({
+            ...prev,
+            [recordKey]: selectedRate
+          }))
+        }
+      }
+
       const { error } = await (supabase as any)
         .from('flight_uploads')
         .update({ 
@@ -502,60 +633,103 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                         {row.convertedData.converted_origin}
                       </span>
                     ) : (
-                      <Button
-                        size="sm"
-                        className="h-5 text-xs px-1 bg-yellow-500 hover:bg-yellow-600 text-white"
-                        onClick={(e) => {
-                          e.stopPropagation() // Prevent row click
-                          setSelectedOrigin(row.origin)
-                          // Find the original flight data from flightData
-                          const originalFlight = flightData.find(flight => flight.id === row.id)
-                          setSelectedFlightData(originalFlight)
-                          setShowConvertModal(true)
-                        }}
-                      >
-                        Convert
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          className="h-5 text-xs px-1 bg-yellow-500 hover:bg-yellow-600 text-white"
+                          onClick={(e) => {
+                            e.stopPropagation() // Prevent row click
+                            setSelectedOrigin(row.origin)
+                            // Find the original flight data from flightData
+                            const originalFlight = flightData.find(flight => flight.id === row.id)
+                            setSelectedFlightData(originalFlight)
+                            setShowConvertModal(true)
+                          }}
+                        >
+                          Convert
+                        </Button>
+                        <span className="text-xs">
+                          {row.origin}
+                        </span>
+                      </div>
                     )}
                   </TableCell>
                   <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.before_bt_from && row.convertedData?.before_bt_to
                         ? `${row.convertedData.before_bt_from} → ${row.convertedData.before_bt_to}`
-                        : "-"}
+                        : row.beforeBT}
                     </span>
                   </TableCell>
                   <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.inbound
-                        ? row.convertedData.inbound
-                        : "-"}
+                        ? (() => {
+                            // For converted data, try to get flight route from flights table
+                            const flightRoute = getFlightRoute(row.convertedData.inbound)
+                            if (flightRoute) {
+                              return `${row.convertedData.inbound}, ${flightRoute.origin} → ${flightRoute.destination}`
+                            }
+                            return row.convertedData.inbound
+                          })()
+                        : (() => {
+                            // Find the original flight data
+                            const originalFlight = flightData.find(flight => flight.id === row.id)
+                            if (originalFlight?.inbound) {
+                              // Try to get flight route from flights table
+                              const flightRoute = getFlightRoute(originalFlight.inbound)
+                              if (flightRoute) {
+                                return `${originalFlight.inbound}, ${flightRoute.origin} → ${flightRoute.destination}`
+                              }
+                              return originalFlight.inbound
+                            }
+                            return "-"
+                          })()}
                     </span>
                   </TableCell>
                   <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.outbound
-                        ? row.convertedData.outbound
-                        : "-"}
+                        ? (() => {
+                            // For converted data, try to get flight route from flights table
+                            const flightRoute = getFlightRoute(row.convertedData.outbound)
+                            if (flightRoute) {
+                              return `${row.convertedData.outbound}, ${flightRoute.origin} → ${flightRoute.destination}`
+                            }
+                            return row.convertedData.outbound
+                          })()
+                        : (() => {
+                            // Find the original flight data
+                            const originalFlight = flightData.find(flight => flight.id === row.id)
+                            if (originalFlight?.outbound) {
+                              // Try to get flight route from flights table
+                              const flightRoute = getFlightRoute(originalFlight.outbound)
+                              if (flightRoute) {
+                                return `${originalFlight.outbound}, ${flightRoute.origin} → ${flightRoute.destination}`
+                              }
+                              return originalFlight.outbound
+                            }
+                            return "-"
+                          })()}
                     </span>
                   </TableCell>
                   <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.after_bt_from && row.convertedData?.after_bt_to
                         ? `${row.convertedData.after_bt_from} → ${row.convertedData.after_bt_to}`
-                        : "-"}
+                        : row.afterBT}
                     </span>
                   </TableCell>
                   <TableCell className="py-1 h-8">
                     <span className="text-xs">
                       {row.isConverted && row.convertedData?.converted_destination
                         ? row.convertedData.converted_destination
-                        : "-"}
+                        : row.destination}
                     </span>
                   </TableCell>
                   <TableCell className="py-1 h-8">
                     <Select 
-                      value={row.selectedSectorRate?.id || "none"} 
+                      value={selectedRates[`record-${index}`]?.id || row.selectedSectorRate?.id || "none"} 
                       onValueChange={(value) => handleSectorRateChange(row.id || "", value === "none" ? "" : value)}
                     >
                       <SelectTrigger className="h-6 text-xs">

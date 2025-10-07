@@ -80,32 +80,6 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
     return isValid
   }
 
-  // Get flight display text with origin → destination if flight exists
-  const getFlightDisplayText = (flightString: string): string => {
-    // If no flight string, return dash
-    if (!flightString || flightString.trim() === "" || flightString === "-") return "-"
-    
-    // If flights data not loaded yet, return original string
-    if (!flights.length) return flightString
-    
-    const flightNumber = extractFlightNumber(flightString)
-    
-    // If can't extract flight number, return original string
-    if (!flightNumber) return flightString
-    
-    // Find the flight in the database
-    const flight = flights.find(f => 
-      f.flight_number?.toLowerCase() === flightNumber.toLowerCase()
-    )
-    
-    // If flight found, return formatted string with origin → destination
-    if (flight) {
-      return `${flightNumber}, ${flight.origin} → ${flight.destination}`
-    }
-    
-    // If flight not found, return original string
-    return flightString
-  }
 
   // Load data from database on component mount
   useEffect(() => {
@@ -331,12 +305,12 @@ export function UploadTable({ data, onDataChange }: UploadTableProps) {
                       </TableCell>
                       <TableCell className="py-1 text-xs h-8">
                         <span className={!isFlightValid(row.inbound) ? "text-red-500" : ""}>
-                          {getFlightDisplayText(row.inbound)}
+                          {row.inbound || "-"}
                         </span>
                       </TableCell>
                       <TableCell className="py-1 text-xs h-8">
                         <span className={!isFlightValid(row.outbound) ? "text-red-500" : ""}>
-                          {getFlightDisplayText(row.outbound)}
+                          {row.outbound || "-"}
                         </span>
                       </TableCell>
                       <TableCell className="py-1 h-8">
