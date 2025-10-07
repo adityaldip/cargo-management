@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -51,6 +50,11 @@ interface GeneratedData {
   destination: string
   sectorRates: string
   availableSectorRates: any[]
+  totalRouteAndSum?: {
+    route: string
+    totalSum: number
+    rates: any[]
+  }
   isConverted?: boolean
   selectedSectorRate?: {
     id: string
@@ -85,8 +89,6 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   const [sectorRatesData, setSectorRatesData] = useState<any[]>([])
   const [generatedData, setGeneratedData] = useState<GeneratedData[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [openRateSelects, setOpenRateSelects] = useState<Record<string, boolean>>({})
-  const [selectedRates, setSelectedRates] = useState<Record<string, any>>({})
   const [showConvertModal, setShowConvertModal] = useState(false)
   const [selectedOrigin, setSelectedOrigin] = useState("")
   const [selectedFlightData, setSelectedFlightData] = useState<any>(null)
@@ -171,14 +173,19 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     return null
   }
 
-  // Extract route from connection string (e.g., "FRA → DXB" -> "FRA → DXB")
+  // Extract route from connection string (e.g., "FRA -> DXB" -> "FRA → DXB")
   const extractRouteFromConnection = (connectionString: string): string | null => {
     if (!connectionString || connectionString === "n/a" || connectionString === "-") return null
     
-    // Check if it's already in the correct format
-    const match = connectionString.match(/([A-Z]{3}) → ([A-Z]{3})/)
-    if (match) {
+    // Check for both formats: "FRA -> DXB" and "FRA → DXB"
+    const matchArrow = connectionString.match(/([A-Z]{3}) → ([A-Z]{3})/)
+    const matchDash = connectionString.match(/([A-Z]{3}) -> ([A-Z]{3})/)
+    
+    if (matchArrow) {
       return connectionString
+    } else if (matchDash) {
+      // Convert "->" to "→" for consistency
+      return `${matchDash[1]} → ${matchDash[2]}`
     }
     
     return null
@@ -196,6 +203,48 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     return sectorRatesData.filter(rate => 
       rate.origin === origin && rate.destination === destination
     )
+  }
+
+  // Calculate total route and sum of rates
+  const calculateTotalRouteAndSum = (beforeBT: string, inbound: string, outbound: string, afterBT: string, origin: string, destination: string) => {
+    const allRates: any[] = []
+    
+    // Extract routes from each column
+    const beforeBTRoute = extractRouteFromConnection(beforeBT)
+    const inboundRoute = extractRouteFromFlight(inbound)
+    const outboundRoute = extractRouteFromFlight(outbound)
+    const afterBTRoute = extractRouteFromConnection(afterBT)
+    
+    // Find sector rates for each route
+    if (beforeBTRoute) {
+      const rates = findSectorRatesForRoute(beforeBTRoute)
+      allRates.push(...rates)
+    }
+    if (inboundRoute) {
+      const rates = findSectorRatesForRoute(inboundRoute)
+      allRates.push(...rates)
+    }
+    if (outboundRoute) {
+      const rates = findSectorRatesForRoute(outboundRoute)
+      allRates.push(...rates)
+    }
+    if (afterBTRoute) {
+      const rates = findSectorRatesForRoute(afterBTRoute)
+      allRates.push(...rates)
+    }
+    
+    // Remove duplicates and calculate sum
+    const uniqueRates = allRates.filter((rate, index, self) => 
+      index === self.findIndex(r => r.id === rate.id)
+    )
+    
+    const totalSum = uniqueRates.reduce((sum, rate) => sum + rate.sector_rate, 0)
+    
+    return {
+      route: `${origin} → ${destination}`,
+      totalSum: totalSum,
+      rates: uniqueRates
+    }
   }
 
   // Get all available sector rates from routes in before BT, inbound, outbound, after BT
@@ -322,6 +371,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       const destinationCode = extractAirportCode(flight.destination)
       
       // Build beforeBT - show origin → inbound origin when inbound flight exists
+      // If inbound is empty, get origin from outbound flight
       let beforeBT = "n/a"
       
       if (flight.inbound) {
@@ -329,11 +379,27 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         if (inboundRoute) {
           // Only show connection if origin is different from inbound origin
           if (originCode !== inboundRoute.origin) {
-            beforeBT = `${originCode} -> ${inboundRoute.origin}`
+            beforeBT = `${originCode} → ${inboundRoute.origin}`
           } else {
             // Same origin, no connection needed
             beforeBT = "-"
             console.log(`Same origin detected: ${originCode} === ${inboundRoute.origin}, setting beforeBT to "-"`)
+          }
+        } else {
+          // Flight not found in flights table
+          beforeBT = "n/a"
+        }
+      } else if (flight.outbound) {
+        // When inbound is empty, get origin from outbound flight
+        const outboundRoute = getFlightRoute(flight.outbound)
+        if (outboundRoute) {
+          // Only show connection if origin is different from outbound origin
+          if (originCode !== outboundRoute.origin) {
+            beforeBT = `${originCode} → ${outboundRoute.origin}`
+          } else {
+            // Same origin, no connection needed
+            beforeBT = "-"
+            console.log(`Same origin detected: ${originCode} === ${outboundRoute.origin}, setting beforeBT to "-"`)
           }
         } else {
           // Flight not found in flights table
@@ -349,7 +415,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         if (outboundRoute) {
           // Only show connection if destination is different from outbound destination
           if (destinationCode !== outboundRoute.destination) {
-            afterBT = `${outboundRoute.destination} -> ${destinationCode}`
+            afterBT = `${outboundRoute.destination} → ${destinationCode}`
           } else {
             // Same destination, no connection needed
             afterBT = "-"
@@ -360,6 +426,16 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           afterBT = "n/a"
         }
       }
+
+      // Calculate total route and sum of rates
+      const totalRouteAndSum = calculateTotalRouteAndSum(
+        beforeBT, 
+        flight.inbound ? formatFlight(flight.inbound) : "n/a",
+        flight.outbound ? formatFlight(flight.outbound) : "n/a", 
+        afterBT,
+        originCode,
+        destinationCode
+      )
 
       // Get available sector rates for all routes from the 4 columns
       const availableSectorRates = getAvailableSectorRates(
@@ -378,8 +454,9 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         outbound: flight.is_converted ? "-" : (flight.outbound ? formatFlight(flight.outbound) : "n/a"),
         afterBT: afterBT,
         destination: flight.is_converted ? "-" : destinationCode,
-        sectorRates: flight.is_converted ? "-" : "All rates available",
+        sectorRates: `${totalRouteAndSum.route}, €${totalRouteAndSum.totalSum}`,
         availableSectorRates: availableSectorRates,
+        totalRouteAndSum: totalRouteAndSum,
         isConverted: flight.is_converted || false,
         convertedData: flight.is_converted ? {
           converted_origin: flight.converted_origin,
@@ -415,109 +492,6 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     }
   }, [flightData, flightsData, sectorRatesData])
 
-  // Auto-select highest rate when data is generated
-  useEffect(() => {
-    if (generatedData.length > 0) {
-      const newSelections: Record<string, any> = {}
-      const updatePromises: Promise<any>[] = []
-      
-      generatedData.forEach((record, index) => {
-        const recordId = `record-${index}`
-        if (record.availableSectorRates.length > 0) {
-          // Always select the highest rate (first in sorted array)
-          const highestRate = record.availableSectorRates[0]
-          newSelections[recordId] = highestRate
-          console.log(`Auto-selecting highest rate for record ${index}:`, highestRate)
-          
-          // Save to database
-          if (record.id) {
-            const updatePromise = (supabase as any)
-              .from('flight_uploads')
-              .update({ 
-                sector_rate_id: highestRate.id,
-                applied_rate: `${highestRate.origin} → ${highestRate.destination}, €${highestRate.sector_rate}`
-              })
-              .eq('id', record.id)
-            
-            updatePromises.push(updatePromise)
-          }
-        }
-      })
-      
-      if (Object.keys(newSelections).length > 0) {
-        setSelectedRates(newSelections)
-        console.log('Updated selected rates:', newSelections)
-        
-        // Save all updates to database
-        Promise.all(updatePromises).then(() => {
-          console.log('All rate selections saved to database')
-        }).catch(error => {
-          console.error('Error saving rate selections:', error)
-        })
-      }
-    }
-  }, [generatedData])
-
-  // Handle rate selection
-  const handleRateSelection = (recordIndex: number, rate: any) => {
-    const recordId = `record-${recordIndex}`
-    setSelectedRates(prev => ({
-      ...prev,
-      [recordId]: rate
-    }))
-    setOpenRateSelects(prev => ({
-      ...prev,
-      [recordId]: false
-    }))
-  }
-
-  // Handle sector rate selection change
-  const handleSectorRateChange = async (recordId: string, selectedRateId: string) => {
-    try {
-      // Find the record index to update selectedRates state
-      const recordIndex = generatedData.findIndex(record => record.id === recordId)
-      const recordKey = `record-${recordIndex}`
-      
-      // Update selectedRates state immediately for UI responsiveness
-      if (selectedRateId === "none") {
-        setSelectedRates(prev => {
-          const newRates = { ...prev }
-          delete newRates[recordKey]
-          return newRates
-        })
-      } else {
-        // Find the selected rate from available rates
-        const record = generatedData.find(r => r.id === recordId)
-        const selectedRate = record?.availableSectorRates.find(rate => rate.id === selectedRateId)
-        if (selectedRate) {
-          setSelectedRates(prev => ({
-            ...prev,
-            [recordKey]: selectedRate
-          }))
-        }
-      }
-
-      const { error } = await (supabase as any)
-        .from('flight_uploads')
-        .update({ 
-          sector_rate_id: selectedRateId === "none" ? null : selectedRateId,
-          applied_rate: selectedRateId === "none" ? null : null // Clear old text field
-        })
-        .eq('id', recordId)
-
-      if (error) throw error
-
-      // Refresh data to show updated rate
-      loadFlightData()
-    } catch (error) {
-      console.error('Error updating sector rate:', error)
-      toast({
-        title: "Error",
-        description: "Failed to update sector rate.",
-        variant: "destructive"
-      })
-    }
-  }
 
   const handleProcessAssignment = async () => {
     setIsProcessing(true)
@@ -728,22 +702,9 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                     </span>
                   </TableCell>
                   <TableCell className="py-1 h-8">
-                    <Select 
-                      value={selectedRates[`record-${index}`]?.id || row.selectedSectorRate?.id || "none"} 
-                      onValueChange={(value) => handleSectorRateChange(row.id || "", value === "none" ? "" : value)}
-                    >
-                      <SelectTrigger className="h-6 text-xs">
-                        <SelectValue placeholder="Select rate" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {row.availableSectorRates.map((rate, rateIndex) => (
-                          <SelectItem key={`${rate.id}-${rateIndex}`} value={rate.id}>
-                            {rate.origin} → {rate.destination}, €{rate.sector_rate}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <span className="text-xs">
+                      {row.sectorRates}
+                    </span>
                   </TableCell>
                 </TableRow>
                 ))}
