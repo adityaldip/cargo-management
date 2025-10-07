@@ -207,6 +207,11 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       setFlightData(uploadData || [])
       setFlightsData(flightsDbData || [])
       setSectorRatesData(sectorRatesDbData || [])
+      
+      // If no upload data, clear generated data immediately
+      if (!uploadData || uploadData.length === 0) {
+        setGeneratedData([])
+      }
     } catch (error) {
       console.error('Error loading flight data:', error)
       toast({
@@ -226,7 +231,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
 
   // Reload data when refreshTrigger changes (from UploadTable operations)
   useEffect(() => {
-    if (refreshTrigger && refreshTrigger > 0) {
+    if (refreshTrigger !== undefined) {
       loadFlightData()
     }
   }, [refreshTrigger])
@@ -323,6 +328,9 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   useEffect(() => {
     if (flightData.length > 0) {
       generateData()
+    } else {
+      // Clear generated data when no flight data exists
+      setGeneratedData([])
     }
   }, [flightData, flightsData, sectorRatesData])
 

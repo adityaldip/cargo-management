@@ -42,6 +42,7 @@ const dummyGeneratedData = [
     outbound: "n/a",
     afterBT: "n/a",
     destination: "RIX",
+    sectorRates: "All rates available",
     appliedRate: "DUS → RIX, €3.00",
     availableSectorRates: []
   },
@@ -52,6 +53,7 @@ const dummyGeneratedData = [
     outbound: "BT651, (RIX -> LGW)",
     afterBT: "(LGW -> CVT)",
     destination: "CVT",
+    sectorRates: "All rates available",
     appliedRate: "DUS → RIX, €3.00",
     availableSectorRates: []
   },
@@ -62,6 +64,7 @@ const dummyGeneratedData = [
     outbound: "BT651, (RIX -> RMO)",
     afterBT: "(RMO -> KIV)",
     destination: "KIV",
+    sectorRates: "All rates available",
     appliedRate: "DUS → RIX, €3.00",
     availableSectorRates: []
   },
@@ -72,6 +75,7 @@ const dummyGeneratedData = [
     outbound: "BT965 (VNO -> CDG)",
     afterBT: "(CDG -> SCL)",
     destination: "SCL",
+    sectorRates: "All rates available",
     appliedRate: "VNO → CDG, €3.00",
     availableSectorRates: []
   }
@@ -79,11 +83,11 @@ const dummyGeneratedData = [
 
 export function Preview() {
   const [uploadData, setUploadData] = useState(dummyUploadedData)
-  const [refreshGenerateTable, setRefreshGenerateTable] = useState(0)
+  const [refreshGenerateTable, setRefreshGenerateTable] = useState(1)
 
   const handleUploadDataChange = (data: any[]) => {
     setUploadData(data)
-    // Trigger GenerateTable refresh
+    // Trigger GenerateTable refresh whenever data changes (including deletions)
     setRefreshGenerateTable(prev => prev + 1)
   }
 

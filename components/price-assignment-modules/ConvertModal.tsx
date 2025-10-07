@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Check, ChevronDown } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
 
 interface ConvertModalProps {
@@ -42,6 +46,28 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
+  const [openSelects, setOpenSelects] = useState({
+    origin: false,
+    beforeBTFrom: false,
+    beforeBTTo: false,
+    inbound: false,
+    outbound: false,
+    afterBTFrom: false,
+    afterBTTo: false,
+    destination: false,
+    sectorRates: false
+  })
+  const [searchTerms, setSearchTerms] = useState({
+    origin: "",
+    beforeBTFrom: "",
+    beforeBTTo: "",
+    inbound: "",
+    outbound: "",
+    afterBTFrom: "",
+    afterBTTo: "",
+    destination: "",
+    sectorRates: ""
+  })
 
   // Extract airport code from origin/destination (3rd to 5th characters)
   const extractAirportCode = (code: string): string => {
@@ -110,6 +136,29 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
       validateForm()
     }
   }, [formData])
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (!target.closest('.dropdown-container')) {
+        setOpenSelects({
+          origin: false,
+          beforeBTFrom: false,
+          beforeBTTo: false,
+          inbound: false,
+          outbound: false,
+          afterBTFrom: false,
+          afterBTTo: false,
+          destination: false,
+          sectorRates: false
+        })
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const loadData = async () => {
     setIsLoading(true)
@@ -299,260 +348,727 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         
         <div className="space-y-2">
           {/* Origin */}
-          <div>
+          <div className="relative dropdown-container">
             <label className="text-xs font-medium mb-1 block">Origin</label>
-            <Select value={formData.origin} onValueChange={(value) => {
-              setFormData(prev => {
-                const newData = { ...prev, origin: value }
-                // If origin becomes same as destination, clear destination
-                if (value === prev.destination) {
-                  newData.destination = ""
-                }
-                return newData
-              })
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select origin" />
-              </SelectTrigger>
-              <SelectContent>
-                {airportCodes
-                  .filter(airport => airport.code !== formData.destination)
-                  .map((airport) => (
-                    <SelectItem key={airport.id} value={airport.code}>
-                      {airport.code}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={openSelects.origin}
+              className="w-full justify-between"
+              onClick={() => setOpenSelects({
+                origin: !openSelects.origin,
+                beforeBTFrom: false,
+                beforeBTTo: false,
+                inbound: false,
+                outbound: false,
+                afterBTFrom: false,
+                afterBTTo: false,
+                destination: false,
+                sectorRates: false
+              })}
+            >
+              {formData.origin || "Select origin..."}
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+            {openSelects.origin && (
+              <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                <div className="p-2">
+                  <Input
+                    placeholder="Search origin..."
+                    value={searchTerms.origin}
+                    onChange={(e) => setSearchTerms(prev => ({ ...prev, origin: e.target.value }))}
+                    className="mb-2"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="max-h-48 overflow-y-auto">
+                    {airportCodes
+                      .filter(airport => 
+                        airport.code !== formData.destination &&
+                        airport.code.toLowerCase().includes(searchTerms.origin.toLowerCase())
+                      )
+                      .map((airport) => (
+                        <div
+                          key={airport.id}
+                          className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setFormData(prev => {
+                              const newData = { ...prev, origin: airport.code }
+                              // If origin becomes same as destination, clear destination
+                              if (airport.code === prev.destination) {
+                                newData.destination = ""
+                              }
+                              return newData
+                            })
+                            setOpenSelects(prev => ({ ...prev, origin: false }))
+                            setSearchTerms(prev => ({ ...prev, origin: "" }))
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              formData.origin === airport.code ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {airport.code}
+                        </div>
+                      ))}
+                    {airportCodes.filter(airport => 
+                      airport.code !== formData.destination &&
+                      airport.code.toLowerCase().includes(searchTerms.origin.toLowerCase())
+                    ).length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-gray-500">No origin found.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Before BT */}
           <div>
             <label className="text-xs font-medium mb-1 block">Before BT</label>
             <div className="flex items-center gap-1">
-              <Select value={formData.beforeBTFrom} onValueChange={(value) => {
-                setFormData(prev => {
-                  const newData = { ...prev, beforeBTFrom: value }
-                  // If from becomes same as to, clear to
-                  if (value === prev.beforeBTTo) {
-                    newData.beforeBTTo = ""
-                  }
-                  return newData
-                })
-              }}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="From" />
-                </SelectTrigger>
-                <SelectContent>
-                  {airportCodes
-                    .filter(airport => airport.code !== formData.beforeBTTo)
-                    .map((airport) => (
-                      <SelectItem key={airport.id} value={airport.code}>
-                        {airport.code}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <div className="relative dropdown-container flex-1">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openSelects.beforeBTFrom}
+                  className="w-full justify-between"
+                  onClick={() => setOpenSelects({
+                    origin: false,
+                    beforeBTFrom: !openSelects.beforeBTFrom,
+                    beforeBTTo: false,
+                    inbound: false,
+                    outbound: false,
+                    afterBTFrom: false,
+                    afterBTTo: false,
+                    destination: false,
+                    sectorRates: false
+                  })}
+                >
+                  {formData.beforeBTFrom || "From"}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+                {openSelects.beforeBTFrom && (
+                  <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                    <div className="p-2">
+                      <Input
+                        placeholder="Search airport..."
+                        value={searchTerms.beforeBTFrom}
+                        onChange={(e) => setSearchTerms(prev => ({ ...prev, beforeBTFrom: e.target.value }))}
+                        className="mb-2"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="max-h-48 overflow-y-auto">
+                        {airportCodes
+                          .filter(airport => 
+                            airport.code !== formData.beforeBTTo &&
+                            airport.code.toLowerCase().includes(searchTerms.beforeBTFrom.toLowerCase())
+                          )
+                          .map((airport) => (
+                            <div
+                              key={airport.id}
+                              className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setFormData(prev => {
+                                  const newData = { ...prev, beforeBTFrom: airport.code }
+                                  // If from becomes same as to, clear to
+                                  if (airport.code === prev.beforeBTTo) {
+                                    newData.beforeBTTo = ""
+                                  }
+                                  return newData
+                                })
+                                setOpenSelects(prev => ({ ...prev, beforeBTFrom: false }))
+                                setSearchTerms(prev => ({ ...prev, beforeBTFrom: "" }))
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.beforeBTFrom === airport.code ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {airport.code}
+                            </div>
+                          ))}
+                        {airportCodes.filter(airport => 
+                          airport.code !== formData.beforeBTTo &&
+                          airport.code.toLowerCase().includes(searchTerms.beforeBTFrom.toLowerCase())
+                        ).length === 0 && (
+                          <div className="px-2 py-1.5 text-sm text-gray-500">No airport found.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <span className="text-xs text-gray-500">to</span>
-              <Select value={formData.beforeBTTo} onValueChange={(value) => {
-                setFormData(prev => {
-                  const newData = { ...prev, beforeBTTo: value }
-                  // If to becomes same as from, clear from
-                  if (value === prev.beforeBTFrom) {
-                    newData.beforeBTFrom = ""
-                  }
-                  return newData
-                })
-              }}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="To" />
-                </SelectTrigger>
-                <SelectContent>
-                  {airportCodes
-                    .filter(airport => airport.code !== formData.beforeBTFrom)
-                    .map((airport) => (
-                      <SelectItem key={airport.id} value={airport.code}>
-                        {airport.code}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <div className="relative dropdown-container flex-1">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openSelects.beforeBTTo}
+                  className="w-full justify-between"
+                  onClick={() => setOpenSelects({
+                    origin: false,
+                    beforeBTFrom: false,
+                    beforeBTTo: !openSelects.beforeBTTo,
+                    inbound: false,
+                    outbound: false,
+                    afterBTFrom: false,
+                    afterBTTo: false,
+                    destination: false,
+                    sectorRates: false
+                  })}
+                >
+                  {formData.beforeBTTo || "To"}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+                {openSelects.beforeBTTo && (
+                  <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                    <div className="p-2">
+                      <Input
+                        placeholder="Search airport..."
+                        value={searchTerms.beforeBTTo}
+                        onChange={(e) => setSearchTerms(prev => ({ ...prev, beforeBTTo: e.target.value }))}
+                        className="mb-2"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="max-h-48 overflow-y-auto">
+                        {airportCodes
+                          .filter(airport => 
+                            airport.code !== formData.beforeBTFrom &&
+                            airport.code.toLowerCase().includes(searchTerms.beforeBTTo.toLowerCase())
+                          )
+                          .map((airport) => (
+                            <div
+                              key={airport.id}
+                              className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setFormData(prev => {
+                                  const newData = { ...prev, beforeBTTo: airport.code }
+                                  // If to becomes same as from, clear from
+                                  if (airport.code === prev.beforeBTFrom) {
+                                    newData.beforeBTFrom = ""
+                                  }
+                                  return newData
+                                })
+                                setOpenSelects(prev => ({ ...prev, beforeBTTo: false }))
+                                setSearchTerms(prev => ({ ...prev, beforeBTTo: "" }))
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.beforeBTTo === airport.code ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {airport.code}
+                            </div>
+                          ))}
+                        {airportCodes.filter(airport => 
+                          airport.code !== formData.beforeBTFrom &&
+                          airport.code.toLowerCase().includes(searchTerms.beforeBTTo.toLowerCase())
+                        ).length === 0 && (
+                          <div className="px-2 py-1.5 text-sm text-gray-500">No airport found.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Inbound */}
-          <div>
+          <div className="relative dropdown-container">
             <label className="text-xs font-medium mb-1 block">Inbound</label>
-            <Select value={formData.inbound} onValueChange={(value) => {
-              setFormData(prev => {
-                const newData = { ...prev, inbound: value }
-                // If inbound becomes same as outbound, clear outbound
-                if (value === prev.outbound) {
-                  newData.outbound = ""
-                }
-                return newData
-              })
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select inbound flight" />
-              </SelectTrigger>
-              <SelectContent>
-                {flights
-                  .filter(flight => {
-                    const flightOrigin = extractAirportCode(flight.origin || '')
-                    const flightDestination = extractAirportCode(flight.destination || '')
-                    const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
-                    return flightValue !== formData.outbound
-                  })
-                  .map((flight) => {
-                    const flightOrigin = extractAirportCode(flight.origin || '')
-                    const flightDestination = extractAirportCode(flight.destination || '')
-                    const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
-                    return (
-                      <SelectItem key={flight.id} value={flightValue}>
-                        {flightValue}
-                      </SelectItem>
-                    )
-                  })}
-              </SelectContent>
-            </Select>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={openSelects.inbound}
+              className="w-full justify-between"
+              onClick={() => setOpenSelects({
+                origin: false,
+                beforeBTFrom: false,
+                beforeBTTo: false,
+                inbound: !openSelects.inbound,
+                outbound: false,
+                afterBTFrom: false,
+                afterBTTo: false,
+                destination: false,
+                sectorRates: false
+              })}
+            >
+              {formData.inbound || "Select inbound flight"}
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+            {openSelects.inbound && (
+              <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                <div className="p-2">
+                  <Input
+                    placeholder="Search inbound flight..."
+                    value={searchTerms.inbound}
+                    onChange={(e) => setSearchTerms(prev => ({ ...prev, inbound: e.target.value }))}
+                    className="mb-2"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="max-h-48 overflow-y-auto">
+                    {flights
+                      .filter(flight => {
+                        const flightOrigin = extractAirportCode(flight.origin || '')
+                        const flightDestination = extractAirportCode(flight.destination || '')
+                        const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
+                        return flightValue !== formData.outbound &&
+                               flightValue.toLowerCase().includes(searchTerms.inbound.toLowerCase())
+                      })
+                      .map((flight) => {
+                        const flightOrigin = extractAirportCode(flight.origin || '')
+                        const flightDestination = extractAirportCode(flight.destination || '')
+                        const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
+                        return (
+                          <div
+                            key={flight.id}
+                            className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setFormData(prev => {
+                                const newData = { ...prev, inbound: flightValue }
+                                // If inbound becomes same as outbound, clear outbound
+                                if (flightValue === prev.outbound) {
+                                  newData.outbound = ""
+                                }
+                                return newData
+                              })
+                              setOpenSelects(prev => ({ ...prev, inbound: false }))
+                              setSearchTerms(prev => ({ ...prev, inbound: "" }))
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.inbound === flightValue ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {flightValue}
+                          </div>
+                        )
+                      })}
+                    {flights.filter(flight => {
+                      const flightOrigin = extractAirportCode(flight.origin || '')
+                      const flightDestination = extractAirportCode(flight.destination || '')
+                      const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
+                      return flightValue !== formData.outbound &&
+                             flightValue.toLowerCase().includes(searchTerms.inbound.toLowerCase())
+                    }).length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-gray-500">No inbound flight found.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Outbound */}
-          <div>
+          <div className="relative dropdown-container">
             <label className="text-xs font-medium mb-1 block">Outbound</label>
-            <Select value={formData.outbound} onValueChange={(value) => {
-              setFormData(prev => {
-                const newData = { ...prev, outbound: value }
-                // If outbound becomes same as inbound, clear inbound
-                if (value === prev.inbound) {
-                  newData.inbound = ""
-                }
-                return newData
-              })
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select outbound flight" />
-              </SelectTrigger>
-              <SelectContent>
-                {flights
-                  .filter(flight => {
-                    const flightOrigin = extractAirportCode(flight.origin || '')
-                    const flightDestination = extractAirportCode(flight.destination || '')
-                    const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
-                    return flightValue !== formData.inbound
-                  })
-                  .map((flight) => {
-                    const flightOrigin = extractAirportCode(flight.origin || '')
-                    const flightDestination = extractAirportCode(flight.destination || '')
-                    const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
-                    return (
-                      <SelectItem key={flight.id} value={flightValue}>
-                        {flightValue}
-                      </SelectItem>
-                    )
-                  })}
-              </SelectContent>
-            </Select>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={openSelects.outbound}
+              className="w-full justify-between"
+              onClick={() => setOpenSelects({
+                origin: false,
+                beforeBTFrom: false,
+                beforeBTTo: false,
+                inbound: false,
+                outbound: !openSelects.outbound,
+                afterBTFrom: false,
+                afterBTTo: false,
+                destination: false,
+                sectorRates: false
+              })}
+            >
+              {formData.outbound || "Select outbound flight"}
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+            {openSelects.outbound && (
+              <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                <div className="p-2">
+                  <Input
+                    placeholder="Search outbound flight..."
+                    value={searchTerms.outbound}
+                    onChange={(e) => setSearchTerms(prev => ({ ...prev, outbound: e.target.value }))}
+                    className="mb-2"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="max-h-48 overflow-y-auto">
+                    {flights
+                      .filter(flight => {
+                        const flightOrigin = extractAirportCode(flight.origin || '')
+                        const flightDestination = extractAirportCode(flight.destination || '')
+                        const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
+                        return flightValue !== formData.inbound &&
+                               flightValue.toLowerCase().includes(searchTerms.outbound.toLowerCase())
+                      })
+                      .map((flight) => {
+                        const flightOrigin = extractAirportCode(flight.origin || '')
+                        const flightDestination = extractAirportCode(flight.destination || '')
+                        const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
+                        return (
+                          <div
+                            key={flight.id}
+                            className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setFormData(prev => {
+                                const newData = { ...prev, outbound: flightValue }
+                                // If outbound becomes same as inbound, clear inbound
+                                if (flightValue === prev.inbound) {
+                                  newData.inbound = ""
+                                }
+                                return newData
+                              })
+                              setOpenSelects(prev => ({ ...prev, outbound: false }))
+                              setSearchTerms(prev => ({ ...prev, outbound: "" }))
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.outbound === flightValue ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {flightValue}
+                          </div>
+                        )
+                      })}
+                    {flights.filter(flight => {
+                      const flightOrigin = extractAirportCode(flight.origin || '')
+                      const flightDestination = extractAirportCode(flight.destination || '')
+                      const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
+                      return flightValue !== formData.inbound &&
+                             flightValue.toLowerCase().includes(searchTerms.outbound.toLowerCase())
+                    }).length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-gray-500">No outbound flight found.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* After BT */}
           <div>
             <label className="text-xs font-medium mb-1 block">After BT</label>
             <div className="flex items-center gap-1">
-              <Select value={formData.afterBTFrom} onValueChange={(value) => {
-                setFormData(prev => {
-                  const newData = { ...prev, afterBTFrom: value }
-                  // If from becomes same as to, clear to
-                  if (value === prev.afterBTTo) {
-                    newData.afterBTTo = ""
-                  }
-                  return newData
-                })
-              }}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="From" />
-                </SelectTrigger>
-                <SelectContent>
-                  {airportCodes
-                    .filter(airport => airport.code !== formData.afterBTTo)
-                    .map((airport) => (
-                      <SelectItem key={airport.id} value={airport.code}>
-                        {airport.code}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <div className="relative dropdown-container flex-1">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openSelects.afterBTFrom}
+                  className="w-full justify-between"
+                  onClick={() => setOpenSelects({
+                    origin: false,
+                    beforeBTFrom: false,
+                    beforeBTTo: false,
+                    inbound: false,
+                    outbound: false,
+                    afterBTFrom: !openSelects.afterBTFrom,
+                    afterBTTo: false,
+                    destination: false,
+                    sectorRates: false
+                  })}
+                >
+                  {formData.afterBTFrom || "From"}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+                {openSelects.afterBTFrom && (
+                  <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                    <div className="p-2">
+                      <Input
+                        placeholder="Search airport..."
+                        value={searchTerms.afterBTFrom}
+                        onChange={(e) => setSearchTerms(prev => ({ ...prev, afterBTFrom: e.target.value }))}
+                        className="mb-2"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="max-h-48 overflow-y-auto">
+                        {airportCodes
+                          .filter(airport => 
+                            airport.code !== formData.afterBTTo &&
+                            airport.code.toLowerCase().includes(searchTerms.afterBTFrom.toLowerCase())
+                          )
+                          .map((airport) => (
+                            <div
+                              key={airport.id}
+                              className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setFormData(prev => {
+                                  const newData = { ...prev, afterBTFrom: airport.code }
+                                  // If from becomes same as to, clear to
+                                  if (airport.code === prev.afterBTTo) {
+                                    newData.afterBTTo = ""
+                                  }
+                                  return newData
+                                })
+                                setOpenSelects(prev => ({ ...prev, afterBTFrom: false }))
+                                setSearchTerms(prev => ({ ...prev, afterBTFrom: "" }))
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.afterBTFrom === airport.code ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {airport.code}
+                            </div>
+                          ))}
+                        {airportCodes.filter(airport => 
+                          airport.code !== formData.afterBTTo &&
+                          airport.code.toLowerCase().includes(searchTerms.afterBTFrom.toLowerCase())
+                        ).length === 0 && (
+                          <div className="px-2 py-1.5 text-sm text-gray-500">No airport found.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <span className="text-xs text-gray-500">to</span>
-              <Select value={formData.afterBTTo} onValueChange={(value) => {
-                setFormData(prev => {
-                  const newData = { ...prev, afterBTTo: value }
-                  // If to becomes same as from, clear from
-                  if (value === prev.afterBTFrom) {
-                    newData.afterBTFrom = ""
-                  }
-                  return newData
-                })
-              }}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="To" />
-                </SelectTrigger>
-                <SelectContent>
-                  {airportCodes
-                    .filter(airport => airport.code !== formData.afterBTFrom)
-                    .map((airport) => (
-                      <SelectItem key={airport.id} value={airport.code}>
-                        {airport.code}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <div className="relative dropdown-container flex-1">
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openSelects.afterBTTo}
+                  className="w-full justify-between"
+                  onClick={() => setOpenSelects({
+                    origin: false,
+                    beforeBTFrom: false,
+                    beforeBTTo: false,
+                    inbound: false,
+                    outbound: false,
+                    afterBTFrom: false,
+                    afterBTTo: !openSelects.afterBTTo,
+                    destination: false,
+                    sectorRates: false
+                  })}
+                >
+                  {formData.afterBTTo || "To"}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+                {openSelects.afterBTTo && (
+                  <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                    <div className="p-2">
+                      <Input
+                        placeholder="Search airport..."
+                        value={searchTerms.afterBTTo}
+                        onChange={(e) => setSearchTerms(prev => ({ ...prev, afterBTTo: e.target.value }))}
+                        className="mb-2"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="max-h-48 overflow-y-auto">
+                        {airportCodes
+                          .filter(airport => 
+                            airport.code !== formData.afterBTFrom &&
+                            airport.code.toLowerCase().includes(searchTerms.afterBTTo.toLowerCase())
+                          )
+                          .map((airport) => (
+                            <div
+                              key={airport.id}
+                              className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setFormData(prev => {
+                                  const newData = { ...prev, afterBTTo: airport.code }
+                                  // If to becomes same as from, clear from
+                                  if (airport.code === prev.afterBTFrom) {
+                                    newData.afterBTFrom = ""
+                                  }
+                                  return newData
+                                })
+                                setOpenSelects(prev => ({ ...prev, afterBTTo: false }))
+                                setSearchTerms(prev => ({ ...prev, afterBTTo: "" }))
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.afterBTTo === airport.code ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {airport.code}
+                            </div>
+                          ))}
+                        {airportCodes.filter(airport => 
+                          airport.code !== formData.afterBTFrom &&
+                          airport.code.toLowerCase().includes(searchTerms.afterBTTo.toLowerCase())
+                        ).length === 0 && (
+                          <div className="px-2 py-1.5 text-sm text-gray-500">No airport found.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Destination */}
-          <div>
+          <div className="relative dropdown-container">
             <label className="text-xs font-medium mb-1 block">Destination</label>
-            <Select value={formData.destination} onValueChange={(value) => {
-              setFormData(prev => {
-                const newData = { ...prev, destination: value }
-                // If destination becomes same as origin, clear origin
-                if (value === prev.origin) {
-                  newData.origin = ""
-                }
-                return newData
-              })
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select destination" />
-              </SelectTrigger>
-              <SelectContent>
-                {airportCodes
-                  .filter(airport => airport.code !== formData.origin)
-                  .map((airport) => (
-                    <SelectItem key={airport.id} value={airport.code}>
-                      {airport.code}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={openSelects.destination}
+              className="w-full justify-between"
+              onClick={() => setOpenSelects({
+                origin: false,
+                beforeBTFrom: false,
+                beforeBTTo: false,
+                inbound: false,
+                outbound: false,
+                afterBTFrom: false,
+                afterBTTo: false,
+                destination: !openSelects.destination,
+                sectorRates: false
+              })}
+            >
+              {formData.destination || "Select destination"}
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+            {openSelects.destination && (
+              <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                <div className="p-2">
+                  <Input
+                    placeholder="Search destination..."
+                    value={searchTerms.destination}
+                    onChange={(e) => setSearchTerms(prev => ({ ...prev, destination: e.target.value }))}
+                    className="mb-2"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="max-h-48 overflow-y-auto">
+                    {airportCodes
+                      .filter(airport => 
+                        airport.code !== formData.origin &&
+                        airport.code.toLowerCase().includes(searchTerms.destination.toLowerCase())
+                      )
+                      .map((airport) => (
+                        <div
+                          key={airport.id}
+                          className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setFormData(prev => {
+                              const newData = { ...prev, destination: airport.code }
+                              // If destination becomes same as origin, clear origin
+                              if (airport.code === prev.origin) {
+                                newData.origin = ""
+                              }
+                              return newData
+                            })
+                            setOpenSelects(prev => ({ ...prev, destination: false }))
+                            setSearchTerms(prev => ({ ...prev, destination: "" }))
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              formData.destination === airport.code ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {airport.code}
+                        </div>
+                      ))}
+                    {airportCodes.filter(airport => 
+                      airport.code !== formData.origin &&
+                      airport.code.toLowerCase().includes(searchTerms.destination.toLowerCase())
+                    ).length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-gray-500">No destination found.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sector Rates */}
-          <div>
+          <div className="relative dropdown-container">
             <label className="text-xs font-medium mb-1 block">Sector Rates</label>
-            <Select value={formData.sectorRates} onValueChange={(value) => setFormData(prev => ({ ...prev, sectorRates: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select sector rates" />
-              </SelectTrigger>
-              <SelectContent>
-                {sectorRates.map((rate) => (
-                  <SelectItem key={rate.id} value={`${rate.origin} → ${rate.destination}, €${rate.sector_rate}`}>
-                    {rate.origin} → {rate.destination}, €{rate.sector_rate}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={openSelects.sectorRates}
+              className="w-full justify-between"
+              onClick={() => setOpenSelects({
+                origin: false,
+                beforeBTFrom: false,
+                beforeBTTo: false,
+                inbound: false,
+                outbound: false,
+                afterBTFrom: false,
+                afterBTTo: false,
+                destination: false,
+                sectorRates: !openSelects.sectorRates
+              })}
+            >
+              {formData.sectorRates || "Select sector rates"}
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+            {openSelects.sectorRates && (
+              <div className="absolute top-full left-0 right-0 z-[100] bg-white border shadow-lg rounded-md mt-1">
+                <div className="p-2">
+                  <Input
+                    placeholder="Search sector rates..."
+                    value={searchTerms.sectorRates}
+                    onChange={(e) => setSearchTerms(prev => ({ ...prev, sectorRates: e.target.value }))}
+                    className="mb-2"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="max-h-48 overflow-y-auto">
+                    {sectorRates
+                      .filter(rate => {
+                        const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`
+                        return rateValue.toLowerCase().includes(searchTerms.sectorRates.toLowerCase())
+                      })
+                      .map((rate) => {
+                        const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`
+                        return (
+                          <div
+                            key={rate.id}
+                            className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setFormData(prev => ({ ...prev, sectorRates: rateValue }))
+                              setOpenSelects(prev => ({ ...prev, sectorRates: false }))
+                              setSearchTerms(prev => ({ ...prev, sectorRates: "" }))
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.sectorRates === rateValue ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {rateValue}
+                          </div>
+                        )
+                      })}
+                    {sectorRates.filter(rate => {
+                      const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`
+                      return rateValue.toLowerCase().includes(searchTerms.sectorRates.toLowerCase())
+                    }).length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-gray-500">No sector rates found.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
