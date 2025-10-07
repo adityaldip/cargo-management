@@ -84,10 +84,31 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     return match ? match[1] : ""
   }
 
+  // Extract destination from inbound flight string (e.g., "BT344, DUS → RIX" -> "RIX")
+  const extractDestinationFromInbound = (inboundString: string): string => {
+    if (!inboundString) return ""
+    const match = inboundString.match(/→ ([A-Z]{3})/)
+    return match ? match[1] : ""
+  }
+
   // Extract destination from outbound flight string (e.g., "BT644, LGX → VNO" -> "VNO")
   const extractDestinationFromOutbound = (outboundString: string): string => {
     if (!outboundString) return ""
     const match = outboundString.match(/→ ([A-Z]{3})/)
+    return match ? match[1] : ""
+  }
+
+  // Extract origin from outbound flight string (e.g., "BT644, LGX → VNO" -> "LGX")
+  const extractOriginFromOutbound = (outboundString: string): string => {
+    if (!outboundString) return ""
+    const match = outboundString.match(/, ([A-Z]{3}) →/)
+    return match ? match[1] : ""
+  }
+
+  // Extract flight number from flight string (e.g., "BT344, DXB → LAX" -> "BT344")
+  const extractFlightNumber = (flightString: string): string => {
+    if (!flightString) return ""
+    const match = flightString.match(/^([A-Z0-9]+),/)
     return match ? match[1] : ""
   }
 
@@ -103,6 +124,40 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     if (!formData.destination || !formData.outbound) return false
     const outboundDestination = extractDestinationFromOutbound(formData.outbound)
     return formData.destination === outboundDestination
+  }
+
+  // Get inbound destination for filtering outbound flights
+  const getInboundDestination = () => {
+    if (!formData.inbound) return null
+    return extractDestinationFromInbound(formData.inbound)
+  }
+
+  // Get outbound origin for filtering inbound flights
+  const getOutboundOrigin = () => {
+    if (!formData.outbound) return null
+    return extractOriginFromOutbound(formData.outbound)
+  }
+
+  // Filter outbound flights based on inbound destination
+  const getFilteredOutboundFlights = () => {
+    const inboundDestination = getInboundDestination()
+    if (!inboundDestination) return flights
+
+    return flights.filter(flight => {
+      const flightOrigin = extractAirportCode(flight.origin || '')
+      return flightOrigin === inboundDestination
+    })
+  }
+
+  // Filter inbound flights based on outbound origin
+  const getFilteredInboundFlights = () => {
+    const outboundOrigin = getOutboundOrigin()
+    if (!outboundOrigin) return flights
+
+    return flights.filter(flight => {
+      const flightDestination = extractAirportCode(flight.destination || '')
+      return flightDestination === outboundOrigin
+    })
   }
 
   // Find matching flight option for a flight number
@@ -221,6 +276,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     }
   }, [formData.destination, formData.outbound])
 
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -309,14 +365,18 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
 
       if (data) {
         const convertedData = data as any
+        // Convert flight numbers back to full format for display
+        const inboundDisplay = convertedData.inbound ? findMatchingFlightOption(convertedData.inbound) : ""
+        const outboundDisplay = convertedData.outbound ? findMatchingFlightOption(convertedData.outbound) : ""
+        
         setFormData(prev => ({
           ...prev,
           origin: convertedData.converted_origin || prev.origin,
           destination: convertedData.converted_destination || prev.destination,
           beforeBTFrom: convertedData.before_bt_from || "",
           beforeBTTo: convertedData.before_bt_to || "",
-          inbound: convertedData.inbound || "",
-          outbound: convertedData.outbound || "",
+          inbound: inboundDisplay,
+          outbound: outboundDisplay,
           afterBTFrom: convertedData.after_bt_from || "",
           afterBTTo: convertedData.after_bt_to || "",
           sectorRates: convertedData.applied_rate || ""
@@ -372,11 +432,11 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         converted_destination: formData.destination,
         before_bt_from: formData.beforeBTFrom,
         before_bt_to: formData.beforeBTTo,
-        inbound: formData.inbound,
-        outbound: formData.outbound,
+        inbound: extractFlightNumber(formData.inbound),
+        outbound: extractFlightNumber(formData.outbound),
         after_bt_from: formData.afterBTFrom,
         after_bt_to: formData.afterBTTo,
-          applied_rate: formData.sectorRates,
+        applied_rate: formData.sectorRates,
         is_converted: true
       }
       
@@ -711,7 +771,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                     onClick={(e) => e.stopPropagation()}
                   />
                   <div className="max-h-48 overflow-y-auto">
-                    {flights
+                    {getFilteredInboundFlights()
                       .filter(flight => {
                         const flightOrigin = extractAirportCode(flight.origin || '')
                         const flightDestination = extractAirportCode(flight.destination || '')
@@ -756,7 +816,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                           </div>
                         )
                       })}
-                    {flights.filter(flight => {
+                    {getFilteredInboundFlights().filter(flight => {
                       const flightOrigin = extractAirportCode(flight.origin || '')
                       const flightDestination = extractAirportCode(flight.destination || '')
                       const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
@@ -805,7 +865,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                     onClick={(e) => e.stopPropagation()}
                   />
                   <div className="max-h-48 overflow-y-auto">
-                    {flights
+                    {getFilteredOutboundFlights()
                       .filter(flight => {
                         const flightOrigin = extractAirportCode(flight.origin || '')
                         const flightDestination = extractAirportCode(flight.destination || '')
@@ -850,7 +910,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                           </div>
                         )
                       })}
-                    {flights.filter(flight => {
+                    {getFilteredOutboundFlights().filter(flight => {
                       const flightOrigin = extractAirportCode(flight.origin || '')
                       const flightDestination = extractAirportCode(flight.destination || '')
                       const flightValue = `${flight.flight_number}, ${flightOrigin} → ${flightDestination}`
