@@ -143,7 +143,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
 
   // Find matching sector rates for a route
   const findMatchingSectorRates = (route: string) => {
-    if (!route || route === "n/a") return []
+    if (!route || route === "-") return []
     
     // Extract origin and destination from route (e.g., "FRA -> DUS" or "FRA → DUS")
     const routeMatch = route.match(/([A-Z]{3})\s*->\s*([A-Z]{3})/)
@@ -162,7 +162,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
 
   // Extract route from flight string (e.g., "BT344, DXB → LAX" -> "DXB → LAX")
   const extractRouteFromFlight = (flightString: string): string | null => {
-    if (!flightString || flightString === "n/a") return null
+    if (!flightString || flightString === "-") return null
     
     // Try to match format with comma and arrow (e.g., "BT344, DXB → LAX")
     const match = flightString.match(/, ([A-Z]{3}) → ([A-Z]{3})/)
@@ -175,7 +175,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
 
   // Extract route from connection string (e.g., "FRA -> DXB" -> "FRA → DXB")
   const extractRouteFromConnection = (connectionString: string): string | null => {
-    if (!connectionString || connectionString === "n/a" || connectionString === "-") return null
+    if (!connectionString || connectionString === "-" || connectionString === "-") return null
     
     // Check for both formats: "FRA -> DXB" and "FRA → DXB"
     const matchArrow = connectionString.match(/([A-Z]{3}) → ([A-Z]{3})/)
@@ -372,7 +372,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       
       // Build beforeBT - show origin → inbound origin when inbound flight exists
       // If inbound is empty, get origin from outbound flight
-      let beforeBT = "n/a"
+      let beforeBT = "-"
       
       if (flight.inbound) {
         const inboundRoute = getFlightRoute(flight.inbound)
@@ -387,7 +387,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           }
         } else {
           // Flight not found in flights table
-          beforeBT = "n/a"
+          beforeBT = "-"
         }
       } else if (flight.outbound) {
         // When inbound is empty, get origin from outbound flight
@@ -403,12 +403,12 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           }
         } else {
           // Flight not found in flights table
-          beforeBT = "n/a"
+          beforeBT = "-"
         }
       }
       
       // Build afterBT - show outbound destination → destination when outbound flight exists
-      let afterBT = "n/a"
+      let afterBT = "-"
       
       if (flight.outbound) {
         const outboundRoute = getFlightRoute(flight.outbound)
@@ -423,15 +423,15 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           }
         } else {
           // Flight not found in flights table
-          afterBT = "n/a"
+          afterBT = "-"
         }
       }
 
       // Calculate total route and sum of rates
       const totalRouteAndSum = calculateTotalRouteAndSum(
         beforeBT, 
-        flight.inbound ? formatFlight(flight.inbound) : "n/a",
-        flight.outbound ? formatFlight(flight.outbound) : "n/a", 
+        flight.inbound ? formatFlight(flight.inbound) : "-",
+        flight.outbound ? formatFlight(flight.outbound) : "-", 
         afterBT,
         originCode,
         destinationCode
@@ -440,8 +440,8 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       // Get available sector rates for all routes from the 4 columns
       const availableSectorRates = getAvailableSectorRates(
         beforeBT, 
-        flight.inbound ? formatFlight(flight.inbound) : "n/a",
-        flight.outbound ? formatFlight(flight.outbound) : "n/a", 
+        flight.inbound ? formatFlight(flight.inbound) : "-",
+        flight.outbound ? formatFlight(flight.outbound) : "-", 
         afterBT
       )
 
@@ -450,8 +450,8 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         id: flight.id,
         origin: originCode,
         beforeBT: beforeBT,
-        inbound: flight.is_converted ? "-" : (flight.inbound ? formatFlight(flight.inbound) : "n/a"),
-        outbound: flight.is_converted ? "-" : (flight.outbound ? formatFlight(flight.outbound) : "n/a"),
+        inbound: flight.is_converted ? "-" : (flight.inbound ? formatFlight(flight.inbound) : "-"),
+        outbound: flight.is_converted ? "-" : (flight.outbound ? formatFlight(flight.outbound) : "-"),
         afterBT: afterBT,
         destination: flight.is_converted ? "-" : destinationCode,
         sectorRates: `${totalRouteAndSum.route}, €${totalRouteAndSum.totalSum}`,
