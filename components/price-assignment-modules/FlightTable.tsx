@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowUp, ArrowDown, Edit, Trash2, Loader2 } from "lucide-react"
+import { ArrowUp, ArrowDown, Edit, Trash2, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Flight } from "./types"
 
@@ -43,8 +43,8 @@ export function FlightTable({
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [sortField, setSortField] = useState<'flightNumber' | 'origin' | 'destination' | 'status'>('flightNumber')
-  const [itemsPerPage, setItemsPerPage] = useState(20)
-  const [showAll, setShowAll] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Debounce search term for better performance
   useEffect(() => {
@@ -96,10 +96,22 @@ export function FlightTable({
       })
   }, [flights, debouncedSearchTerm, statusFilter, sortOrder, sortField])
 
-  // Pagination logic with performance optimization
-  const totalItems = filteredFlights.length
-  const displayItems = showAll ? filteredFlights : filteredFlights.slice(0, itemsPerPage)
-  const hasMoreItems = filteredFlights.length > itemsPerPage
+  // Memoized pagination logic
+  const paginationData = useMemo(() => {
+    const totalItems = filteredFlights.length
+    const totalPages = Math.ceil(totalItems / itemsPerPage)
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
+    const currentPageData = filteredFlights.slice(startIndex, endIndex)
+    
+    return {
+      totalItems,
+      totalPages,
+      startIndex,
+      endIndex,
+      currentPageData
+    }
+  }, [filteredFlights, currentPage, itemsPerPage])
 
   const handleSortToggle = (field: 'flightNumber' | 'origin' | 'destination' | 'status') => {
     if (sortField === field) {
@@ -150,9 +162,9 @@ export function FlightTable({
       </div> */}
       
       {/* Results Summary */}
-      {filteredFlights.length > 0 && (
+      {paginationData.totalItems > 0 && (
         <div className="mb-3 text-sm text-gray-600">
-          Showing {filteredFlights.length} flight{filteredFlights.length !== 1 ? 's' : ''}
+          Showing {paginationData.totalItems} flight{paginationData.totalItems !== 1 ? 's' : ''}
           {statusFilter !== 'all' && ` (${statusFilter} only)`}
           {debouncedSearchTerm && ` matching "${debouncedSearchTerm}"`}
         </div>
@@ -218,7 +230,7 @@ export function FlightTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayItems.map((flight) => (
+            {paginationData.currentPageData.map((flight) => (
               <TableRow key={flight.id} className="">
                 <TableCell className="py-1 px-1">
                   <div className="flex items-center gap-1">
@@ -283,14 +295,14 @@ export function FlightTable({
         </Table>
       </div>
 
-      {/* Performance Controls */}
-      {filteredFlights.length > 0 && (
+      {/* Pagination Controls */}
+      {paginationData.totalItems > 0 && (
         <div className="flex items-center justify-between mt-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Show</span>
             <Select value={itemsPerPage.toString()} onValueChange={(value) => {
               setItemsPerPage(Number(value))
-              setShowAll(false)
+              setCurrentPage(1)
             }}>
               <SelectTrigger className="w-20">
                 <SelectValue />
@@ -305,35 +317,36 @@ export function FlightTable({
             <span className="text-sm text-gray-600">entries</span>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">
-              {showAll ? `Showing all ${totalItems} entries` : `Showing ${displayItems.length} of ${totalItems} entries`}
+              Showing {paginationData.startIndex + 1} to {paginationData.endIndex} of {paginationData.totalItems} entries
             </span>
-            
-            {hasMoreItems && !showAll && (
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(true)}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
               >
-                Show All
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            )}
-            
-            {showAll && hasMoreItems && (
+              <span className="px-3 py-1 text-sm bg-gray-100 rounded">
+                {currentPage}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(false)}
+                onClick={() => setCurrentPage(prev => Math.min(paginationData.totalPages, prev + 1))}
+                disabled={currentPage >= paginationData.totalPages}
               >
-                Show Less
+                <ChevronRight className="h-4 w-4" />
               </Button>
-            )}
+            </div>
           </div>
         </div>
       )}
 
-      {filteredFlights.length === 0 && (
+      {paginationData.totalItems === 0 && (
         <div className="text-center py-8">
           <p className="text-gray-500">No flights found matching your search criteria</p>
         </div>

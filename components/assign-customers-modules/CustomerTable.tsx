@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowUp, ArrowDown, Edit, Trash2, Loader2 } from "lucide-react"
+import { ArrowUp, ArrowDown, Edit, Trash2, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CustomerWithCodes } from "./types"
 
@@ -48,8 +48,8 @@ export function CustomerTable({
 }: CustomerTableProps) {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-  const [itemsPerPage, setItemsPerPage] = useState(20)
-  const [showAll, setShowAll] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Debounce search term for better performance
   useEffect(() => {
@@ -84,10 +84,22 @@ export function CustomerTable({
       })
   }, [customers, debouncedSearchTerm, statusFilter, sortOrder])
 
-  // Pagination logic with performance optimization
-  const totalItems = filteredCustomers.length
-  const displayItems = showAll ? filteredCustomers : filteredCustomers.slice(0, itemsPerPage)
-  const hasMoreItems = filteredCustomers.length > itemsPerPage
+  // Memoized pagination logic
+  const paginationData = useMemo(() => {
+    const totalItems = filteredCustomers.length
+    const totalPages = Math.ceil(totalItems / itemsPerPage)
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
+    const currentPageData = filteredCustomers.slice(startIndex, endIndex)
+    
+    return {
+      totalItems,
+      totalPages,
+      startIndex,
+      endIndex,
+      currentPageData
+    }
+  }, [filteredCustomers, currentPage, itemsPerPage])
 
   const handleSortToggle = () => {
     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
@@ -141,9 +153,9 @@ export function CustomerTable({
       </div>
       
       {/* Results Summary */}
-      {filteredCustomers.length > 0 && (
+      {paginationData.totalItems > 0 && (
         <div className="mb-3 text-sm text-gray-600">
-          Showing {filteredCustomers.length} contractee{filteredCustomers.length !== 1 ? 's' : ''}
+          Showing {paginationData.totalItems} contractee{paginationData.totalItems !== 1 ? 's' : ''}
           {statusFilter !== 'all' && ` (${statusFilter} only)`}
           {debouncedSearchTerm && ` matching "${debouncedSearchTerm}"`}
           {!customerCodeAssignmentEnabled && (
@@ -180,7 +192,7 @@ export function CustomerTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayItems.map((customer) => (
+            {paginationData.currentPageData.map((customer) => (
               <TableRow key={customer.id} className="">
                 <TableCell className="py-1 px-1">
                   <div className="flex items-center gap-1">
@@ -266,14 +278,14 @@ export function CustomerTable({
         </Table>
       </div>
 
-      {/* Performance Controls */}
-      {filteredCustomers.length > 0 && (
+      {/* Pagination Controls */}
+      {paginationData.totalItems > 0 && (
         <div className="flex items-center justify-between mt-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Show</span>
             <Select value={itemsPerPage.toString()} onValueChange={(value) => {
               setItemsPerPage(Number(value))
-              setShowAll(false)
+              setCurrentPage(1)
             }}>
               <SelectTrigger className="w-20">
                 <SelectValue />
@@ -288,35 +300,36 @@ export function CustomerTable({
             <span className="text-sm text-gray-600">entries</span>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">
-              {showAll ? `Showing all ${totalItems} entries` : `Showing ${displayItems.length} of ${totalItems} entries`}
+              Showing {paginationData.startIndex + 1} to {paginationData.endIndex} of {paginationData.totalItems} entries
             </span>
-            
-            {hasMoreItems && !showAll && (
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(true)}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
               >
-                Show All
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            )}
-            
-            {showAll && hasMoreItems && (
+              <span className="px-3 py-1 text-sm bg-gray-100 rounded">
+                {currentPage}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(false)}
+                onClick={() => setCurrentPage(prev => Math.min(paginationData.totalPages, prev + 1))}
+                disabled={currentPage >= paginationData.totalPages}
               >
-                Show Less
+                <ChevronRight className="h-4 w-4" />
               </Button>
-            )}
+            </div>
           </div>
         </div>
       )}
 
-      {filteredCustomers.length === 0 && (
+      {paginationData.totalItems === 0 && (
         <div className="text-center py-8">
           <p className="text-gray-500">No contractees found matching your search criteria</p>
         </div>

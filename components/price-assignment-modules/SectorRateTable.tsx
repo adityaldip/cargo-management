@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ArrowUp, ArrowDown, Edit, Trash2, Loader2 } from "lucide-react"
+import { ArrowUp, ArrowDown, Edit, Trash2, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SectorRate, Flight } from "./types"
 
@@ -45,8 +45,8 @@ export function SectorRateTable({
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [sortField, setSortField] = useState<'origin' | 'destination' | 'sectorRate' | 'flightPreview'>('origin')
-  const [itemsPerPage, setItemsPerPage] = useState(20)
-  const [showAll, setShowAll] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Get flights for a specific route
   const getFlightsForRoute = (origin: string, destination: string): Flight[] => {
@@ -128,10 +128,22 @@ export function SectorRateTable({
       })
   }, [sectorRates, debouncedSearchTerm, statusFilter, sortOrder, sortField, flights])
 
-  // Pagination logic with performance optimization
-  const totalItems = filteredSectorRates.length
-  const displayItems = showAll ? filteredSectorRates : filteredSectorRates.slice(0, itemsPerPage)
-  const hasMoreItems = filteredSectorRates.length > itemsPerPage
+  // Memoized pagination logic
+  const paginationData = useMemo(() => {
+    const totalItems = filteredSectorRates.length
+    const totalPages = Math.ceil(totalItems / itemsPerPage)
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
+    const currentPageData = filteredSectorRates.slice(startIndex, endIndex)
+    
+    return {
+      totalItems,
+      totalPages,
+      startIndex,
+      endIndex,
+      currentPageData
+    }
+  }, [filteredSectorRates, currentPage, itemsPerPage])
 
   const handleSortToggle = (field: 'origin' | 'destination' | 'sectorRate' | 'flightPreview') => {
     if (sortField === field) {
@@ -182,9 +194,9 @@ export function SectorRateTable({
       </div> */}
       
       {/* Results Summary */}
-      {filteredSectorRates.length > 0 && (
+      {paginationData.totalItems > 0 && (
         <div className="mb-3 text-sm text-gray-600">
-          Showing {filteredSectorRates.length} sector rate{filteredSectorRates.length !== 1 ? 's' : ''}
+          Showing {paginationData.totalItems} sector rate{paginationData.totalItems !== 1 ? 's' : ''}
           {statusFilter !== 'all' && ` (${statusFilter} only)`}
           {debouncedSearchTerm && ` matching "${debouncedSearchTerm}"`}
         </div>
@@ -267,7 +279,7 @@ export function SectorRateTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayItems.map((sectorRate) => (
+            {paginationData.currentPageData.map((sectorRate) => (
               <TableRow key={sectorRate.id} className="">
                 <TableCell className="py-1 px-1">
                   <div className="flex items-center gap-1">
@@ -337,14 +349,14 @@ export function SectorRateTable({
         </Table>
       </div>
 
-      {/* Performance Controls */}
-      {filteredSectorRates.length > 0 && (
+      {/* Pagination Controls */}
+      {paginationData.totalItems > 0 && (
         <div className="flex items-center justify-between mt-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Show</span>
             <Select value={itemsPerPage.toString()} onValueChange={(value) => {
               setItemsPerPage(Number(value))
-              setShowAll(false)
+              setCurrentPage(1)
             }}>
               <SelectTrigger className="w-20">
                 <SelectValue />
@@ -359,35 +371,36 @@ export function SectorRateTable({
             <span className="text-sm text-gray-600">entries</span>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">
-              {showAll ? `Showing all ${totalItems} entries` : `Showing ${displayItems.length} of ${totalItems} entries`}
+              Showing {paginationData.startIndex + 1} to {paginationData.endIndex} of {paginationData.totalItems} entries
             </span>
-            
-            {hasMoreItems && !showAll && (
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(true)}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
               >
-                Show All
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            )}
-            
-            {showAll && hasMoreItems && (
+              <span className="px-3 py-1 text-sm bg-gray-100 rounded">
+                {currentPage}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(false)}
+                onClick={() => setCurrentPage(prev => Math.min(paginationData.totalPages, prev + 1))}
+                disabled={currentPage >= paginationData.totalPages}
               >
-                Show Less
+                <ChevronRight className="h-4 w-4" />
               </Button>
-            )}
+            </div>
           </div>
         </div>
       )}
 
-      {filteredSectorRates.length === 0 && (
+      {paginationData.totalItems === 0 && (
         <div className="text-center py-8">
           <p className="text-gray-500">No sector rates found matching your search criteria</p>
         </div>

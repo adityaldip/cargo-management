@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowUp, ArrowDown, Edit, Trash2, Loader2 } from "lucide-react"
+import { ArrowUp, ArrowDown, Edit, Trash2, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AirportCode } from "./types"
 
@@ -47,8 +47,8 @@ export function AirportCodeTable({
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [sortField, setSortField] = useState<'code' | 'is_eu'>('code')
-  const [itemsPerPage, setItemsPerPage] = useState(20)
-  const [showAll, setShowAll] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Debounce search term for better performance
   useEffect(() => {
@@ -91,10 +91,22 @@ export function AirportCodeTable({
       })
   }, [airportCodes, debouncedSearchTerm, statusFilter, sortOrder, sortField])
 
-  // Pagination logic with performance optimization
-  const totalItems = filteredAirportCodes.length
-  const displayItems = showAll ? filteredAirportCodes : filteredAirportCodes.slice(0, itemsPerPage)
-  const hasMoreItems = filteredAirportCodes.length > itemsPerPage
+  // Memoized pagination logic
+  const paginationData = useMemo(() => {
+    const totalItems = filteredAirportCodes.length
+    const totalPages = Math.ceil(totalItems / itemsPerPage)
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
+    const currentPageData = filteredAirportCodes.slice(startIndex, endIndex)
+    
+    return {
+      totalItems,
+      totalPages,
+      startIndex,
+      endIndex,
+      currentPageData
+    }
+  }, [filteredAirportCodes, currentPage, itemsPerPage])
 
   const handleSortToggle = (field: 'code' | 'is_eu') => {
     if (sortField === field) {
@@ -145,9 +157,9 @@ export function AirportCodeTable({
       </div> */}
       
       {/* Results Summary */}
-      {filteredAirportCodes.length > 0 && (
+      {paginationData.totalItems > 0 && (
         <div className="mb-3 text-sm text-gray-600">
-          Showing {filteredAirportCodes.length} airport code{filteredAirportCodes.length !== 1 ? 's' : ''}
+          Showing {paginationData.totalItems} airport code{paginationData.totalItems !== 1 ? 's' : ''}
           {statusFilter !== 'all' && ` (${statusFilter} only)`}
           {debouncedSearchTerm && ` matching "${debouncedSearchTerm}"`}
         </div>
@@ -196,7 +208,7 @@ export function AirportCodeTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayItems.map((airport) => (
+            {paginationData.currentPageData.map((airport) => (
               <TableRow key={airport.id} className="">
                 <TableCell className="py-1 px-1">
                   <div className="flex items-center gap-1">
@@ -269,14 +281,14 @@ export function AirportCodeTable({
         </Table>
       </div>
 
-      {/* Performance Controls */}
-      {filteredAirportCodes.length > 0 && (
+      {/* Pagination Controls */}
+      {paginationData.totalItems > 0 && (
         <div className="flex items-center justify-between mt-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Show</span>
             <Select value={itemsPerPage.toString()} onValueChange={(value) => {
               setItemsPerPage(Number(value))
-              setShowAll(false)
+              setCurrentPage(1)
             }}>
               <SelectTrigger className="w-20">
                 <SelectValue />
@@ -291,35 +303,36 @@ export function AirportCodeTable({
             <span className="text-sm text-gray-600">entries</span>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">
-              {showAll ? `Showing all ${totalItems} entries` : `Showing ${displayItems.length} of ${totalItems} entries`}
+              Showing {paginationData.startIndex + 1} to {paginationData.endIndex} of {paginationData.totalItems} entries
             </span>
-            
-            {hasMoreItems && !showAll && (
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(true)}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
               >
-                Show All
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            )}
-            
-            {showAll && hasMoreItems && (
+              <span className="px-3 py-1 text-sm bg-gray-100 rounded">
+                {currentPage}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAll(false)}
+                onClick={() => setCurrentPage(prev => Math.min(paginationData.totalPages, prev + 1))}
+                disabled={currentPage >= paginationData.totalPages}
               >
-                Show Less
+                <ChevronRight className="h-4 w-4" />
               </Button>
-            )}
+            </div>
           </div>
         </div>
       )}
 
-      {filteredAirportCodes.length === 0 && (
+      {paginationData.totalItems === 0 && (
         <div className="text-center py-8">
           <p className="text-gray-500">No airport codes found matching your search criteria</p>
         </div>
