@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -92,6 +93,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   const [showConvertModal, setShowConvertModal] = useState(false)
   const [selectedOrigin, setSelectedOrigin] = useState("")
   const [selectedFlightData, setSelectedFlightData] = useState<any>(null)
+  const [selectedRates, setSelectedRates] = useState<{[key: string]: string[]}>({})
   const { toast } = useToast()
 
   const processingSteps = [
@@ -102,6 +104,32 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     "Generating final prices...",
     "Completing assignment..."
   ]
+
+  // Handle rate selection
+  const handleRateSelection = (rowId: string, rateId: string, checked: boolean) => {
+    setSelectedRates(prev => {
+      const currentSelected = prev[rowId] || []
+      if (checked) {
+        return {
+          ...prev,
+          [rowId]: [...currentSelected, rateId]
+        }
+      } else {
+        return {
+          ...prev,
+          [rowId]: currentSelected.filter(id => id !== rateId)
+        }
+      }
+    })
+  }
+
+  // Calculate total for selected rates
+  const calculateSelectedTotal = (rowId: string, rates: any[]) => {
+    const selectedRateIds = selectedRates[rowId] || []
+    const selectedRatesList = rates.filter(rate => selectedRateIds.includes(rate.id))
+    const total = selectedRatesList.reduce((sum, rate) => sum + rate.sector_rate, 0)
+    return Math.round(total * 100) / 100
+  }
 
   // Extract airport code from origin/destination (3rd to 5th letters)
   const extractAirportCode = (code: string): string => {
@@ -726,15 +754,25 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                           <ChevronDown className="h-3 w-3 text-gray-500" />
                         </div>
                       </PopoverTrigger>
-                      <PopoverContent className="w-38 p-2" align="center" side="bottom">
+                      <PopoverContent className="w-48 p-2" align="center" side="bottom" onClick={(e) => e.stopPropagation()}>
                         <div className="space-y-2">
                           {row.totalRouteAndSum?.rates && row.totalRouteAndSum.rates.length > 0 ? (
                             <div className="space-y-1">
                               {row.totalRouteAndSum.rates.map((rate: any, rateIndex: number) => (
-                                <div key={rateIndex} className="flex justify-between items-center py-1 px-2 bg-gray-50 rounded">
-                                  <span className="text-xs">
-                                    {rate.origin} → {rate.destination}
-                                  </span>
+                                <div key={rateIndex} className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`rate-${row.id}-${rate.id}`}
+                                      checked={row.id ? selectedRates[row.id]?.includes(rate.id) || false : false}
+                                      onCheckedChange={(checked) => 
+                                        row.id && handleRateSelection(row.id, rate.id, checked as boolean)
+                                      }
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <span className="text-xs">
+                                      {rate.origin} → {rate.destination}
+                                    </span>
+                                  </div>
                                   <span className="text-xs font-medium">
                                     €{rate.sector_rate.toFixed(2)}
                                   </span>
@@ -742,10 +780,14 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                               ))}
                               <div className="border-t pt-1 mt-2 p-2">
                                 <div className="flex justify-between items-center font-semibold">
-                                  <span className="text-sm">Total:</span>
+                                  <span className="text-sm">Selected Total:</span>
                                   <span className="text-sm text-blue-600">
-                                    €{row.totalRouteAndSum.totalSum.toFixed(2)}
+                                    €{row.id ? calculateSelectedTotal(row.id, row.totalRouteAndSum.rates).toFixed(2) : '0.00'}
                                   </span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs text-gray-500 mt-1">
+                                  <span>All Rates Total:</span>
+                                  <span>€{row.totalRouteAndSum.totalSum.toFixed(2)}</span>
                                 </div>
                               </div>
                             </div>
