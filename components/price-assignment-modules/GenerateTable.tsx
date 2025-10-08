@@ -109,7 +109,10 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   ]
 
   // Handle rate selection
-  const handleRateSelection = (rowId: string, rateId: string, checked: boolean) => {
+  const handleRateSelection = async (rowId: string, rateId: string, checked: boolean) => {
+    console.log('Rate selection changed:', { rowId, rateId, checked })
+    
+    // Update local state
     setSelectedRates(prev => {
       const currentSelected = prev[rowId] || []
       if (checked) {
@@ -124,14 +127,85 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         }
       }
     })
+
+    // Save to database
+    await saveRateSelectionToDatabase(rowId, rateId, checked)
+  }
+
+  // Save rate selection to database
+  const saveRateSelectionToDatabase = async (rowId: string, rateId: string, checked: boolean) => {
+    try {
+      // Get current selected rates from database
+      const { data: currentData, error: fetchError } = await supabase
+        .from('flight_uploads')
+        .select('selected_sector_rate_ids')
+        .eq('id', rowId)
+        .single()
+
+      if (fetchError) {
+        console.error('Error fetching current data:', fetchError)
+        return
+      }
+
+      const currentSelectedIds = currentData?.selected_sector_rate_ids || []
+      let newSelectedIds: string[]
+
+      if (checked) {
+        // Add rate ID if not already present
+        newSelectedIds = [...new Set([...currentSelectedIds, rateId])]
+      } else {
+        // Remove rate ID
+        newSelectedIds = currentSelectedIds.filter(id => id !== rateId)
+      }
+
+      console.log('Saving to database:', { rowId, currentSelectedIds, newSelectedIds })
+
+      // Update database
+      const { error: updateError } = await supabase
+        .from('flight_uploads')
+        .update({
+          selected_sector_rate_ids: newSelectedIds.length > 0 ? newSelectedIds : null
+        })
+        .eq('id', rowId)
+
+      if (updateError) {
+        console.error('Error updating database:', updateError)
+        toast({
+          title: "Error",
+          description: "Failed to save rate selection.",
+          variant: "destructive"
+        })
+        return
+      }
+
+      console.log('Successfully saved rate selection to database')
+      toast({
+        title: "Success",
+        description: "Rate selection updated successfully.",
+      })
+
+      // No need to reload - local state is already updated
+
+    } catch (error) {
+      console.error('Error saving rate selection:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save rate selection.",
+        variant: "destructive"
+      })
+    }
   }
 
   // Calculate total for selected rates
   const calculateSelectedTotal = (rowId: string, rates: any[], rowData?: any) => {
-    const selectedRateIds = selectedRates[rowId] || []
+    // Use local state first (most up-to-date), then fallback to database state
+    const localSelectedIds = selectedRates[rowId] || []
     const dbSelectedRateIds = rowData?.selectedSectorRateIds || []
-    const allSelectedIds = [...new Set([...selectedRateIds, ...dbSelectedRateIds])]
-    const selectedRatesList = rates.filter(rate => allSelectedIds.includes(rate.id))
+    
+    // If we have local changes, use those; otherwise use database state
+    const selectedRateIds = localSelectedIds.length > 0 ? localSelectedIds : dbSelectedRateIds
+    
+    const selectedRatesList = rates.filter(rate => selectedRateIds.includes(rate.id))
     const total = selectedRatesList.reduce((sum, rate) => sum + rate.sector_rate, 0)
     return Math.round(total * 100) / 100
   }
@@ -764,7 +838,11 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <span className="text-xs">
-                            {row.sectorRates}
+                            {(() => {
+                              // Calculate current total based on local state
+                              const currentTotal = calculateSelectedTotal(row.id || '', row.totalRouteAndSum?.rates || [], row)
+                              return `${row.totalRouteAndSum?.route || 'Route'}, €${currentTotal.toFixed(2)}`
+                            })()}
                           </span>
                           <ChevronDown className="h-3 w-3 text-gray-500" />
                         </div>
@@ -778,11 +856,15 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                                   <div className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`rate-${row.id}-${rate.id}`}
-                                      checked={row.id ? (
-                                        selectedRates[row.id]?.includes(rate.id) || 
-                                        row.selectedSectorRateIds?.includes(rate.id) || 
-                                        false
-                                      ) : false}
+                                      checked={row.id ? (() => {
+                                        // Check local state first (most up-to-date)
+                                        const localSelected = selectedRates[row.id] || []
+                                        if (localSelected.length > 0) {
+                                          return localSelected.includes(rate.id)
+                                        }
+                                        // Fallback to database state
+                                        return row.selectedSectorRateIds?.includes(rate.id) || false
+                                      })() : false}
                                       onCheckedChange={(checked) => 
                                         row.id && handleRateSelection(row.id, rate.id, checked as boolean)
                                       }
