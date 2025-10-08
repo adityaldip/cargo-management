@@ -491,6 +491,12 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       )
 
 
+      // Calculate selected rates total from database
+      const selectedRateIds = flight.selected_sector_rate_ids || []
+      const selectedRatesList = availableSectorRates.filter(rate => selectedRateIds.includes(rate.id))
+      const selectedTotal = selectedRatesList.reduce((sum, rate) => sum + rate.sector_rate, 0)
+      const selectedTotalRounded = Math.round(selectedTotal * 100) / 100
+
       return {
         id: flight.id,
         origin: originCode,
@@ -499,7 +505,9 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         outbound: flight.is_converted ? "-" : (flight.outbound ? formatFlight(flight.outbound) : "-"),
         afterBT: afterBT,
         destination: flight.is_converted ? "-" : destinationCode,
-        sectorRates: `${totalRouteAndSum.route}, €${totalRouteAndSum.totalSum.toFixed(2)}`,
+        sectorRates: selectedRateIds.length > 0 
+          ? `${totalRouteAndSum.route}, €${selectedTotalRounded.toFixed(2)}`
+          : `${totalRouteAndSum.route}, €${totalRouteAndSum.totalSum.toFixed(2)}`,
         availableSectorRates: availableSectorRates,
         totalRouteAndSum: totalRouteAndSum,
         isConverted: flight.is_converted || false,

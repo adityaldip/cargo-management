@@ -233,7 +233,23 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     const allRates: any[] = []
     
     // Extract routes from each column
-    const beforeBTRoute = extractRouteFromConnection(`${formData.beforeBTFrom} → ${formData.beforeBTTo}`)
+    let beforeBTRoute = extractRouteFromConnection(`${formData.beforeBTFrom} → ${formData.beforeBTTo}`)
+    
+    // If beforeBTTo is empty, try to get destination from inbound or outbound
+    if (formData.beforeBTFrom && !formData.beforeBTTo) {
+      if (formData.inbound) {
+        const inboundOrigin = extractOriginFromInbound(formData.inbound)
+        if (inboundOrigin) {
+          beforeBTRoute = `${formData.beforeBTFrom} → ${inboundOrigin}`
+        }
+      } else if (formData.outbound) {
+        const outboundOrigin = extractOriginFromOutbound(formData.outbound)
+        if (outboundOrigin) {
+          beforeBTRoute = `${formData.beforeBTFrom} → ${outboundOrigin}`
+        }
+      }
+    }
+    
     const inboundRoute = extractRouteFromFlight(formData.inbound)
     const outboundRoute = extractRouteFromFlight(formData.outbound)
     
