@@ -326,7 +326,7 @@ export function Flights() {
         <CardContent>
           <div className="flex items-center justify-between pb-2">
             <CardTitle className="text-black flex items-center gap-2">
-              <Plane className="h-5 w-5" />
+              {/* <Plane className="h-5 w-5" /> */}
               Flight Management
             </CardTitle>
             <div className="flex gap-2">

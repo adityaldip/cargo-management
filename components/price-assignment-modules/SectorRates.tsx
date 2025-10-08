@@ -282,7 +282,7 @@ export function SectorRates() {
         <CardContent>
           <div className="flex items-center justify-between pb-2">
             <CardTitle className="text-black flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
+              {/* <DollarSign className="h-5 w-5" /> */}
               Sector Rate Management
             </CardTitle>
             <div className="flex gap-2">

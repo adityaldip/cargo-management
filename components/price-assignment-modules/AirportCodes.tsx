@@ -315,7 +315,7 @@ export function AirportCodes() {
         <CardContent>
           <div className="flex items-center justify-between pb-2">
             <CardTitle className="text-black flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
+              {/* <MapPin className="h-5 w-5" /> */}
               Airport Codes Management
             </CardTitle>
             <div className="flex gap-2">
