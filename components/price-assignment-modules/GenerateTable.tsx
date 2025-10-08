@@ -702,9 +702,49 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                     </span>
                   </TableCell>
                   <TableCell className="py-1 h-8">
-                    <span className="text-xs">
-                      {row.sectorRates}
-                    </span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <div 
+                          className="flex items-center justify-between w-full cursor-pointer hover:bg-gray-50 p-1 rounded"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-xs">
+                            {row.sectorRates}
+                          </span>
+                          <ChevronDown className="h-3 w-3 text-gray-500" />
+                        </div>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-38 p-2" align="center" side="bottom">
+                        <div className="space-y-2">
+                          {row.totalRouteAndSum?.rates && row.totalRouteAndSum.rates.length > 0 ? (
+                            <div className="space-y-1">
+                              {row.totalRouteAndSum.rates.map((rate: any, rateIndex: number) => (
+                                <div key={rateIndex} className="flex justify-between items-center py-1 px-2 bg-gray-50 rounded">
+                                  <span className="text-xs">
+                                    {rate.origin} → {rate.destination}
+                                  </span>
+                                  <span className="text-xs font-medium">
+                                    €{rate.sector_rate}
+                                  </span>
+                                </div>
+                              ))}
+                              <div className="border-t pt-1 mt-2 p-2">
+                                <div className="flex justify-between items-center font-semibold">
+                                  <span className="text-sm">Total:</span>
+                                  <span className="text-sm text-blue-600">
+                                    €{row.totalRouteAndSum.totalSum}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-500 italic">
+                              No sector rates found for this route
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </TableCell>
                 </TableRow>
                 ))}
