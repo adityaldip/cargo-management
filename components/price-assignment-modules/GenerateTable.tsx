@@ -109,7 +109,14 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   ]
 
   // Handle rate selection
-  const handleRateSelection = (rowId: string, rateId: string, checked: boolean) => {
+  const handleRateSelection = async (rowId: string, rateId: string, checked: boolean) => {
+    // Show loading toast
+    toast({
+      title: "Updating...",
+      description: checked ? "Adding rate selection..." : "Removing rate selection...",
+    })
+
+    // Update local state first for immediate UI feedback
     setSelectedRates(prev => {
       const currentSelected = prev[rowId] || []
       if (checked) {
@@ -124,12 +131,63 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         }
       }
     })
+
+    // Update database
+    try {
+      const currentSelected = selectedRates[rowId] || []
+      let newSelectedIds: string[]
+      
+      if (checked) {
+        // Add rate ID to array if not already present
+        newSelectedIds = [...currentSelected, rateId]
+      } else {
+        // Remove rate ID from array
+        newSelectedIds = currentSelected.filter(id => id !== rateId)
+      }
+
+      const { error } = await (supabase as any)
+        .from('flight_uploads')
+        .update({ selected_sector_rate_ids: newSelectedIds })
+        .eq('id', rowId)
+
+      if (error) {
+        console.error('Error updating selected rates:', error)
+        toast({
+          title: "Error",
+          description: "Failed to update rate selection in database.",
+          variant: "destructive"
+        })
+        // Revert local state on error
+        setSelectedRates(prev => ({
+          ...prev,
+          [rowId]: currentSelected
+        }))
+      } else {
+        // Show success toast
+        toast({
+          title: "Success",
+          description: checked ? "Rate selection added successfully!" : "Rate selection removed successfully!",
+        })
+      }
+    } catch (error) {
+      console.error('Error updating selected rates:', error)
+      toast({
+        title: "Error", 
+        description: "Failed to update rate selection in database.",
+        variant: "destructive"
+      })
+      // Revert local state on error
+      setSelectedRates(prev => ({
+        ...prev,
+        [rowId]: selectedRates[rowId] || []
+      }))
+    }
   }
 
   // Calculate total for selected rates
   const calculateSelectedTotal = (rowId: string, rates: any[], rowData?: any) => {
-    // Only use database state (selectedSectorRateIds from Supabase)
-    const selectedRateIds = rowData?.selectedSectorRateIds || []
+    // Use local state for immediate UI updates
+    const selectedRateIds = selectedRates[rowId] || []
     
     const selectedRatesList = rates.filter(rate => selectedRateIds.includes(rate.id))
     const total = selectedRatesList.reduce((sum, rate) => sum + rate.sector_rate, 0)
@@ -547,6 +605,20 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     }
   }, [flightData, flightsData, sectorRatesData])
 
+  // Initialize selectedRates with existing Supabase data
+  useEffect(() => {
+    if (flightData.length > 0) {
+      const initialSelectedRates: {[key: string]: string[]} = {}
+      
+      flightData.forEach(flight => {
+        if (flight.id && flight.selected_sector_rate_ids && flight.selected_sector_rate_ids.length > 0) {
+          initialSelectedRates[flight.id] = flight.selected_sector_rate_ids
+        }
+      })
+      
+      setSelectedRates(initialSelectedRates)
+    }
+  }, [flightData])
 
   const handleProcessAssignment = async () => {
     setIsProcessing(true)
@@ -783,7 +855,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                                     <Checkbox
                                       id={`rate-${row.id}-${rate.id}`}
                                       checked={row.id ? (
-                                        row.selectedSectorRateIds?.includes(rate.id) || false
+                                        selectedRates[row.id]?.includes(rate.id) || false
                                       ) : false}
                                       onCheckedChange={(checked) => 
                                         row.id && handleRateSelection(row.id, rate.id, checked as boolean)
