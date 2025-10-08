@@ -29,6 +29,7 @@ interface FlightUploadData {
   after_bt_from?: string
   after_bt_to?: string
   applied_rate?: string
+  selected_sector_rate_ids?: string[]
   sector_rate_id?: string
   sector_rate?: {
     id: string
@@ -57,6 +58,7 @@ interface GeneratedData {
     rates: any[]
   }
   isConverted?: boolean
+  selectedSectorRateIds?: string[]
   selectedSectorRate?: {
     id: string
     origin: string
@@ -71,6 +73,7 @@ interface GeneratedData {
     after_bt_from?: string
     after_bt_to?: string
     applied_rate?: string
+    selected_sector_rate_ids?: string[]
     sector_rate_id?: string
     inbound?: string
     outbound?: string
@@ -124,9 +127,11 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   }
 
   // Calculate total for selected rates
-  const calculateSelectedTotal = (rowId: string, rates: any[]) => {
+  const calculateSelectedTotal = (rowId: string, rates: any[], rowData?: any) => {
     const selectedRateIds = selectedRates[rowId] || []
-    const selectedRatesList = rates.filter(rate => selectedRateIds.includes(rate.id))
+    const dbSelectedRateIds = rowData?.selectedSectorRateIds || []
+    const allSelectedIds = [...new Set([...selectedRateIds, ...dbSelectedRateIds])]
+    const selectedRatesList = rates.filter(rate => allSelectedIds.includes(rate.id))
     const total = selectedRatesList.reduce((sum, rate) => sum + rate.sector_rate, 0)
     return Math.round(total * 100) / 100
   }
@@ -506,10 +511,12 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           after_bt_from: flight.after_bt_from,
           after_bt_to: flight.after_bt_to,
           applied_rate: flight.applied_rate,
+          selected_sector_rate_ids: flight.selected_sector_rate_ids,
           sector_rate_id: flight.sector_rate_id,
           inbound: flight.inbound,
           outbound: flight.outbound
         } : undefined,
+        selectedSectorRateIds: flight.selected_sector_rate_ids || [],
         selectedSectorRate: flight.sector_rate_id ? {
           id: flight.sector_rate_id,
           origin: flight.sector_rate?.origin || '',
@@ -763,7 +770,11 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                                   <div className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`rate-${row.id}-${rate.id}`}
-                                      checked={row.id ? selectedRates[row.id]?.includes(rate.id) || false : false}
+                                      checked={row.id ? (
+                                        selectedRates[row.id]?.includes(rate.id) || 
+                                        row.selectedSectorRateIds?.includes(rate.id) || 
+                                        false
+                                      ) : false}
                                       onCheckedChange={(checked) => 
                                         row.id && handleRateSelection(row.id, rate.id, checked as boolean)
                                       }
@@ -782,7 +793,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                                 <div className="flex justify-between items-center font-semibold">
                                   <span className="text-sm">Selected Total:</span>
                                   <span className="text-sm text-blue-600">
-                                    €{row.id ? calculateSelectedTotal(row.id, row.totalRouteAndSum.rates).toFixed(2) : '0.00'}
+                                    €{row.id ? calculateSelectedTotal(row.id, row.totalRouteAndSum.rates, row).toFixed(2) : '0.00'}
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center text-xs text-gray-500 mt-1">

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
 import { Check, ChevronDown } from "lucide-react"
@@ -39,6 +40,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     destination: "",
     sectorRates: ""
   })
+  const [selectedSectorRates, setSelectedSectorRates] = useState<string[]>([])
 
   const [airportCodes, setAirportCodes] = useState<any[]>([])
   const [flights, setFlights] = useState<any[]>([])
@@ -138,6 +140,137 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     return extractOriginFromOutbound(formData.outbound)
   }
 
+  // Extract route from connection string (e.g., "FRA -> DXB" -> "FRA → DXB")
+  const extractRouteFromConnection = (connectionString: string): string | null => {
+    if (!connectionString || connectionString === "-" || connectionString === "") return null
+    
+    // Check for both formats: "FRA -> DXB" and "FRA → DXB"
+    const matchArrow = connectionString.match(/([A-Z]{3}) → ([A-Z]{3})/)
+    const matchDash = connectionString.match(/([A-Z]{3}) -> ([A-Z]{3})/)
+    
+    if (matchArrow) {
+      return connectionString
+    } else if (matchDash) {
+      // Convert "->" to "→" for consistency
+      return `${matchDash[1]} → ${matchDash[2]}`
+    }
+    
+    return null
+  }
+
+  // Extract route from flight string (e.g., "BT344, DXB → LAX" -> "DXB → LAX")
+  const extractRouteFromFlight = (flightString: string): string | null => {
+    if (!flightString || flightString === "-" || flightString === "") return null
+    
+    // Try to match format with comma and arrow (e.g., "BT344, DXB → LAX")
+    const match = flightString.match(/, ([A-Z]{3}) → ([A-Z]{3})/)
+    if (match) {
+      return `${match[1]} → ${match[2]}`
+    }
+    
+    return null
+  }
+
+  // Find matching sector rates for a route
+  const findSectorRatesForRoute = (route: string) => {
+    if (!route) return []
+    
+    const routeMatch = route.match(/([A-Z]{3}) → ([A-Z]{3})/)
+    if (!routeMatch) return []
+    
+    const [, origin, destination] = routeMatch
+    
+    return sectorRates.filter(rate => 
+      rate.origin === origin && rate.destination === destination
+    )
+  }
+
+  // Handle sector rate selection/deselection
+  const handleSectorRateToggle = (rateValue: string) => {
+    setSelectedSectorRates(prev => {
+      if (prev.includes(rateValue)) {
+        // Remove if already selected
+        const newSelection = prev.filter(rate => rate !== rateValue)
+        setFormData(prevForm => ({
+          ...prevForm,
+          sectorRates: newSelection.join(", ")
+        }))
+        return newSelection
+      } else {
+        // Add if not selected
+        const newSelection = [...prev, rateValue]
+        setFormData(prevForm => ({
+          ...prevForm,
+          sectorRates: newSelection.join(", ")
+        }))
+        return newSelection
+      }
+    })
+  }
+
+  // Clear selected sector rates when available rates change
+  const clearInvalidSectorRates = () => {
+    const availableRates = getAvailableSectorRates()
+    const availableRateValues = availableRates.map((rate: any) => 
+      `${rate.origin} → ${rate.destination}, €${rate.sector_rate.toFixed(2)}`
+    )
+    
+    const validSelections = selectedSectorRates.filter(rate => 
+      availableRateValues.includes(rate)
+    )
+    
+    if (validSelections.length !== selectedSectorRates.length) {
+      setSelectedSectorRates(validSelections)
+      setFormData(prev => ({
+        ...prev,
+        sectorRates: validSelections.join(", ")
+      }))
+    }
+  }
+
+  // Get all available sector rates from routes in before BT, inbound, outbound, after BT
+  const getAvailableSectorRates = () => {
+    const allRates: any[] = []
+    
+    // Extract routes from each column
+    const beforeBTRoute = extractRouteFromConnection(`${formData.beforeBTFrom} → ${formData.beforeBTTo}`)
+    const inboundRoute = extractRouteFromFlight(formData.inbound)
+    const outboundRoute = extractRouteFromFlight(formData.outbound)
+    
+    // For after BT, use destination field if afterBTTo is empty
+    let afterBTRoute = extractRouteFromConnection(`${formData.afterBTFrom} → ${formData.afterBTTo}`)
+    if (formData.afterBTFrom && !formData.afterBTTo && formData.destination) {
+      afterBTRoute = `${formData.afterBTFrom} → ${formData.destination}`
+    }
+    
+    // Find sector rates for each route
+    if (beforeBTRoute) {
+      const rates = findSectorRatesForRoute(beforeBTRoute)
+      allRates.push(...rates)
+    }
+    if (inboundRoute) {
+      const rates = findSectorRatesForRoute(inboundRoute)
+      allRates.push(...rates)
+    }
+    if (outboundRoute) {
+      const rates = findSectorRatesForRoute(outboundRoute)
+      allRates.push(...rates)
+    }
+    if (afterBTRoute) {
+      const rates = findSectorRatesForRoute(afterBTRoute)
+      allRates.push(...rates)
+    }
+    
+    // Remove duplicates and sort by rate (highest first)
+    const uniqueRates = allRates.filter((rate, index, self) => 
+      index === self.findIndex(r => r.id === rate.id)
+    )
+    
+    const sortedRates = uniqueRates.sort((a, b) => b.sector_rate - a.sector_rate)
+    
+    return sortedRates
+  }
+
   // Filter outbound flights based on inbound destination
   const getFilteredOutboundFlights = () => {
     const inboundDestination = getInboundDestination()
@@ -207,8 +340,9 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         }))
       }
     } else {
-      // Clear validation errors when modal is closed
+      // Clear validation errors and selected rates when modal is closed
       setValidationErrors([])
+      setSelectedSectorRates([])
     }
   }, [isOpen, recordId, originalFlightData])
 
@@ -275,6 +409,50 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
       }))
     }
   }, [formData.destination, formData.outbound])
+
+  // Clear invalid sector rates when available rates change and re-insert valid ones
+  useEffect(() => {
+    if (selectedSectorRates.length > 0) {
+      // Get current available rates
+      const availableRates = getAvailableSectorRates()
+      const availableRateValues = availableRates.map((rate: any) => 
+        `${rate.origin} → ${rate.destination}, €${rate.sector_rate.toFixed(2)}`
+      )
+      
+      // Filter to keep only valid selections
+      const validSelections = selectedSectorRates.filter(rate => 
+        availableRateValues.includes(rate)
+      )
+      
+      // Update if there are changes
+      if (validSelections.length !== selectedSectorRates.length) {
+        setSelectedSectorRates(validSelections)
+        setFormData(prev => ({
+          ...prev,
+          sectorRates: validSelections.join(", ")
+        }))
+      }
+    }
+  }, [formData.beforeBTFrom, formData.beforeBTTo, formData.inbound, formData.outbound, formData.afterBTFrom, formData.afterBTTo])
+
+  // Handle loading existing sector rates when sector rates data is available
+  useEffect(() => {
+    if (sectorRates.length > 0 && selectedSectorRates.length > 0) {
+      console.log('Sector rates loaded, checking existing selections:', selectedSectorRates)
+      // The selected rates should already be set from loadExistingConvertedData
+      // This effect ensures they're properly displayed when sector rates are loaded
+    }
+  }, [sectorRates, selectedSectorRates])
+
+  // Load selected sector rates when modal opens and data is available
+  useEffect(() => {
+    if (isOpen && sectorRates.length > 0 && recordId && originalFlightData?.converted_origin) {
+      // Re-load existing data when sector rates are available
+      console.log('Re-loading existing data with sector rates available')
+      loadExistingConvertedData()
+    }
+  }, [isOpen, sectorRates.length, recordId, originalFlightData?.converted_origin])
+
 
 
   // Close dropdowns when clicking outside
@@ -354,7 +532,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     try {
       const { data, error } = await supabase
         .from('flight_uploads')
-        .select('converted_origin, converted_destination, before_bt_from, before_bt_to, after_bt_from, after_bt_to, applied_rate, inbound, outbound')
+        .select('converted_origin, converted_destination, before_bt_from, before_bt_to, after_bt_from, after_bt_to, applied_rate, selected_sector_rate_ids, inbound, outbound')
         .eq('id', recordId)
         .single()
 
@@ -369,6 +547,30 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         const inboundDisplay = convertedData.inbound ? findMatchingFlightOption(convertedData.inbound) : ""
         const outboundDisplay = convertedData.outbound ? findMatchingFlightOption(convertedData.outbound) : ""
         
+        const sectorRatesValue = convertedData.applied_rate || ""
+        const selectedRateIds = convertedData.selected_sector_rate_ids || []
+        
+        console.log('Loading existing data:', {
+          applied_rate: sectorRatesValue,
+          selected_sector_rate_ids: selectedRateIds
+        })
+        
+        // Convert selected rate IDs to rate text format
+        const selectedRateTexts: string[] = []
+        if (selectedRateIds.length > 0 && sectorRates.length > 0) {
+          selectedRateIds.forEach((rateId: string) => {
+            const matchingRate = sectorRates.find(rate => rate.id === rateId)
+            if (matchingRate) {
+              const rateText = `${matchingRate.origin} → ${matchingRate.destination}, €${matchingRate.sector_rate.toFixed(2)}`
+              selectedRateTexts.push(rateText)
+            }
+          })
+        }
+        
+        // Fallback to applied_rate text if no IDs found
+        const sectorRatesArray = selectedRateTexts.length > 0 ? selectedRateTexts : 
+          (sectorRatesValue ? sectorRatesValue.split(", ").filter((rate: string) => rate.trim() !== "") : [])
+        
         setFormData(prev => ({
           ...prev,
           origin: convertedData.converted_origin || prev.origin,
@@ -379,8 +581,12 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
           outbound: outboundDisplay,
           afterBTFrom: convertedData.after_bt_from || "",
           afterBTTo: convertedData.after_bt_to || "",
-          sectorRates: convertedData.applied_rate || ""
+          sectorRates: selectedRateTexts.length > 0 ? selectedRateTexts.join(", ") : sectorRatesValue
         }))
+        
+        // Load selected sector rates from the database IDs or fallback to text
+        console.log('Loading existing sector rates:', sectorRatesArray)
+        setSelectedSectorRates(sectorRatesArray)
       }
     } catch (error) {
       console.error('Error loading existing converted data:', error)
@@ -434,6 +640,25 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     
     setIsSaving(true)
     try {
+      // Get selected sector rate IDs from the selected rates
+      const selectedRateIds = selectedSectorRates.map(rateText => {
+        // Extract rate ID from the rate text by finding matching sector rate
+        const availableRates = getAvailableSectorRates()
+        console.log('Available rates for ID mapping:', availableRates)
+        console.log('Looking for rate text:', rateText)
+        
+        const matchingRate = availableRates.find(rate => {
+          const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate.toFixed(2)}`
+          console.log('Comparing:', rateValue, 'with', rateText)
+          return rateValue === rateText
+        })
+        
+        console.log('Found matching rate:', matchingRate)
+        return matchingRate?.id
+      }).filter(id => id !== undefined)
+      
+      console.log('Selected rate IDs to save:', selectedRateIds)
+
       // Update the record in the database
       const updateData = {
         converted_origin: formData.origin,
@@ -445,8 +670,11 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         after_bt_from: formData.afterBTFrom || null,
         after_bt_to: formData.afterBTTo || null,
         applied_rate: formData.sectorRates || null,
+        selected_sector_rate_ids: selectedRateIds.length > 0 ? selectedRateIds : null,
         is_converted: true
       }
+      
+      console.log('Update data being sent to database:', updateData)
       
       const { error } = await (supabase as any)
         .from('flight_uploads')
@@ -458,7 +686,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         throw error
       }
       
-      console.log('Data saved successfully')
+      console.log('Data saved successfully with selected sector rate IDs:', selectedRateIds)
       
       // Notify parent component that data was saved
       if (onDataSaved) {
@@ -1197,7 +1425,10 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                 sectorRates: !openSelects.sectorRates
               })}
             >
-              {formData.sectorRates || "Select sector rates"}
+              {selectedSectorRates.length > 0 
+                ? `${selectedSectorRates.length} rate${selectedSectorRates.length > 1 ? 's' : ''} selected`
+                : "Select sector rates"
+              }
               <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
             {openSelects.sectorRates && (
@@ -1211,39 +1442,42 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                     onClick={(e) => e.stopPropagation()}
                   />
                   <div className="max-h-48 overflow-y-auto">
-                    {sectorRates
+                    {getAvailableSectorRates()
                       .filter(rate => {
-                        const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`
+                        const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate.toFixed(2)}`
                         return rateValue.toLowerCase().includes(searchTerms.sectorRates.toLowerCase())
                       })
                       .map((rate) => {
-                        const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`
+                        const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate.toFixed(2)}`
+                        const isSelected = selectedSectorRates.includes(rateValue)
                         return (
                           <div
                             key={rate.id}
                             className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation()
-                              setFormData(prev => ({ ...prev, sectorRates: rateValue }))
-                              setOpenSelects(prev => ({ ...prev, sectorRates: false }))
-                              setSearchTerms(prev => ({ ...prev, sectorRates: "" }))
+                              handleSectorRateToggle(rateValue)
                             }}
                           >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                formData.sectorRates === rateValue ? "opacity-100" : "opacity-0"
-                              )}
+                            <Checkbox
+                              checked={isSelected}
+                              onChange={() => handleSectorRateToggle(rateValue)}
+                              className="mr-2"
                             />
-                            {rateValue}
+                            <span className="text-sm">{rateValue}</span>
                           </div>
                         )
                       })}
-                    {sectorRates.filter(rate => {
-                      const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate}`
+                    {getAvailableSectorRates().filter(rate => {
+                      const rateValue = `${rate.origin} → ${rate.destination}, €${rate.sector_rate.toFixed(2)}`
                       return rateValue.toLowerCase().includes(searchTerms.sectorRates.toLowerCase())
                     }).length === 0 && (
-                      <div className="px-2 py-1.5 text-sm text-gray-500">No sector rates found.</div>
+                      <div className="px-2 py-1.5 text-sm text-gray-500">
+                        {getAvailableSectorRates().length === 0 
+                          ? "No sector rates found for selected routes" 
+                          : "No sector rates found matching search"
+                        }
+                      </div>
                     )}
                   </div>
                 </div>
