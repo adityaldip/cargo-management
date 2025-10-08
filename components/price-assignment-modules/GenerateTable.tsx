@@ -238,12 +238,18 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       index === self.findIndex(r => r.id === rate.id)
     )
     
-    const totalSum = uniqueRates.reduce((sum, rate) => sum + rate.sector_rate, 0)
+    // Round each rate to 2 decimal places to avoid floating point precision issues
+    const roundedRates = uniqueRates.map(rate => ({
+      ...rate,
+      sector_rate: Math.round(rate.sector_rate * 100) / 100
+    }))
+    
+    const totalSum = roundedRates.reduce((sum, rate) => sum + rate.sector_rate, 0)
     
     return {
       route: `${origin} → ${destination}`,
-      totalSum: totalSum,
-      rates: uniqueRates
+      totalSum: Math.round(totalSum * 100) / 100,
+      rates: roundedRates
     }
   }
 
@@ -286,7 +292,13 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
       index === self.findIndex(r => r.id === rate.id)
     )
     
-    const sortedRates = uniqueRates.sort((a, b) => b.sector_rate - a.sector_rate)
+    // Round each rate to 2 decimal places to avoid floating point precision issues
+    const roundedRates = uniqueRates.map(rate => ({
+      ...rate,
+      sector_rate: Math.round(rate.sector_rate * 100) / 100
+    }))
+    
+    const sortedRates = roundedRates.sort((a, b) => b.sector_rate - a.sector_rate)
     console.log('Final filtered rates:', sortedRates)
     
     return sortedRates
@@ -454,7 +466,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         outbound: flight.is_converted ? "-" : (flight.outbound ? formatFlight(flight.outbound) : "-"),
         afterBT: afterBT,
         destination: flight.is_converted ? "-" : destinationCode,
-        sectorRates: `${totalRouteAndSum.route}, €${totalRouteAndSum.totalSum}`,
+        sectorRates: `${totalRouteAndSum.route}, €${totalRouteAndSum.totalSum.toFixed(2)}`,
         availableSectorRates: availableSectorRates,
         totalRouteAndSum: totalRouteAndSum,
         isConverted: flight.is_converted || false,
@@ -724,7 +736,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                                     {rate.origin} → {rate.destination}
                                   </span>
                                   <span className="text-xs font-medium">
-                                    €{rate.sector_rate}
+                                    €{rate.sector_rate.toFixed(2)}
                                   </span>
                                 </div>
                               ))}
@@ -732,7 +744,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                                 <div className="flex justify-between items-center font-semibold">
                                   <span className="text-sm">Total:</span>
                                   <span className="text-sm text-blue-600">
-                                    €{row.totalRouteAndSum.totalSum}
+                                    €{row.totalRouteAndSum.totalSum.toFixed(2)}
                                   </span>
                                 </div>
                               </div>
