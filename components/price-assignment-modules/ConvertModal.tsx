@@ -257,6 +257,9 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     let afterBTRoute = extractRouteFromConnection(`${formData.afterBTFrom} → ${formData.afterBTTo}`)
     if (formData.afterBTFrom && !formData.afterBTTo && formData.destination) {
       afterBTRoute = `${formData.afterBTFrom} → ${formData.destination}`
+    } else if (formData.afterBTFrom && formData.afterBTTo) {
+      // If both are filled, use the connection format
+      afterBTRoute = `${formData.afterBTFrom} → ${formData.afterBTTo}`
     }
     
     // Find sector rates for each route
@@ -449,7 +452,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         }))
       }
     }
-  }, [formData.beforeBTFrom, formData.beforeBTTo, formData.inbound, formData.outbound, formData.afterBTFrom, formData.afterBTTo])
+  }, [formData.beforeBTFrom, formData.beforeBTTo, formData.inbound, formData.outbound, formData.afterBTFrom, formData.afterBTTo, formData.destination])
 
   // Handle loading existing sector rates when sector rates data is available
   useEffect(() => {
@@ -1386,19 +1389,23 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                         <div
                           key={airport.id}
                           className="flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setFormData(prev => {
-                              const newData = { ...prev, destination: airport.code }
-                              // If destination becomes same as origin, clear origin
-                              if (airport.code === prev.origin) {
-                                newData.origin = ""
-                              }
-                              return newData
-                            })
-                            setOpenSelects(prev => ({ ...prev, destination: false }))
-                            setSearchTerms(prev => ({ ...prev, destination: "" }))
-                          }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setFormData(prev => {
+                                const newData = { ...prev, destination: airport.code }
+                                // If destination becomes same as origin, clear origin
+                                if (airport.code === prev.origin) {
+                                  newData.origin = ""
+                                }
+                                // Auto-update After BT To to new destination
+                                if (prev.afterBTFrom) {
+                                  newData.afterBTTo = airport.code
+                                }
+                                return newData
+                              })
+                              setOpenSelects(prev => ({ ...prev, destination: false }))
+                              setSearchTerms(prev => ({ ...prev, destination: "" }))
+                            }}
                         >
                           <Check
                             className={cn(

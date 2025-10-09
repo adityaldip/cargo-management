@@ -510,20 +510,14 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         }
       }
       
-      // Build afterBT - show outbound destination → destination when outbound flight exists
+      // Build afterBT - show outbound destination → final destination when outbound flight exists
       let afterBT = "-"
       
       if (flight.outbound) {
         const outboundRoute = getFlightRoute(flight.outbound)
         if (outboundRoute) {
-          // Only show connection if destination is different from outbound destination
-          if (destinationCode !== outboundRoute.destination) {
-            afterBT = `${outboundRoute.destination} → ${destinationCode}`
-          } else {
-            // Same destination, no connection needed
-            afterBT = "-"
-            console.log(`Same destination detected: ${destinationCode} === ${outboundRoute.destination}, setting afterBT to "-"`)
-          }
+          // Always show connection from outbound destination to final destination
+          afterBT = `${outboundRoute.destination} → ${flight.converted_destination ?? destinationCode}`
         } else {
           // Flight not found in flights table
           afterBT = "-"
@@ -537,7 +531,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         flight.outbound ? formatFlight(flight.outbound) : "-", 
         afterBT,
         originCode,
-        destinationCode
+        flight.converted_destination ?? destinationCode
       )
 
       // Get available sector rates for all routes from the 4 columns
@@ -816,9 +810,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                   </TableCell>
                   <TableCell className="py-1 h-8">
                     <span className="text-xs">
-                      {row.isConverted && row.convertedData?.after_bt_from && row.convertedData?.after_bt_to
-                        ? `${row.convertedData.after_bt_from} → ${row.convertedData.after_bt_to}`
-                        : row.afterBT}
+                      { row.afterBT}
                     </span>
                   </TableCell>
                   <TableCell className="py-1 h-8">
