@@ -100,6 +100,8 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
   const [selectedOrigin, setSelectedOrigin] = useState("")
   const [selectedFlightData, setSelectedFlightData] = useState<any>(null)
   const [selectedRates, setSelectedRates] = useState<{[key: string]: string[]}>({})
+  const [customerUpdateTimeouts, setCustomerUpdateTimeouts] = useState<{[key: string]: NodeJS.Timeout}>({})
+  const [localCustomerValues, setLocalCustomerValues] = useState<{[key: string]: string}>({})
   const { toast } = useToast()
 
   const processingSteps = [
@@ -111,39 +113,66 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     "Completing assignment..."
   ]
 
-  // Handle customer update
-  const handleCustomerUpdate = async (rowId: string, customerValue: string) => {
-    try {
-      const { error } = await (supabase as any)
-        .from('flight_uploads')
-        .update({ customer: customerValue })
-        .eq('id', rowId)
+  // Handle customer input change (immediate local update)
+  const handleCustomerInputChange = (rowId: string, customerValue: string) => {
+    // Update local state immediately for responsive UI
+    setLocalCustomerValues(prev => ({
+      ...prev,
+      [rowId]: customerValue
+    }))
+    
+    // Update generated data for display
+    setGeneratedData(prev => prev.map(item => 
+      item.id === rowId ? { ...item, customer: customerValue } : item
+    ))
+    
+    // Trigger debounced database update
+    handleCustomerUpdate(rowId, customerValue)
+  }
 
-      if (error) {
+  // Handle customer update with debouncing (1 second delay)
+  const handleCustomerUpdate = async (rowId: string, customerValue: string) => {
+    // Clear existing timeout for this row
+    if (customerUpdateTimeouts[rowId]) {
+      clearTimeout(customerUpdateTimeouts[rowId])
+    }
+    
+    // Set new timeout for 1 second
+    const timeout = setTimeout(async () => {
+      try {
+        const { error } = await (supabase as any)
+          .from('flight_uploads')
+          .update({ customer: customerValue })
+          .eq('id', rowId)
+
+        if (error) {
+          console.error('Error updating customer:', error)
+          toast({
+            title: "Error",
+            description: "Failed to update customer information.",
+            variant: "destructive"
+          })
+        } else {
+          toast({
+            title: "Success",
+            description: "Customer information updated successfully!",
+          })
+        }
+      } catch (error) {
         console.error('Error updating customer:', error)
         toast({
-          title: "Error",
+          title: "Error", 
           description: "Failed to update customer information.",
           variant: "destructive"
         })
-      } else {
-        // Update local state
-        setGeneratedData(prev => prev.map(item => 
-          item.id === rowId ? { ...item, customer: customerValue } : item
-        ))
-        toast({
-          title: "Success",
-          description: "Customer information updated successfully!",
-        })
       }
-    } catch (error) {
-      console.error('Error updating customer:', error)
-      toast({
-        title: "Error", 
-        description: "Failed to update customer information.",
-        variant: "destructive"
-      })
-    }
+    }, 1000)
+    
+    // Store the timeout
+    setCustomerUpdateTimeouts(prev => ({
+      ...prev,
+      [rowId]: timeout
+    }))
   }
 
   // Handle rate selection
@@ -640,20 +669,34 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     }
   }, [flightData, flightsData, sectorRatesData])
 
-  // Initialize selectedRates with existing Supabase data
+  // Initialize selectedRates and local customer values with existing Supabase data
   useEffect(() => {
     if (flightData.length > 0) {
       const initialSelectedRates: {[key: string]: string[]} = {}
+      const initialCustomerValues: {[key: string]: string} = {}
       
       flightData.forEach(flight => {
         if (flight.id && flight.selected_sector_rate_ids && flight.selected_sector_rate_ids.length > 0) {
           initialSelectedRates[flight.id] = flight.selected_sector_rate_ids
         }
+        if (flight.id && flight.customer) {
+          initialCustomerValues[flight.id] = flight.customer
+        }
       })
       
       setSelectedRates(initialSelectedRates)
+      setLocalCustomerValues(initialCustomerValues)
     }
   }, [flightData])
+
+  // Cleanup timeouts when component unmounts
+  useEffect(() => {
+    return () => {
+      Object.values(customerUpdateTimeouts).forEach(timeout => {
+        clearTimeout(timeout)
+      })
+    }
+  }, [customerUpdateTimeouts])
 
   const handleProcessAssignment = async () => {
     setIsProcessing(true)
@@ -929,11 +972,11 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                   </TableCell>
                   <TableCell className="py-1 h-8">
                     <Input
-                      value={row.customer || ''}
+                      value={localCustomerValues[row.id || ''] !== undefined ? localCustomerValues[row.id || ''] : (row.customer || '')}
                       onChange={(e) => {
                         e.stopPropagation()
                         if (row.id) {
-                          handleCustomerUpdate(row.id, e.target.value)
+                          handleCustomerInputChange(row.id, e.target.value)
                         }
                       }}
                       onClick={(e) => e.stopPropagation()}
