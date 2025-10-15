@@ -52,7 +52,10 @@ export function SectorRates() {
     destination: "",
     originAirportId: "",
     destinationAirportId: "",
-    sectorRate: ""
+    sectorRate: "",
+    customer: "",
+    originOE: "",
+    destinationOE: ""
   })
 
   const handleToggleSectorRate = async (sectorRateId: string) => {
@@ -101,6 +104,7 @@ export function SectorRates() {
     setShowDeleteAlert(true)
   }
 
+
   const confirmDeleteSectorRate = async () => {
     if (!sectorRateToDelete) return
 
@@ -146,7 +150,10 @@ export function SectorRates() {
           destination: sectorRateData.destination,
           origin_airport_id: sectorRateData.originAirportId,
           destination_airport_id: sectorRateData.destinationAirportId,
-          sector_rate: sectorRateData.sectorRate
+          sector_rate: sectorRateData.sectorRate,
+          customer: sectorRateData.customer,
+          origin_oe: sectorRateData.originOE,
+          destination_oe: sectorRateData.destinationOE
         })
         
         if (result?.success) {
@@ -170,7 +177,10 @@ export function SectorRates() {
           destination: sectorRateData.destination,
           origin_airport_id: sectorRateData.originAirportId,
           destination_airport_id: sectorRateData.destinationAirportId,
-          sector_rate: sectorRateData.sectorRate
+          sector_rate: sectorRateData.sectorRate,
+          customer: sectorRateData.customer,
+          origin_oe: sectorRateData.originOE,
+          destination_oe: sectorRateData.destinationOE
         })
         
         if (result?.success) {
@@ -203,7 +213,10 @@ export function SectorRates() {
       destination: "",
       originAirportId: "",
       destinationAirportId: "",
-      sectorRate: ""
+      sectorRate: "",
+      customer: "",
+      originOE: "",
+      destinationOE: ""
     })
     setIsSectorRateEditorOpen(true)
   }
@@ -214,7 +227,10 @@ export function SectorRates() {
       destination: "",
       originAirportId: "",
       destinationAirportId: "",
-      sectorRate: ""
+      sectorRate: "",
+      customer: "",
+      originOE: "",
+      destinationOE: ""
     })
     setSelectedSectorRate(null)
     setIsSectorRateEditorOpen(false)
@@ -278,7 +294,7 @@ export function SectorRates() {
       )}
 
       {/* Sector Rate Management */}
-      <Card className="bg-white border-gray-200 shadow-sm">
+      <Card className="bg-white border-gray-200 shadow-sm w-full max-w-7xl">
         <CardContent>
           <div className="flex items-center justify-between pb-2">
             <CardTitle className="text-black flex items-center gap-2">
@@ -326,21 +342,21 @@ export function SectorRates() {
           </div>
 
           {/* Sector Rates Table */}
-          <SectorRateTable
-            sectorRates={sectorRates}
-            flights={flights}
-            loading={loading}
-            sectorRateSearchTerm={sectorRateSearchTerm}
-            setSectorRateSearchTerm={setSectorRateSearchTerm}
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
-            togglingStatus={togglingStatus}
-            onToggleSectorRate={handleToggleSectorRate}
-            onEditSectorRate={handleEditSectorRate}
-            onDeleteSectorRate={handleDeleteSectorRate}
-            onRefresh={handleRefresh}
-            isRefreshing={isRefreshing}
-          />
+            <SectorRateTable
+              sectorRates={sectorRates}
+              flights={flights}
+              loading={loading}
+              sectorRateSearchTerm={sectorRateSearchTerm}
+              setSectorRateSearchTerm={setSectorRateSearchTerm}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              togglingStatus={togglingStatus}
+              onToggleSectorRate={handleToggleSectorRate}
+              onEditSectorRate={handleEditSectorRate}
+              onDeleteSectorRate={handleDeleteSectorRate}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+            />
         </CardContent>
       </Card>
 

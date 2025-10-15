@@ -11,6 +11,55 @@ import { ArrowUp, ArrowDown, Edit, Trash2, Loader2, ChevronLeft, ChevronRight } 
 import { cn } from "@/lib/utils"
 import { SectorRate, Flight } from "./types"
 
+interface AlternativeRoutesCellProps {
+  origin: string
+  destination: string
+  alternatives: Array<{
+    route: string
+    rate: number
+    isDirect: boolean
+  }>
+}
+
+function AlternativeRoutesCell({ 
+  origin, 
+  destination, 
+  alternatives
+}: AlternativeRoutesCellProps) {
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount)
+  }
+
+  if (alternatives.length === 0) {
+    return (
+      <div className="text-xs text-gray-500">
+        No alternatives
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-1 max-w-xs">
+      {alternatives.map((alternative, index) => (
+        <div key={index} className="text-xs">
+          <span className={cn(
+            "font-mono",
+            alternative.isDirect ? "text-blue-600 font-semibold" : "text-gray-600"
+          )}>
+            {alternative.route}
+          </span>
+          <span className="ml-1 text-green-600 font-medium">
+            ({formatCurrency(alternative.rate)})
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 interface SectorRateTableProps {
   sectorRates: SectorRate[]
   flights: Flight[]
@@ -67,6 +116,73 @@ export function SectorRateTable({
       return routeFlights[0].flightNumber
     }
     return routeFlights.map(flight => flight.flightNumber).join(', ')
+  }
+
+  // Find alternative routes for a given origin and destination
+  const getAlternativeRoutes = (origin: string, destination: string): Array<{
+    route: string
+    rate: number
+    isDirect: boolean
+  }> => {
+    const alternatives: Array<{
+      route: string
+      rate: number
+      isDirect: boolean
+    }> = []
+
+    // First, check if there's a direct route with a sector rate
+    const directSectorRate = sectorRates.find(sr => 
+      sr.origin === origin && 
+      sr.destination === destination && 
+      sr.is_active
+    )
+    
+    if (directSectorRate) {
+      alternatives.push({
+        route: `${origin} → ${destination}`,
+        rate: directSectorRate.sector_rate,
+        isDirect: true
+      })
+    }
+
+    // Find all sector rates that start from the origin (like FRA -> RIX, FRA -> IST)
+    const originRates = sectorRates.filter(sr => 
+      sr.origin === origin && sr.is_active
+    )
+
+    // Find all sector rates that end at the destination (like RMO -> DXB, IST -> DXB)
+    const destinationRates = sectorRates.filter(sr => 
+      sr.destination === destination && sr.is_active
+    )
+
+    // Add all origin rates (excluding the direct route if it exists)
+    originRates.forEach(rate => {
+      if (!(rate.origin === origin && rate.destination === destination)) {
+        alternatives.push({
+          route: `${rate.origin} → ${rate.destination}`,
+          rate: rate.sector_rate,
+          isDirect: false
+        })
+      }
+    })
+
+    // Add all destination rates (excluding the direct route if it exists)
+    destinationRates.forEach(rate => {
+      if (!(rate.origin === origin && rate.destination === destination)) {
+        alternatives.push({
+          route: `${rate.origin} → ${rate.destination}`,
+          rate: rate.sector_rate,
+          isDirect: false
+        })
+      }
+    })
+
+    // Remove duplicates based on route string
+    const uniqueAlternatives = alternatives.filter((alternative, index, self) => 
+      index === self.findIndex(a => a.route === alternative.route)
+    )
+
+    return uniqueAlternatives.sort((a, b) => a.rate - b.rate) // Sort by rate ascending
   }
 
   const formatCurrency = (amount: number) => {
@@ -206,6 +322,7 @@ export function SectorRateTable({
         <Table>
           <TableHeader>
             <TableRow className="h-8">
+              <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
               <TableHead className="h-8 py-1 text-xs">Status</TableHead>
               <TableHead className="h-8 py-1 text-xs">
                 <Button
@@ -275,12 +392,34 @@ export function SectorRateTable({
                   )}
                 </Button>
               </TableHead>
-              <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
+              <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
+              <TableHead className="h-8 py-1 text-xs">OE Route</TableHead>
+              <TableHead className="h-8 py-1 text-xs">Alternative Routes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginationData.currentPageData.map((sectorRate) => (
               <TableRow key={sectorRate.id} className="">
+                <TableCell className="py-1 px-2">
+                  <div className="flex gap-0">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => onEditSectorRate(sectorRate)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => onDeleteSectorRate(sectorRate)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </TableCell>
                 <TableCell className="py-1 px-1">
                   <div className="flex items-center gap-1">
                     <div className="relative">
@@ -324,24 +463,31 @@ export function SectorRateTable({
                   </Badge>
                 </TableCell>
                 <TableCell className="py-1 px-2">
-                  <div className="flex gap-0">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => onEditSectorRate(sectorRate)}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => onDeleteSectorRate(sectorRate)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                  <div className="text-xs">
+                    {sectorRate.customer ? (
+                      <span className="text-blue-600 font-medium">{sectorRate.customer}</span>
+                    ) : (
+                      <span className="text-gray-400">No customer</span>
+                    )}
                   </div>
+                </TableCell>
+                <TableCell className="py-1 px-2">
+                  <div className="text-xs">
+                    {sectorRate.origin_oe && sectorRate.destination_oe ? (
+                      <span className="font-mono text-green-600">
+                        {sectorRate.origin_oe} → {sectorRate.destination_oe}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">No OE route</span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="py-1 px-2">
+                  <AlternativeRoutesCell 
+                    origin={sectorRate.origin}
+                    destination={sectorRate.destination}
+                    alternatives={getAlternativeRoutes(sectorRate.origin, sectorRate.destination)}
+                  />
                 </TableCell>
               </TableRow>
             ))}

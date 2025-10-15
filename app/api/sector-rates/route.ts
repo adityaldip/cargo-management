@@ -18,6 +18,9 @@ export async function GET() {
       destination_airport_id: sectorRate.destination_airport_id,
       sector_rate: sectorRate.sector_rate,
       flight_num_preview: sectorRate.flight_num_preview,
+      customer: sectorRate.customer,
+      origin_oe: sectorRate.origin_oe,
+      destination_oe: sectorRate.destination_oe,
       is_active: sectorRate.is_active,
       created_at: sectorRate.created_at,
       updated_at: sectorRate.updated_at
@@ -43,6 +46,9 @@ export async function POST(request: NextRequest) {
       destination_airport_id: body.destination_airport_id,
       sector_rate: body.sector_rate,
       flight_num_preview: body.flight_num_preview,
+      customer: body.customer,
+      origin_oe: body.origin_oe,
+      destination_oe: body.destination_oe,
       is_active: body.is_active !== undefined ? body.is_active : true
     })
     
@@ -59,6 +65,9 @@ export async function POST(request: NextRequest) {
       destination_airport_id: (sectorRate as any).destination_airport_id,
       sector_rate: (sectorRate as any).sector_rate,
       flight_num_preview: (sectorRate as any).flight_num_preview,
+      customer: (sectorRate as any).customer,
+      origin_oe: (sectorRate as any).origin_oe,
+      destination_oe: (sectorRate as any).destination_oe,
       is_active: (sectorRate as any).is_active,
       created_at: (sectorRate as any).created_at,
       updated_at: (sectorRate as any).updated_at

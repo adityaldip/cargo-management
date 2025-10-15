@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -37,6 +38,7 @@ interface FlightUploadData {
     destination: string
     sector_rate: number
   }
+  customer?: string
   is_converted?: boolean
   created_at?: string
   updated_at?: string
@@ -51,6 +53,7 @@ interface GeneratedData {
   afterBT: string
   destination: string
   sectorRates: string
+  customer?: string
   availableSectorRates: any[]
   totalRouteAndSum?: {
     route: string
@@ -107,6 +110,41 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
     "Generating final prices...",
     "Completing assignment..."
   ]
+
+  // Handle customer update
+  const handleCustomerUpdate = async (rowId: string, customerValue: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('flight_uploads')
+        .update({ customer: customerValue })
+        .eq('id', rowId)
+
+      if (error) {
+        console.error('Error updating customer:', error)
+        toast({
+          title: "Error",
+          description: "Failed to update customer information.",
+          variant: "destructive"
+        })
+      } else {
+        // Update local state
+        setGeneratedData(prev => prev.map(item => 
+          item.id === rowId ? { ...item, customer: customerValue } : item
+        ))
+        toast({
+          title: "Success",
+          description: "Customer information updated successfully!",
+        })
+      }
+    } catch (error) {
+      console.error('Error updating customer:', error)
+      toast({
+        title: "Error", 
+        description: "Failed to update customer information.",
+        variant: "destructive"
+      })
+    }
+  }
 
   // Handle rate selection
   const handleRateSelection = async (rowId: string, rateId: string, checked: boolean) => {
@@ -486,7 +524,6 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           } else {
             // Same origin, no connection needed
             beforeBT = "-"
-            console.log(`Same origin detected: ${originCode} === ${inboundRoute.origin}, setting beforeBT to "-"`)
           }
         } else {
           // Flight not found in flights table
@@ -502,7 +539,6 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
           } else {
             // Same origin, no connection needed
             beforeBT = "-"
-            console.log(`Same origin detected: ${originCode} === ${outboundRoute.origin}, setting beforeBT to "-"`)
           }
         } else {
           // Flight not found in flights table
@@ -517,7 +553,11 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         const outboundRoute = getFlightRoute(flight.outbound)
         if (outboundRoute) {
           // Always show connection from outbound destination to final destination
-          afterBT = `${outboundRoute.destination} → ${flight.converted_destination ?? destinationCode}`
+          if (outboundRoute.destination !== (flight.converted_destination ?? destinationCode)) {
+            afterBT = `${outboundRoute.destination} → ${flight.converted_destination ?? destinationCode}`
+          } else {
+            afterBT = "-"
+          }
         } else {
           // Flight not found in flights table
           afterBT = "-"
@@ -560,6 +600,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
         sectorRates: selectedRateIds.length > 0 
           ? `${totalRouteAndSum.route}, €${selectedTotalRounded.toFixed(2)}`
           : `${totalRouteAndSum.route}, €${totalRouteAndSum.totalSum.toFixed(2)}`,
+        customer: flight.customer || '',
         availableSectorRates: availableSectorRates,
         totalRouteAndSum: totalRouteAndSum,
         isConverted: flight.is_converted || false,
@@ -707,6 +748,7 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                   <TableHead className="text-xs py-1 min-w-[80px]">after BT</TableHead>
                   <TableHead className="text-xs py-1 min-w-[60px]">Destination</TableHead>
                   <TableHead className="text-xs py-1 min-w-[120px]">Sector Rates</TableHead>
+                  <TableHead className="text-xs py-1 min-w-[120px]">Customer</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -884,6 +926,20 @@ export function GenerateTable({ data, refreshTrigger }: GenerateTableProps) {
                         </div>
                       </PopoverContent>
                     </Popover>
+                  </TableCell>
+                  <TableCell className="py-1 h-8">
+                    <Input
+                      value={row.customer || ''}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        if (row.id) {
+                          handleCustomerUpdate(row.id, e.target.value)
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="Enter customer..."
+                      className="h-6 text-xs w-full"
+                    />
                   </TableCell>
                 </TableRow>
                 ))}

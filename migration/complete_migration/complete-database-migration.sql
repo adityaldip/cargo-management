@@ -212,6 +212,9 @@ CREATE TABLE public.sector_rates (
     destination_airport_id UUID NOT NULL REFERENCES public.airport_code(id) ON DELETE CASCADE,
     sector_rate NUMERIC(10,2) NOT NULL CHECK (sector_rate > 0),
     flight_num_preview VARCHAR(20) NULL,
+    customer CHARACTER VARYING(255) NULL,
+    origin_oe CHARACTER VARYING(10) NULL,
+    destination_oe CHARACTER VARYING(10) NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -235,6 +238,7 @@ CREATE TABLE public.flight_uploads (
     applied_rate TEXT NULL,
     selected_sector_rate_ids UUID[] DEFAULT '{}',
     sector_rate_id UUID NULL REFERENCES public.sector_rates(id) ON DELETE SET NULL,
+    customer CHARACTER VARYING(255) NULL,
     is_converted BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -254,6 +258,7 @@ COMMENT ON COLUMN public.flight_uploads.after_bt_to IS 'After BT destination air
 COMMENT ON COLUMN public.flight_uploads.applied_rate IS 'Applied rate information from sector rates (comma-separated text)';
 COMMENT ON COLUMN public.flight_uploads.selected_sector_rate_ids IS 'Array of selected sector rate IDs for multi-select functionality';
 COMMENT ON COLUMN public.flight_uploads.sector_rate_id IS 'Foreign key reference to sector_rates table for applied rate';
+COMMENT ON COLUMN public.flight_uploads.customer IS 'Customer information for the flight upload';
 COMMENT ON COLUMN public.flight_uploads.is_converted IS 'Whether this record has been converted using ConvertModal';
 
 -- Create indexes for better performance
@@ -310,6 +315,11 @@ CREATE INDEX IF NOT EXISTS idx_sector_rates_origin_airport_id ON public.sector_r
 CREATE INDEX IF NOT EXISTS idx_sector_rates_destination_airport_id ON public.sector_rates USING btree (destination_airport_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_is_active ON public.sector_rates USING btree (is_active) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_route ON public.sector_rates USING btree (origin, destination) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_customer ON public.sector_rates USING btree (customer) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_origin_oe ON public.sector_rates USING btree (origin_oe) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_destination_oe ON public.sector_rates USING btree (destination_oe) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_customer_origin_destination ON public.sector_rates USING btree (customer, origin, destination) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_origin_oe_destination_oe ON public.sector_rates USING btree (origin_oe, destination_oe) TABLESPACE pg_default;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sector_rates_unique_route ON public.sector_rates USING btree (origin_airport_id, destination_airport_id) WHERE is_active = true TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_origin ON public.flight_uploads USING btree (origin) TABLESPACE pg_default;
@@ -325,6 +335,7 @@ CREATE INDEX IF NOT EXISTS idx_flight_uploads_after_bt_to ON public.flight_uploa
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_is_converted ON public.flight_uploads USING btree (is_converted) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_sector_rate_id ON public.flight_uploads USING btree (sector_rate_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_selected_sector_rate_ids ON public.flight_uploads USING gin (selected_sector_rate_ids) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_flight_uploads_customer ON public.flight_uploads USING btree (customer) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_created_at ON public.flight_uploads USING btree (created_at) TABLESPACE pg_default;
 
 -- Create triggers for updated_at columns
@@ -583,15 +594,15 @@ INSERT INTO public.flights (flight_number, origin, destination, origin_airport_i
 ('TP012', 'LIS', 'OPO', (SELECT id FROM public.airport_code WHERE code = 'LIS'), (SELECT id FROM public.airport_code WHERE code = 'OPO'), 'scheduled', true);
 
 -- Insert sample sector rates
-INSERT INTO public.sector_rates (origin, destination, origin_airport_id, destination_airport_id, sector_rate, flight_num_preview, is_active) VALUES
-('JFK', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'JFK'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 450.00, 'AA123', true),
-('LAX', 'SFO', (SELECT id FROM public.airport_code WHERE code = 'LAX'), (SELECT id FROM public.airport_code WHERE code = 'SFO'), 320.00, 'UA456', true),
-('LHR', 'CDG', (SELECT id FROM public.airport_code WHERE code = 'LHR'), (SELECT id FROM public.airport_code WHERE code = 'CDG'), 180.00, 'BA567', true),
-('JFK', 'LHR', (SELECT id FROM public.airport_code WHERE code = 'JFK'), (SELECT id FROM public.airport_code WHERE code = 'LHR'), 850.00, 'AA123', true),
-('NRT', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'NRT'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 1200.00, 'JL789', true),
-('SYD', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'SYD'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 1500.00, 'QF456', false),
-('DXB', 'LHR', (SELECT id FROM public.airport_code WHERE code = 'DXB'), (SELECT id FROM public.airport_code WHERE code = 'LHR'), 650.00, 'EK123', true),
-('SFO', 'NRT', (SELECT id FROM public.airport_code WHERE code = 'SFO'), (SELECT id FROM public.airport_code WHERE code = 'NRT'), 1100.00, 'UA789', true);
+INSERT INTO public.sector_rates (origin, destination, origin_airport_id, destination_airport_id, sector_rate, flight_num_preview, customer, origin_oe, destination_oe, is_active) VALUES
+('JFK', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'JFK'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 450.00, 'AA123', 'Premium Express Ltd', 'USJFK', 'USLAX', true),
+('LAX', 'SFO', (SELECT id FROM public.airport_code WHERE code = 'LAX'), (SELECT id FROM public.airport_code WHERE code = 'SFO'), 320.00, 'UA456', 'Nordic Post AS', 'USLAX', 'USSFO', true),
+('LHR', 'CDG', (SELECT id FROM public.airport_code WHERE code = 'LHR'), (SELECT id FROM public.airport_code WHERE code = 'CDG'), 180.00, 'BA567', 'Baltic Express Network', 'UKLHR', 'FRCDG', true),
+('JFK', 'LHR', (SELECT id FROM public.airport_code WHERE code = 'JFK'), (SELECT id FROM public.airport_code WHERE code = 'LHR'), 850.00, 'AA123', 'Cargo Masters International', 'USJFK', 'UKLHR', true),
+('NRT', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'NRT'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 1200.00, 'JL789', 'General Mail Services', 'JPNRT', 'USLAX', true),
+('SYD', 'LAX', (SELECT id FROM public.airport_code WHERE code = 'SYD'), (SELECT id FROM public.airport_code WHERE code = 'LAX'), 1500.00, 'QF456', NULL, 'AUSYD', 'USLAX', false),
+('DXB', 'LHR', (SELECT id FROM public.airport_code WHERE code = 'DXB'), (SELECT id FROM public.airport_code WHERE code = 'LHR'), 650.00, 'EK123', 'Premium Express Ltd', 'AEDXB', 'UKLHR', true),
+('SFO', 'NRT', (SELECT id FROM public.airport_code WHERE code = 'SFO'), (SELECT id FROM public.airport_code WHERE code = 'NRT'), 1100.00, 'UA789', 'Nordic Post AS', 'USSFO', 'JPNRT', true);
 
 -- Success message
 SELECT 'Complete Cargo Management System database setup completed successfully!' as message;

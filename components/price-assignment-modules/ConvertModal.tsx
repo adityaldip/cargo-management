@@ -429,6 +429,46 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     }
   }, [formData.destination, formData.outbound])
 
+  // Update After BT To when destination changes (only if After BT is not disabled)
+  useEffect(() => {
+    if (formData.destination && !isAfterBTDisabled()) {
+      setFormData(prev => ({
+        ...prev,
+        afterBTTo: formData.destination
+      }))
+    }
+  }, [formData.destination])
+
+  // Update After BT From based on outbound destination or inbound destination as fallback
+  useEffect(() => {
+    if (!isAfterBTDisabled()) {
+      let afterBTFromValue = ""
+      
+      // First priority: outbound destination
+      if (formData.outbound) {
+        const outboundDestination = extractDestinationFromOutbound(formData.outbound)
+        if (outboundDestination) {
+          afterBTFromValue = outboundDestination
+        }
+      }
+      
+      // Fallback: inbound destination if outbound is not available
+      if (!afterBTFromValue && formData.inbound) {
+        const inboundDestination = extractDestinationFromInbound(formData.inbound)
+        if (inboundDestination) {
+          afterBTFromValue = inboundDestination
+        }
+      }
+      
+      if (afterBTFromValue) {
+        setFormData(prev => ({
+          ...prev,
+          afterBTFrom: afterBTFromValue
+        }))
+      }
+    }
+  }, [formData.outbound, formData.inbound])
+
   // Clear invalid sector rates when available rates change and re-insert valid ones
   useEffect(() => {
     if (selectedSectorRates.length > 0) {

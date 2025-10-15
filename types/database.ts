@@ -458,6 +458,9 @@ export interface Database {
           destination_airport_id: string
           sector_rate: number
           flight_num_preview: string | null
+          customer: string | null
+          origin_oe: string | null
+          destination_oe: string | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -469,7 +472,10 @@ export interface Database {
           origin_airport_id: string
           destination_airport_id: string
           sector_rate: number
-          flight_num_preview: string | null
+          flight_num_preview?: string | null
+          customer?: string | null
+          origin_oe?: string | null
+          destination_oe?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -481,7 +487,10 @@ export interface Database {
           origin_airport_id?: string
           destination_airport_id?: string
           sector_rate?: number
-          flight_num_preview?: string
+          flight_num_preview?: string | null
+          customer?: string | null
+          origin_oe?: string | null
+          destination_oe?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string

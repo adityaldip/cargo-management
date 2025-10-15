@@ -20,6 +20,9 @@ interface SectorRateModalProps {
     originAirportId: string
     destinationAirportId: string
     sectorRate: string
+    customer: string
+    originOE: string
+    destinationOE: string
   }
   setSectorRateForm: (form: any) => void
   isCreating: boolean
@@ -47,20 +50,23 @@ export function SectorRateModal({
         destination: selectedSectorRate.destination,
         originAirportId: selectedSectorRate.origin_airport_id,
         destinationAirportId: selectedSectorRate.destination_airport_id,
-        sectorRate: selectedSectorRate.sector_rate.toString()
+        sectorRate: selectedSectorRate.sector_rate.toString(),
+        customer: selectedSectorRate.customer || '',
+        originOE: selectedSectorRate.origin_oe || '',
+        destinationOE: selectedSectorRate.destination_oe || ''
       })
     }
   }, [selectedSectorRate, setSectorRateForm])
 
   const handleInputChange = (field: string, value: string) => {
-    setSectorRateForm(prev => ({
+    setSectorRateForm((prev: any) => ({
       ...prev,
       [field]: value
     }))
     
     // Clear error when user starts typing
     if (formErrors[field]) {
-      setFormErrors(prev => ({
+      setFormErrors((prev: any) => ({
         ...prev,
         [field]: ""
       }))
@@ -70,7 +76,7 @@ export function SectorRateModal({
   const handleAirportChange = (field: 'originAirportId' | 'destinationAirportId', airportId: string) => {
     const airport = airportCodes.find(a => a.id === airportId)
     if (airport) {
-      setSectorRateForm(prev => {
+      setSectorRateForm((prev: any) => {
         const newForm = {
           ...prev,
           [field]: airportId,
@@ -83,9 +89,21 @@ export function SectorRateModal({
     }
   }
 
+  const handleOEChange = (field: 'originOE' | 'destinationOE', airportCode: string) => {
+    setSectorRateForm((prev: any) => ({
+      ...prev,
+      [field]: airportCode
+    }))
+  }
+
   const getAvailableAirportCodes = (excludeField: 'originAirportId' | 'destinationAirportId') => {
     const excludeId = sectorRateForm[excludeField]
     return airportCodes.filter(airport => airport.id !== excludeId)
+  }
+
+  const getAvailableOECodes = (excludeField: 'originOE' | 'destinationOE') => {
+    const excludeCode = sectorRateForm[excludeField]
+    return activeAirportCodes.filter(airport => airport.code !== excludeCode)
   }
 
   const validateForm = () => {
@@ -120,7 +138,10 @@ export function SectorRateModal({
         destination: sectorRateForm.destination,
         originAirportId: sectorRateForm.originAirportId,
         destinationAirportId: sectorRateForm.destinationAirportId,
-        sectorRate: Number(sectorRateForm.sectorRate)
+        sectorRate: Number(sectorRateForm.sectorRate),
+        customer: sectorRateForm.customer,
+        originOE: sectorRateForm.originOE,
+        destinationOE: sectorRateForm.destinationOE
       })
     }
   }
@@ -144,6 +165,19 @@ export function SectorRateModal({
         )}
 
         <div className="space-y-4">
+          {/* Customer Field */}
+          <div>
+            <Label htmlFor="customer">Customer</Label>
+            <Input
+              id="customer"
+              type="text"
+              value={sectorRateForm.customer}
+              onChange={(e) => handleInputChange('customer', e.target.value)}
+              placeholder="Enter customer name"
+            />
+          </div>
+
+          {/* Origin and Destination Airports */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="originAirportId">Origin Airport *</Label>
@@ -200,6 +234,58 @@ export function SectorRateModal({
             </div>
           </div>
 
+          {/* Origin and Destination OE */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="originOE">Origin OE</Label>
+              <Select
+                value={sectorRateForm.originOE}
+                onValueChange={(value) => handleOEChange('originOE', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select origin OE" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getAvailableOECodes('destinationOE').map((airport) => (
+                    <SelectItem key={airport.code} value={airport.code}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{airport.code}</span>
+                        <span className="text-xs text-gray-500 ml-2">
+                          {airport.is_eu ? 'EU' : 'Non-EU'}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="destinationOE">Destination OE</Label>
+              <Select
+                value={sectorRateForm.destinationOE}
+                onValueChange={(value) => handleOEChange('destinationOE', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select destination OE" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getAvailableOECodes('originOE').map((airport) => (
+                    <SelectItem key={airport.code} value={airport.code}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{airport.code}</span>
+                        <span className="text-xs text-gray-500 ml-2">
+                          {airport.is_eu ? 'EU' : 'Non-EU'}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Sector Rate */}
           <div>
             <Label htmlFor="sectorRate">Sector Rate *</Label>
             <Input

@@ -30,6 +30,9 @@ export interface SectorRate {
   is_active: boolean
   created_at?: string
   updated_at?: string
+  customer?: string
+  origin_oe?: string
+  destination_oe?: string
 }
 
 export interface PriceAssignmentData {
