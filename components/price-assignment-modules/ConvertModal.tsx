@@ -25,6 +25,7 @@ interface ConvertModalProps {
     inbound: string
     outbound: string
     converted_origin?: string
+    customer?: string
   }
 }
 
@@ -38,9 +39,11 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     afterBTFrom: "",
     afterBTTo: "",
     destination: "",
-    sectorRates: ""
+    sectorRates: "",
+    customer: ""
   })
   const [selectedSectorRates, setSelectedSectorRates] = useState<string[]>([])
+  const [customerUpdateTimeout, setCustomerUpdateTimeout] = useState<NodeJS.Timeout | null>(null)
 
   const [airportCodes, setAirportCodes] = useState<any[]>([])
   const [flights, setFlights] = useState<any[]>([])
@@ -68,7 +71,8 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     afterBTFrom: "",
     afterBTTo: "",
     destination: "",
-    sectorRates: ""
+    sectorRates: "",
+    customer: ""
   })
 
   // Extract airport code from origin/destination (3rd to 5th characters)
@@ -183,6 +187,34 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     return sectorRates.filter(rate => 
       rate.origin === origin && rate.destination === destination
     )
+  }
+
+  // Handle customer update with debouncing (1 second delay)
+  const handleCustomerUpdate = async (customerValue: string) => {
+    if (!recordId) return
+    
+    // Clear existing timeout
+    if (customerUpdateTimeout) {
+      clearTimeout(customerUpdateTimeout)
+    }
+    
+    // Set new timeout for 1 second
+    const timeout = setTimeout(async () => {
+      try {
+        const { error } = await (supabase as any)
+          .from('flight_uploads')
+          .update({ customer: customerValue })
+          .eq('id', recordId)
+
+        if (error) {
+          console.error('Error updating customer:', error)
+        }
+      } catch (error) {
+        console.error('Error updating customer:', error)
+      }
+    }, 1000)
+    
+    setCustomerUpdateTimeout(timeout)
   }
 
   // Handle sector rate selection/deselection
@@ -355,7 +387,9 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
           beforeBTFrom: origin,
           beforeBTTo: inboundOrigin || "",
           // Auto-set After BT fields only if outbound exists
-          afterBTFrom: outboundDestination || ""
+          afterBTFrom: outboundDestination || "",
+          // Load existing customer data
+          customer: (originalFlightData as any).customer || ""
         }))
       }
     } else {
@@ -385,7 +419,9 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         beforeBTFrom: origin,
         beforeBTTo: inboundOrigin || "",
         // Auto-set After BT fields only if outbound exists
-        afterBTFrom: outboundDestination || ""
+        afterBTFrom: outboundDestination || "",
+        // Load existing customer data
+        customer: (originalFlightData as any).customer || ""
       }))
     }
   }, [originalFlightData, isOpen, flights])
@@ -537,6 +573,23 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Cleanup timeout when component unmounts or modal closes
+  useEffect(() => {
+    return () => {
+      if (customerUpdateTimeout) {
+        clearTimeout(customerUpdateTimeout)
+      }
+    }
+  }, [customerUpdateTimeout])
+
+  // Clear timeout when modal closes
+  useEffect(() => {
+    if (!isOpen && customerUpdateTimeout) {
+      clearTimeout(customerUpdateTimeout)
+      setCustomerUpdateTimeout(null)
+    }
+  }, [isOpen, customerUpdateTimeout])
+
   const loadData = async () => {
     setIsLoading(true)
     try {
@@ -591,7 +644,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
     try {
       const { data, error } = await supabase
         .from('flight_uploads')
-        .select('converted_origin, converted_destination, before_bt_from, before_bt_to, after_bt_from, after_bt_to, applied_rate, selected_sector_rate_ids, inbound, outbound')
+        .select('converted_origin, converted_destination, before_bt_from, before_bt_to, after_bt_from, after_bt_to, applied_rate, selected_sector_rate_ids, inbound, outbound, customer')
         .eq('id', recordId)
         .single()
 
@@ -640,7 +693,8 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
           outbound: outboundDisplay,
           afterBTFrom: convertedData.after_bt_from || "",
           afterBTTo: convertedData.after_bt_to || "",
-          sectorRates: selectedRateTexts.length > 0 ? selectedRateTexts.join(", ") : sectorRatesValue
+          sectorRates: selectedRateTexts.length > 0 ? selectedRateTexts.join(", ") : sectorRatesValue,
+          customer: convertedData.customer || ""
         }))
         
         // Load selected sector rates from the database IDs or fallback to text
@@ -730,6 +784,7 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
         after_bt_to: formData.afterBTTo || null,
         applied_rate: formData.sectorRates || null,
         selected_sector_rate_ids: selectedRateIds.length > 0 ? selectedRateIds : null,
+        customer: formData.customer || null,
         is_converted: true
       }
       
@@ -1546,6 +1601,23 @@ export function ConvertModal({ isOpen, onClose, origin, recordId, onDataSaved, o
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Customer */}
+          <div>
+            <label className="text-xs font-medium mb-1 block">Customer</label>
+            <textarea
+              value={formData.customer}
+              onChange={(e) => {
+                const customerValue = e.target.value
+                setFormData(prev => ({ ...prev, customer: customerValue }))
+                // Debounced update to database (1 second delay)
+                handleCustomerUpdate(customerValue)
+              }}
+              placeholder="Enter customer information..."
+              className="w-full p-2 text-xs border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={3}
+            />
           </div>
         </div>
 

@@ -26,6 +26,8 @@ function AlternativeRoutesCell({
   destination, 
   alternatives
 }: AlternativeRoutesCellProps) {
+  const [showAll, setShowAll] = useState(false)
+  
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -41,21 +43,55 @@ function AlternativeRoutesCell({
     )
   }
 
+  // Sort alternatives: direct routes first, then by rate (lowest first)
+  const sortedAlternatives = alternatives.sort((a, b) => {
+    if (a.isDirect && !b.isDirect) return -1
+    if (!a.isDirect && b.isDirect) return 1
+    return a.rate - b.rate
+  })
+
+  // Limit displayed alternatives
+  const displayLimit = 8
+  const shouldShowMore = sortedAlternatives.length > displayLimit
+  const displayedAlternatives = showAll ? sortedAlternatives : sortedAlternatives.slice(0, displayLimit)
+
+  // Create comma-separated route string
+  const routeString = displayedAlternatives.map(alt => alt.route).join(', ')
+  const totalCount = sortedAlternatives.length
+
   return (
-    <div className="space-y-1 max-w-xs">
-      {alternatives.map((alternative, index) => (
-        <div key={index} className="text-xs">
-          <span className={cn(
-            "font-mono",
-            alternative.isDirect ? "text-blue-600 font-semibold" : "text-gray-600"
-          )}>
-            {alternative.route}
-          </span>
-          <span className="ml-1 text-green-600 font-medium">
-            ({formatCurrency(alternative.rate)})
-          </span>
+    <div className="space-y-1 w-48">
+      {/* Route display */}
+      <div className="text-xs">
+        <span className="font-mono text-gray-700 break-words whitespace-normal">
+          {routeString}
+          {shouldShowMore && !showAll && `, ...`}
+        </span>
+      </div>
+
+      {/* Show more/less button */}
+      {shouldShowMore && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowAll(!showAll)}
+          className="h-5 text-xs p-1"
+        >
+          {showAll ? 'Show Less' : `Show All (${totalCount})`}
+        </Button>
+      )}
+
+      {/* Rate summary */}
+      {/* {sortedAlternatives.length > 0 && (
+        <div className="text-xs text-gray-500">
+          Best: {formatCurrency(Math.min(...sortedAlternatives.map(a => a.rate)))}
+          {sortedAlternatives.filter(a => a.isDirect).length > 0 && (
+            <span className="ml-2 text-blue-600">
+              • Direct: {sortedAlternatives.filter(a => a.isDirect).length}
+            </span>
+          )}
         </div>
-      ))}
+      )} */}
     </div>
   )
 }
