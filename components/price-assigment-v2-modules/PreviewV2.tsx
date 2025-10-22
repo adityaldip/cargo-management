@@ -308,16 +308,16 @@ export function PreviewV2() {
               <Table>
                 <TableHeader>
                   <TableRow className="h-10">
-                    <TableHead className="text-xs py-2 px-3 w-[300px]">Sector Rates</TableHead>
-                    <TableHead className="text-xs py-2 px-3 w-[80px]">Actions</TableHead>
+                    <TableHead className="text-xs py-1 px-1 w-[200px]">Sector Rates</TableHead>
+                    <TableHead className="text-xs py-1 px-1 w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {previewData.map((row) => (
-                    <TableRow key={row.id} className="h-12">
+                    <TableRow key={row.id} className="h-10">
                       {/* Column 1: Sector Rates Dropdown */}
-                      <TableCell className="py-2 px-3 text-xs w-[300px]">
-                        <div className="mt-2">
+                      <TableCell className="py-1 px-1 text-xs w-[300px]">
+                        <div className="">
                           <Select 
                             value={row.selectedSectorRate?.id || ""} 
                             onValueChange={(value) => handleSectorRateChange(row.id, value)}
@@ -355,7 +355,7 @@ export function PreviewV2() {
                       </TableCell>
                       
                       {/* Column 2: Actions */}
-                      <TableCell className="py-2 px-3 w-[80px]">
+                      <TableCell className="py-1 px-1 w-[80px]">
                         <div className="flex gap-1 justify-center">
                           <Button
                             onClick={() => handleDeleteWithConfirmation(row.id, row.origin || 'Record', row.destination || '')}
