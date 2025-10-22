@@ -245,7 +245,7 @@ export function SectorRateTable({
               </TableCell>
               <TableCell className="py-1 px-2">
                 <span className="text-sm">
-                  {rate.customers ? `${rate.customers.name} (${rate.customers.code})` : rate.customer_id ? `Customer ID: ${rate.customer_id}` : "No customer"}
+                  {rate.customers ? rate.customers.name : rate.customer_id ? `Customer ID: ${rate.customer_id}` : "No customer"}
                 </span>
               </TableCell>
             </TableRow>
