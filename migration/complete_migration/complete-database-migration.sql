@@ -277,6 +277,15 @@ CREATE TABLE public.sector_rates_v2 (
     CONSTRAINT sector_rates_v2_pkey PRIMARY KEY (id)
 ) TABLESPACE pg_default;
 
+-- Create preview_price_assignment table for PreviewV2 component
+CREATE TABLE public.preview_price_assignment (
+    id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
+    sector_rate_id UUID NULL REFERENCES public.sector_rates_v2(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT preview_price_assignment_pkey PRIMARY KEY (id)
+) TABLESPACE pg_default;
+
 -- Add comments for SectorRatesV2 table columns
 COMMENT ON TABLE public.sector_rates_v2 IS 'Sector Rates V2 table for the new UI component';
 COMMENT ON COLUMN public.sector_rates_v2.text_label IS 'Manual text label for sector rate (e.g., "NL Post (AMS → IST)")';
@@ -287,6 +296,10 @@ COMMENT ON COLUMN public.sector_rates_v2.airbaltic_destination IS 'AirBaltic des
 COMMENT ON COLUMN public.sector_rates_v2.final_destination IS 'Final destination information (e.g., "no additional" or "SYD, MEL")';
 COMMENT ON COLUMN public.sector_rates_v2.customer_id IS 'Foreign key reference to customers table';
 COMMENT ON COLUMN public.sector_rates_v2.is_active IS 'Whether the sector rate is active';
+
+-- Add comments for PreviewPriceAssignment table columns
+COMMENT ON TABLE public.preview_price_assignment IS 'Table to store preview data for price assignment with sector rates';
+COMMENT ON COLUMN public.preview_price_assignment.sector_rate_id IS 'Reference to selected sector rate from sector_rates_v2 table';
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_customers_code ON public.customers USING btree (code) TABLESPACE pg_default;
@@ -358,6 +371,10 @@ CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_airbaltic_destination ON public.s
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_final_destination ON public.sector_rates_v2 USING btree (final_destination) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_customer_id ON public.sector_rates_v2 USING btree (customer_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_is_active ON public.sector_rates_v2 USING btree (is_active) TABLESPACE pg_default;
+
+-- Indexes for PreviewPriceAssignment table
+CREATE INDEX IF NOT EXISTS idx_preview_price_assignment_sector_rate_id ON public.preview_price_assignment USING btree (sector_rate_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_preview_price_assignment_created_at ON public.preview_price_assignment USING btree (created_at) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_origin ON public.flight_uploads USING btree (origin) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_destination ON public.flight_uploads USING btree (destination) TABLESPACE pg_default;
@@ -442,6 +459,11 @@ CREATE TRIGGER update_sector_rates_v2_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_preview_price_assignment_updated_at 
+    BEFORE UPDATE ON public.preview_price_assignment 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_codes ENABLE ROW LEVEL SECURITY;
@@ -456,6 +478,7 @@ ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sector_rates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.flight_uploads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sector_rates_v2 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_price_assignment ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies (allow all operations for authenticated users)
 CREATE POLICY "Allow all operations for authenticated users" ON public.customers
@@ -495,6 +518,9 @@ CREATE POLICY "Allow all operations for authenticated users" ON public.flight_up
     FOR ALL USING (auth.role() = 'authenticated');
 
 CREATE POLICY "Allow all operations for authenticated users" ON public.sector_rates_v2
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow all operations for authenticated users" ON public.preview_price_assignment
     FOR ALL USING (auth.role() = 'authenticated');
 
 -- Grant permissions
