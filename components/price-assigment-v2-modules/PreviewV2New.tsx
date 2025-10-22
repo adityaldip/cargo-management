@@ -231,6 +231,35 @@ export function PreviewV2New() {
     setDeleteIndex(null)
   }
 
+  const handleSectorRateChange = async (rowId: string, sectorRateId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('preview_flights')
+        .update({ sector_rate_id: sectorRateId })
+        .eq('id', rowId)
+
+      if (error) throw error
+
+      // Update local state
+      const newData = uploadData.map((item) => 
+        item.id === rowId ? { ...item, sector_rate_id: sectorRateId } : item
+      )
+      setUploadData(newData)
+
+      toast({
+        title: "Updated!",
+        description: "Sector rate has been updated.",
+      })
+    } catch (error) {
+      console.error('Error updating sector rate:', error)
+      toast({
+        title: "Error!",
+        description: "Failed to update sector rate.",
+        variant: "destructive"
+      })
+    }
+  }
+
   const handleUpload = async () => {
     setIsUploading(true)
     try {
@@ -292,7 +321,7 @@ export function PreviewV2New() {
         <CardContent className="p-2">
           <div className="p-1">
             {/* Upload Section */}
-            <div className="flex justify-between items-center mb-1">
+            <div className="flex justify-between items-center mb-1 w-[50%]">
               <Button 
                 className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-3"
                 onClick={handleUpload}
@@ -313,7 +342,9 @@ export function PreviewV2New() {
             <div>
               <div className="text-xs text-gray-500 w-full flex justify-center items-center">
                 <p className="w-full text-center font-bold text-black">Form upload file</p>
-              </div>
+                <p className="w-full text-center font-bold text-black">System Generated</p>
+                </div>
+              <div className="w-full border-b border-black"></div>
               <div className="w-full border-b border-black"></div>
               
               {isLoading ? (
@@ -338,7 +369,8 @@ export function PreviewV2New() {
                         <TableHead className="text-xs py-1 min-w-[100px]">Inbound Flight</TableHead>
                         <TableHead className="text-xs py-1 min-w-[100px]">Outbound Flight</TableHead>
                         <TableHead className="text-xs py-1 min-w-[60px]">Actions</TableHead>
-                        <TableHead className="text-xs py-1 min-w-[150px]">Sector Rate</TableHead>
+                        <TableHead className=""></TableHead>
+                        <TableHead className="text-xs py-1 w-[50%]">Sector Rate</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -380,14 +412,20 @@ export function PreviewV2New() {
                               </Button>
                             </div>
                           </TableCell>
+                          <TableCell className="w-8"></TableCell>
                           <TableCell className="py-1 text-xs h-8">
                             <Select 
                               value={row.sector_rate_id || ""} 
                               onValueChange={(value) => {
-                                const newData = uploadData.map((item, i) => 
-                                  i === index ? { ...item, sector_rate_id: value } : item
-                                )
-                                setUploadData(newData)
+                                if (row.id) {
+                                  handleSectorRateChange(row.id, value)
+                                } else {
+                                  // For new records without ID, update local state only
+                                  const newData = uploadData.map((item, i) => 
+                                    i === index ? { ...item, sector_rate_id: value } : item
+                                  )
+                                  setUploadData(newData)
+                                }
                               }}
                             >
                               <SelectTrigger className="h-8 text-xs px-2 py-1">
@@ -396,11 +434,11 @@ export function PreviewV2New() {
                               <SelectContent>
                                 {sectorRates.map((rate) => (
                                   <SelectItem key={rate.id} value={rate.id}>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium text-sm">
+                                    <div className="flex flex-col text-left">
+                                      <span className="font-medium text-sm text-left">
                                         {rate.sector_rate || 'No Rate'} - {rate.text_label || 'No Label'}
                                       </span>
-                                      <span className="text-xs text-gray-500">
+                                      <span className="text-xs text-gray-500 text-left">
                                         Customer: {rate.customers?.name || 'No Customer'}
                                       </span>
                                     </div>
