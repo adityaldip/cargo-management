@@ -76,9 +76,9 @@ export function SectorRatesV2() {
       if (customersError) throw customersError
 
       // Merge the data manually
-      const mergedData = sectorRatesData?.map(rate => ({
+      const mergedData = sectorRatesData?.map((rate: any) => ({
         ...rate,
-        customers: customersData?.find(customer => customer.id === rate.customer_id) || null
+        customers: customersData?.find((customer: any) => customer.id === rate.customer_id) || null
       })) || []
 
       setSectorRates(mergedData)
@@ -209,19 +209,29 @@ export function SectorRatesV2() {
 
       if (editingData) {
         // Update existing record
-        const { error } = await (supabase as any)
+        const { data, error } = await (supabase as any)
           .from('sector_rates_v2')
           .update(dataToSave)
           .eq('id', editingData.id)
+          .select(`
+            *,
+            customers (
+              id,
+              name,
+              code
+            )
+          `)
 
         if (error) throw error
 
         // Update local state
-        setSectorRates(prev => 
-          prev.map(r => 
-            r.id === editingData.id ? { ...r, ...dataToSave } : r
+        if (data && data[0]) {
+          setSectorRates(prev => 
+            prev.map(r => 
+              r.id === editingData.id ? data[0] : r
+            )
           )
-        )
+        }
 
         toast({
           title: "Sector Rate Updated",
@@ -232,7 +242,14 @@ export function SectorRatesV2() {
         const { data, error } = await (supabase as any)
           .from('sector_rates_v2')
           .insert([dataToSave])
-          .select()
+          .select(`
+            *,
+            customers (
+              id,
+              name,
+              code
+            )
+          `)
 
         if (error) throw error
 

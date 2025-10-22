@@ -444,7 +444,7 @@ export function SectorRateModal({
                   ? [{ value: "", label: "Loading customers...", disabled: true }]
                   : customers.map((customer) => ({
                       value: customer.id,
-                      label: `${customer.name} (${customer.code})`
+                      label: customer.name
                     }))
                 }
                 value={formData.customerId}
