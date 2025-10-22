@@ -350,16 +350,48 @@ export function PreviewV2New() {
               </div>
               
               {isLoading ? (
-                <div className="space-y-2 mt-2">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="flex space-x-2">
-                      <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
-                      <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
-                      <div className="h-6 w-24 bg-gray-200 rounded animate-pulse"></div>
-                      <div className="h-6 w-24 bg-gray-200 rounded animate-pulse"></div>
-                      <div className="h-6 w-12 bg-gray-200 rounded animate-pulse"></div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs py-1 min-w-[80px]">Origin</TableHead>
+                        <TableHead className="text-xs py-1 min-w-[80px]">Destination</TableHead>
+                        <TableHead className="text-xs py-1 min-w-[100px]">Inbound Flight</TableHead>
+                        <TableHead className="text-xs py-1 min-w-[100px]">Outbound Flight</TableHead>
+                        <TableHead className="text-xs py-1 min-w-[60px]">Actions</TableHead>
+                        <TableHead className="border-0 w-8"></TableHead>
+                        <TableHead className="text-xs py-1 w-[50%]">Sector Rate</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...Array(3)].map((_, i) => (
+                        <TableRow key={i} className="h-8">
+                          <TableCell className="py-1 text-xs h-8">
+                            <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
+                          </TableCell>
+                          <TableCell className="py-1 text-xs h-8">
+                            <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
+                          </TableCell>
+                          <TableCell className="py-1 text-xs h-8">
+                            <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                          </TableCell>
+                          <TableCell className="py-1 text-xs h-8">
+                            <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                          </TableCell>
+                          <TableCell className="py-1 h-8">
+                            <div className="flex gap-0.5">
+                              <div className="h-5 w-5 bg-gray-200 rounded animate-pulse"></div>
+                              <div className="h-5 w-5 bg-gray-200 rounded animate-pulse"></div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="w-8 border-0"></TableCell>
+                          <TableCell className="py-1 text-xs h-8">
+                            <div className="h-8 w-full bg-gray-200 rounded animate-pulse"></div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
