@@ -1,10 +1,10 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Flights } from "./Flights"
-import { AirportCodes } from "./AirportCodes"
-import { Preview } from "./Preview"
-import { PriceAssignmentProps } from "./types"
+import { Flights } from "@/components/price-assignment-modules/Flights"
+import { AirportCodes } from "@/components/price-assignment-modules/AirportCodes"
+import { Preview } from "@/components/price-assignment-modules/Preview"
+import { PriceAssignmentProps } from "@/components/price-assignment-modules/types"
 import { usePriceAssignmentV2TabStore } from "@/store/price-assignment-v2-tab-store"
 import { CustomerManagement } from "@/components/assign-customers-modules/CustomerManagement"
 
