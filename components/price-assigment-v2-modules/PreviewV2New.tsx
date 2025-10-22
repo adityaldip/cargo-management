@@ -321,7 +321,7 @@ export function PreviewV2New() {
         <CardContent className="p-2">
           <div className="p-1">
             {/* Upload Section */}
-            <div className="flex justify-between items-center mb-1 w-[50%]">
+            <div className="flex justify-between items-center mb-1 w-[48%]">
               <Button 
                 className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-3"
                 onClick={handleUpload}
@@ -344,8 +344,10 @@ export function PreviewV2New() {
                 <p className="w-full text-center font-bold text-black">Form upload file</p>
                 <p className="w-full text-center font-bold text-black">System Generated</p>
                 </div>
-              <div className="w-full border-b border-black"></div>
-              <div className="w-full border-b border-black"></div>
+                <div className="flex justify-between items-center w-full">
+                  <div className="w-[48%] border-b border-black"></div>
+                  <div className="w-[50%] border-b border-black"></div>
+              </div>
               
               {isLoading ? (
                 <div className="space-y-2 mt-2">
@@ -369,7 +371,7 @@ export function PreviewV2New() {
                         <TableHead className="text-xs py-1 min-w-[100px]">Inbound Flight</TableHead>
                         <TableHead className="text-xs py-1 min-w-[100px]">Outbound Flight</TableHead>
                         <TableHead className="text-xs py-1 min-w-[60px]">Actions</TableHead>
-                        <TableHead className=""></TableHead>
+                        <TableHead className="border-0 w-8"></TableHead>
                         <TableHead className="text-xs py-1 w-[50%]">Sector Rate</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -412,7 +414,7 @@ export function PreviewV2New() {
                               </Button>
                             </div>
                           </TableCell>
-                          <TableCell className="w-8"></TableCell>
+                          <TableCell className="w-8 border-0"></TableCell>
                           <TableCell className="py-1 text-xs h-8">
                             <Select 
                               value={row.sector_rate_id || ""} 
