@@ -9,6 +9,7 @@ type WorkflowStep =
   | "assign-customers"
   | "assign-rates"
   | "price-assignment"
+  | "price-assignment-v2"
   | "review-rates"
   | "review-invoices"
   | "reporting"

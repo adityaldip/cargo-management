@@ -13,6 +13,7 @@ type WorkflowStep =
   | "assign-customers"
   | "assign-rates"
   | "price-assignment"
+  | "price-assignment-v2"
   | "review-rates"
   | "review-invoices"
   | "reporting"
@@ -52,6 +53,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
     { id: "assign-customers", label: "Assign Contractees", icon: UserCheck, tooltip: "Configure automated rules for cargo processing and team assignment" },
     { id: "assign-rates", label: "Assign Rates", icon: Calculator, tooltip: "Configure automated rate assignment rules and pricing calculations" },
     { id: "price-assignment", label: "Price Assignment", icon: Coins, tooltip: "Manage flight pricing, airport codes, and sector rates", hasBadge: true, badgeText: "new" },
+    { id: "price-assignment-v2", label: "Price Assignment 2.0", icon: Coins, tooltip: "Manage flight pricing, airport codes, and sector rates"},
     // { id: "review-rates", label: "Review Rates", icon: DollarSign, tooltip: "Configure pricing for your routes and manage rate plans." },
     { id: "review-invoices", label: "Review Invoices", icon: Receipt, tooltip: "Review and manage generated invoices from processed cargo data"},
     { id: "reporting", label: "Reporting", icon: BarChart3, tooltip: "View comprehensive reports and analytics for cargo data", lighterColor: true },
