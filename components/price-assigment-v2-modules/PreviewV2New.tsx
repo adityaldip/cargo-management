@@ -470,10 +470,7 @@ export function PreviewV2New() {
                                   <SelectItem key={rate.id} value={rate.id}>
                                     <div className="flex flex-col text-left">
                                       <span className="font-medium text-sm text-left">
-                                        {rate.sector_rate || 'No Rate'} - {rate.text_label || 'No Label'}
-                                      </span>
-                                      <span className="text-xs text-gray-500 text-left">
-                                        Customer: {rate.customers?.name || 'No Customer'}
+                                        {rate.sector_rate || 'No Rate'} - {rate.text_label || 'No Label'} - {rate.customers?.name || 'No Customer'}
                                       </span>
                                     </div>
                                   </SelectItem>
