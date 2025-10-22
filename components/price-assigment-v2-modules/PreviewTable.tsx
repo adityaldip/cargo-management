@@ -118,52 +118,29 @@ export function PreviewTable({ data = dummyPreviewData, onDataChange }: PreviewT
         <Table>
           <TableHeader>
             <TableRow className="h-8">
-              <TableHead className="text-xs py-1 min-w-[60px]">Origin</TableHead>
-              <TableHead className="text-xs py-1 min-w-[60px]">Destination</TableHead>
-              <TableHead className="text-xs py-1 min-w-[80px]">Before BT</TableHead>
-              <TableHead className="text-xs py-1 min-w-[100px]">Inbound</TableHead>
-              <TableHead className="text-xs py-1 min-w-[100px]">Outbound</TableHead>
-              <TableHead className="text-xs py-1 min-w-[80px]">After BT</TableHead>
-              <TableHead className="text-xs py-1 min-w-[60px]">Final Dest</TableHead>
-              <TableHead className="text-xs py-1 min-w-[100px]">Sector Rates</TableHead>
-              <TableHead className="text-xs py-1 min-w-[100px]">Applied Rate</TableHead>
-              <TableHead className="text-xs py-1 min-w-[60px]">Actions</TableHead>
+              <TableHead className="text-xs py-1 min-w-[200px]">Label</TableHead>
+              <TableHead className="text-xs py-1 min-w-[100px]">Actions</TableHead>
+              <TableHead className="text-xs py-1 min-w-[300px]">Options</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {tableData.map((row) => (
               <TableRow key={row.id} className="h-8">
+                {/* Column 1: Label */}
                 <TableCell className="py-1 text-xs h-8">
-                  {row.origin}
+                  <div className="font-medium">
+                    {row.origin} → {row.destination}
+                  </div>
+                  <div className="text-gray-500 text-xs">
+                    {row.beforeBT && `${row.beforeBT} | `}
+                    {row.inbound && `${row.inbound} | `}
+                    {row.outbound && `${row.outbound} | `}
+                    {row.afterBT && `${row.afterBT} | `}
+                    {row.finalDestination}
+                  </div>
                 </TableCell>
-                <TableCell className="py-1 text-xs h-8">
-                  {row.destination}
-                </TableCell>
-                <TableCell className="py-1 text-xs h-8">
-                  {row.beforeBT || "n/a"}
-                </TableCell>
-                <TableCell className="py-1 text-xs h-8">
-                  <span className={!row.is_valid_inbound ? "text-red-500" : ""}>
-                    {row.inbound || "n/a"}
-                  </span>
-                </TableCell>
-                <TableCell className="py-1 text-xs h-8">
-                  <span className={!row.is_valid_outbound ? "text-red-500" : ""}>
-                    {row.outbound || "n/a"}
-                  </span>
-                </TableCell>
-                <TableCell className="py-1 text-xs h-8">
-                  {row.afterBT || "n/a"}
-                </TableCell>
-                <TableCell className="py-1 text-xs h-8">
-                  {row.finalDestination}
-                </TableCell>
-                <TableCell className="py-1 text-xs h-8">
-                  {row.sectorRates}
-                </TableCell>
-                <TableCell className="py-1 text-xs h-8">
-                  {row.appliedRate}
-                </TableCell>
+                
+                {/* Column 2: Actions */}
                 <TableCell className="py-1 h-8">
                   <div className="flex gap-0.5">
                     <Button
@@ -182,6 +159,30 @@ export function PreviewTable({ data = dummyPreviewData, onDataChange }: PreviewT
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
+                  </div>
+                </TableCell>
+                
+                {/* Column 3: Options */}
+                <TableCell className="py-1 text-xs h-8">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600">Sector Rates:</span>
+                      <span className="font-medium">{row.sectorRates}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600">Applied Rate:</span>
+                      <span className="font-medium text-green-600">{row.appliedRate}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600">Status:</span>
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        row.is_valid_inbound && row.is_valid_outbound 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {row.is_valid_inbound && row.is_valid_outbound ? 'Valid' : 'Invalid'}
+                      </span>
+                    </div>
                   </div>
                 </TableCell>
               </TableRow>
