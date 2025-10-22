@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Trash2, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
@@ -238,6 +239,34 @@ export function PreviewV2() {
   }
 
 
+  // Skeleton component untuk loading state
+  const SkeletonTable = () => (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow className="h-10">
+            <TableHead className="text-xs py-1 px-1 w-[200px]">Sector Rates</TableHead>
+            <TableHead className="text-xs py-1 px-1 w-[80px]">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <TableRow key={index} className="h-10">
+              <TableCell className="py-1 px-1 text-xs w-[300px]">
+                <Skeleton className="h-10 w-full" />
+              </TableCell>
+              <TableCell className="py-1 px-1 w-[80px]">
+                <div className="flex gap-1 justify-center">
+                  <Skeleton className="h-6 w-6" />
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+
   const handleDeleteWithConfirmation = async (id: string, origin: string, destination: string) => {
     const result = await Swal.fire({
       title: 'Are you sure?',
@@ -298,80 +327,85 @@ export function PreviewV2() {
                 onClick={handleAddNewRow}
                 size="sm"
                 className="flex items-center gap-2"
+                disabled={loading}
               >
                 <Plus className="h-4 w-4" />
                 Add Record
               </Button>
             </div>
             
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="h-10">
-                    <TableHead className="text-xs py-1 px-1 w-[200px]">Sector Rates</TableHead>
-                    <TableHead className="text-xs py-1 px-1 w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {previewData.map((row) => (
-                    <TableRow key={row.id} className="h-10">
-                      {/* Column 1: Sector Rates Dropdown */}
-                      <TableCell className="py-1 px-1 text-xs w-[300px]">
-                        <div className="">
-                          <Select 
-                            value={row.selectedSectorRate?.id || ""} 
-                            onValueChange={(value) => handleSectorRateChange(row.id, value)}
-                          >
-                            <SelectTrigger className="h-10 text-xs px-3 py-2">
-                              {row.selectedSectorRate ? (
-                                <div className="flex flex-col items-start w-full">
-                                  <span className="font-medium text-sm">
-                                    {row.selectedSectorRate.sector_rate || 'No Rate'} - {row.selectedSectorRate.text_label || 'No Label'}
-                                  </span>
-                                  <span className="text-xs text-gray-500">
-                                    Customer: {row.selectedSectorRate.customers?.name || 'No Customer'}
-                                  </span>
-                                </div>
-                              ) : (
-                                <SelectValue placeholder="Select sector rate..." />
-                              )}
-                            </SelectTrigger>
-                            <SelectContent>
-                              {sectorRates.map((rate) => (
-                                <SelectItem key={rate.id} value={rate.id}>
-                                  <div className="flex flex-col">
+            {loading ? (
+              <SkeletonTable />
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="h-10">
+                      <TableHead className="text-xs py-1 px-1 w-[200px]">Sector Rates</TableHead>
+                      <TableHead className="text-xs py-1 px-1 w-[80px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewData.map((row) => (
+                      <TableRow key={row.id} className="h-10">
+                        {/* Column 1: Sector Rates Dropdown */}
+                        <TableCell className="py-1 px-1 text-xs w-[300px]">
+                          <div className="">
+                            <Select 
+                              value={row.selectedSectorRate?.id || ""} 
+                              onValueChange={(value) => handleSectorRateChange(row.id, value)}
+                            >
+                              <SelectTrigger className="h-10 text-xs px-3 py-2">
+                                {row.selectedSectorRate ? (
+                                  <div className="flex flex-col items-start w-full">
                                     <span className="font-medium text-sm">
-                                      {rate.sector_rate || 'No Rate'} - {rate.text_label || 'No Label'}
+                                      {row.selectedSectorRate.sector_rate || 'No Rate'} - {row.selectedSectorRate.text_label || 'No Label'}
                                     </span>
                                     <span className="text-xs text-gray-500">
-                                      Customer: {rate.customers?.name || 'No Customer'}
+                                      Customer: {row.selectedSectorRate.customers?.name || 'No Customer'}
                                     </span>
                                   </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </TableCell>
-                      
-                      {/* Column 2: Actions */}
-                      <TableCell className="py-1 px-1 w-[80px]">
-                        <div className="flex gap-1 justify-center">
-                          <Button
-                            onClick={() => handleDeleteWithConfirmation(row.id, row.origin || 'Record', row.destination || '')}
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                                ) : (
+                                  <SelectValue placeholder="Select sector rate..." />
+                                )}
+                              </SelectTrigger>
+                              <SelectContent>
+                                {sectorRates.map((rate) => (
+                                  <SelectItem key={rate.id} value={rate.id}>
+                                    <div className="flex flex-col">
+                                      <span className="font-medium text-sm">
+                                        {rate.sector_rate || 'No Rate'} - {rate.text_label || 'No Label'}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        Customer: {rate.customers?.name || 'No Customer'}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
+                        
+                        {/* Column 2: Actions */}
+                        <TableCell className="py-1 px-1 w-[80px]">
+                          <div className="flex gap-1 justify-center">
+                            <Button
+                              onClick={() => handleDeleteWithConfirmation(row.id, row.origin || 'Record', row.destination || '')}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
