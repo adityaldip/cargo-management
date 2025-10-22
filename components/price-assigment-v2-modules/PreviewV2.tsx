@@ -309,14 +309,14 @@ export function PreviewV2() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="h-8">
-                    <TableHead className="text-xs py-1 w-[300px]">Sector Rates</TableHead>
-                    <TableHead className="text-xs py-1 w-[80px]">Actions</TableHead>
+                  <TableRow className="h-10">
+                    <TableHead className="text-xs py-2 px-3 w-[300px]">Sector Rates</TableHead>
+                    <TableHead className="text-xs py-2 px-3 w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {previewData.map((row) => (
-                    <TableRow key={row.id} className="h-8">
+                    <TableRow key={row.id} className="h-12">
                       {/* Column 1: Sector Rates Dropdown */}
                       <TableCell className="py-2 px-3 text-xs w-[300px]">
                         <div className="mt-2">
