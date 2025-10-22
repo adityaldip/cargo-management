@@ -290,12 +290,10 @@ export function PreviewV2() {
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
       <Card>
-        <CardHeader>
-          <CardTitle>Flight Data Preview</CardTitle>
-        </CardHeader>
-        <CardContent className="p-2">
+        <CardContent className="">
+        <CardTitle>Flight Data Preview</CardTitle>
           <div className="w-full">
-            <div className="flex justify-end items-center mb-4">
+            <div className="flex justify-end items-center mb-1">
               <Button 
                 onClick={handleAddNewRow}
                 size="sm"
