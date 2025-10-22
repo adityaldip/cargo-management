@@ -8,7 +8,7 @@ import { PriceAssignmentProps } from "@/components/price-assignment-modules/type
 import { usePriceAssignmentV2TabStore } from "@/store/price-assignment-v2-tab-store"
 import { CustomerManagement } from "@/components/assign-customers-modules/CustomerManagement"
 import { SectorRatesV2 } from "./SectorRatesV2"
-import { PreviewV2 } from "./PreviewV2"
+import { PreviewV2New } from "./PreviewV2New"
 
 export function PriceAssignmentV2Modules({ data, onSave, onExecute }: PriceAssignmentProps) {
   const { 
@@ -117,7 +117,7 @@ export function PriceAssignmentV2Modules({ data, onSave, onExecute }: PriceAssig
           {activeTab === "sector-rates" && <SectorRatesV2 />}
 
           {/* Preview Tab */}
-          {activeTab === "preview" && <PreviewV2 />}
+          {activeTab === "preview" && <PreviewV2New />}
         </>
       )}
 

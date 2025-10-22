@@ -265,11 +265,11 @@ COMMENT ON COLUMN public.flight_uploads.is_converted IS 'Whether this record has
 CREATE TABLE public.sector_rates_v2 (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     text_label VARCHAR(255) NULL,
-    origin_airport VARCHAR(50) NULL,
+    origin_airport TEXT[] NULL,
     airbaltic_origin TEXT[] NULL,
     sector_rate VARCHAR(20) NULL,
     airbaltic_destination TEXT[] NULL,
-    final_destination VARCHAR(255) NULL,
+    final_destination TEXT[] NULL,
     customer_id UUID NULL REFERENCES public.customers(id) ON DELETE SET NULL,
     is_active BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -286,20 +286,41 @@ CREATE TABLE public.preview_price_assignment (
     CONSTRAINT preview_price_assignment_pkey PRIMARY KEY (id)
 ) TABLESPACE pg_default;
 
+-- Create preview_flights table for PreviewV2New component
+CREATE TABLE public.preview_flights (
+    id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
+    origin CHARACTER VARYING(50) NOT NULL,
+    destination CHARACTER VARYING(50) NOT NULL,
+    inbound CHARACTER VARYING(50) NULL,
+    outbound CHARACTER VARYING(50) NULL,
+    sector_rate_id UUID NULL REFERENCES public.sector_rates_v2(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NULL DEFAULT NOW(),
+    CONSTRAINT preview_flights_pkey PRIMARY KEY (id)
+) TABLESPACE pg_default;
+
 -- Add comments for SectorRatesV2 table columns
 COMMENT ON TABLE public.sector_rates_v2 IS 'Sector Rates V2 table for the new UI component';
 COMMENT ON COLUMN public.sector_rates_v2.text_label IS 'Manual text label for sector rate (e.g., "NL Post (AMS → IST)")';
-COMMENT ON COLUMN public.sector_rates_v2.origin_airport IS 'Origin airport information (e.g., "no previous stop")';
+COMMENT ON COLUMN public.sector_rates_v2.origin_airport IS 'Origin airport codes as array (e.g., ["AMS", "FRA"] or null for "no previous stop")';
 COMMENT ON COLUMN public.sector_rates_v2.airbaltic_origin IS 'AirBaltic origin airport codes as array (e.g., ["AMS", "FRA"] or ["ALL"])';
 COMMENT ON COLUMN public.sector_rates_v2.sector_rate IS 'Sector rate as string (e.g., "€2.00")';
 COMMENT ON COLUMN public.sector_rates_v2.airbaltic_destination IS 'AirBaltic destination airport codes as array (e.g., ["IST", "RIX"] or ["ALL"])';
-COMMENT ON COLUMN public.sector_rates_v2.final_destination IS 'Final destination information (e.g., "no additional" or "SYD, MEL")';
+COMMENT ON COLUMN public.sector_rates_v2.final_destination IS 'Final destination airport codes as array (e.g., ["SYD", "MEL"] or null for "no additional")';
 COMMENT ON COLUMN public.sector_rates_v2.customer_id IS 'Foreign key reference to customers table';
 COMMENT ON COLUMN public.sector_rates_v2.is_active IS 'Whether the sector rate is active';
 
 -- Add comments for PreviewPriceAssignment table columns
 COMMENT ON TABLE public.preview_price_assignment IS 'Table to store preview data for price assignment with sector rates';
 COMMENT ON COLUMN public.preview_price_assignment.sector_rate_id IS 'Reference to selected sector rate from sector_rates_v2 table';
+
+-- Add comments for PreviewFlights table columns
+COMMENT ON TABLE public.preview_flights IS 'Table to store flight data for preview functionality';
+COMMENT ON COLUMN public.preview_flights.origin IS 'Origin airport code';
+COMMENT ON COLUMN public.preview_flights.destination IS 'Destination airport code';
+COMMENT ON COLUMN public.preview_flights.inbound IS 'Inbound flight information';
+COMMENT ON COLUMN public.preview_flights.outbound IS 'Outbound flight information';
+COMMENT ON COLUMN public.preview_flights.sector_rate_id IS 'Foreign key reference to sector_rates_v2 table';
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_customers_code ON public.customers USING btree (code) TABLESPACE pg_default;
@@ -365,16 +386,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sector_rates_unique_route ON public.sector
 
 -- Indexes for SectorRatesV2 table
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_text_label ON public.sector_rates_v2 USING btree (text_label) TABLESPACE pg_default;
-CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_origin_airport ON public.sector_rates_v2 USING btree (origin_airport) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_origin_airport ON public.sector_rates_v2 USING GIN (origin_airport) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_airbaltic_origin ON public.sector_rates_v2 USING GIN (airbaltic_origin) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_airbaltic_destination ON public.sector_rates_v2 USING GIN (airbaltic_destination) TABLESPACE pg_default;
-CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_final_destination ON public.sector_rates_v2 USING btree (final_destination) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_final_destination ON public.sector_rates_v2 USING GIN (final_destination) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_customer_id ON public.sector_rates_v2 USING btree (customer_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v2_is_active ON public.sector_rates_v2 USING btree (is_active) TABLESPACE pg_default;
 
 -- Indexes for PreviewPriceAssignment table
 CREATE INDEX IF NOT EXISTS idx_preview_price_assignment_sector_rate_id ON public.preview_price_assignment USING btree (sector_rate_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_preview_price_assignment_created_at ON public.preview_price_assignment USING btree (created_at) TABLESPACE pg_default;
+
+-- Indexes for PreviewFlights table
+CREATE INDEX IF NOT EXISTS idx_preview_flights_origin ON public.preview_flights USING btree (origin) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_preview_flights_destination ON public.preview_flights USING btree (destination) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_preview_flights_sector_rate_id ON public.preview_flights USING btree (sector_rate_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_preview_flights_created_at ON public.preview_flights USING btree (created_at) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_origin ON public.flight_uploads USING btree (origin) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_destination ON public.flight_uploads USING btree (destination) TABLESPACE pg_default;
@@ -464,6 +491,11 @@ CREATE TRIGGER update_preview_price_assignment_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_preview_flights_updated_at 
+    BEFORE UPDATE ON public.preview_flights 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_codes ENABLE ROW LEVEL SECURITY;
@@ -479,6 +511,7 @@ ALTER TABLE public.sector_rates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.flight_uploads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sector_rates_v2 ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.preview_price_assignment ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_flights ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies (allow all operations for authenticated users)
 CREATE POLICY "Allow all operations for authenticated users" ON public.customers
@@ -523,6 +556,9 @@ CREATE POLICY "Allow all operations for authenticated users" ON public.sector_ra
 CREATE POLICY "Allow all operations for authenticated users" ON public.preview_price_assignment
     FOR ALL USING (auth.role() = 'authenticated');
 
+CREATE POLICY "Allow all operations for authenticated users" ON public.preview_flights
+    FOR ALL USING (auth.role() = 'authenticated');
+
 -- Grant permissions
 GRANT ALL ON public.customers TO authenticated;
 GRANT ALL ON public.customer_codes TO authenticated;
@@ -537,6 +573,7 @@ GRANT ALL ON public.invoices TO authenticated;
 GRANT ALL ON public.sector_rates TO authenticated;
 GRANT ALL ON public.flight_uploads TO authenticated;
 GRANT ALL ON public.sector_rates_v2 TO authenticated;
+GRANT ALL ON public.preview_flights TO authenticated;
 
 GRANT ALL ON public.customers TO service_role;
 GRANT ALL ON public.customer_codes TO service_role;
@@ -551,6 +588,7 @@ GRANT ALL ON public.invoices TO service_role;
 GRANT ALL ON public.sector_rates TO service_role;
 GRANT ALL ON public.flight_uploads TO service_role;
 GRANT ALL ON public.sector_rates_v2 TO service_role;
+GRANT ALL ON public.preview_flights TO service_role;
 
 -- Insert sample data
 INSERT INTO public.customers (name, code, email, phone, address, city, state, postal_code, country, contact_person, priority, total_shipments) VALUES
@@ -691,10 +729,19 @@ INSERT INTO public.sector_rates_v2 (
     customer_id,
     is_active
 ) VALUES
-('NL Post (AMS → IST)', 'no previous stop', ARRAY['AMS'], '€2.00', ARRAY['IST'], 'no additional', (SELECT id FROM public.customers WHERE code = 'NL001' LIMIT 1), false),
-('NL Post (AMS → IST)', 'no previous stop', ARRAY['AMS'], '€2.00', ARRAY['IST'], 'no additional', (SELECT id FROM public.customers WHERE code = 'NL001' LIMIT 1), false),
-('NL Post (AMS → IST) → APAC', 'no previous stop', ARRAY['AMS'], '€1.50', ARRAY['IST'], 'SYD, MEL', (SELECT id FROM public.customers WHERE code = 'NL001' LIMIT 1), false),
-('DHL (FRA → RIX)', 'no previous stop', ARRAY['FRA'], '€1.80', ARRAY['RIX'], 'no additional', (SELECT id FROM public.customers WHERE code = 'DHL001' LIMIT 1), false);
+('NL Post (AMS → IST)', NULL, ARRAY['AMS'], '€2.00', ARRAY['IST'], NULL, (SELECT id FROM public.customers WHERE code = 'PREM001' LIMIT 1), true),
+('Multi Origin (AMS, FRA → IST)', ARRAY['AMS', 'FRA'], ARRAY['AMS', 'FRA'], '€2.50', ARRAY['IST'], NULL, (SELECT id FROM public.customers WHERE code = 'NORD002' LIMIT 1), true),
+('NL Post (AMS → IST) → APAC', NULL, ARRAY['AMS'], '€1.50', ARRAY['IST'], ARRAY['SYD', 'MEL'], (SELECT id FROM public.customers WHERE code = 'BALT003' LIMIT 1), true),
+('DHL (FRA → RIX)', NULL, ARRAY['FRA'], '€1.80', ARRAY['RIX'], NULL, (SELECT id FROM public.customers WHERE code = 'CARG004' LIMIT 1), true),
+('Multi Destination (AMS → IST, RIX)', NULL, ARRAY['AMS'], '€2.20', ARRAY['IST', 'RIX'], NULL, (SELECT id FROM public.customers WHERE code = 'GENM005' LIMIT 1), true);
+
+-- Insert sample data for PreviewFlights table
+INSERT INTO public.preview_flights (origin, destination, inbound, outbound) VALUES
+('USFRAT', 'USRIXT', 'BT234', ''),
+('USFRAT', 'USROMT', 'BT234', 'BT633'),
+('LTVNOA', 'CLSCLE', 'BT965', 'BT965'),
+('FRA', 'RIX', 'BT234', 'BT633'),
+('AMS', 'IST', 'BT421', 'BT651');
 
 -- Success message
 SELECT 'Complete Cargo Management System database setup completed successfully!' as message;

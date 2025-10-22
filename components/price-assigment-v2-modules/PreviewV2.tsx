@@ -10,15 +10,16 @@ import { Trash2, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import Swal from 'sweetalert2'
+import { UploadTable } from "@/components/price-assignment-modules/UploadTable"
 
 interface SectorRateV2 {
   id: string
   text_label: string | null
-  origin_airport: string | null
+  origin_airport: string[] | null
   airbaltic_origin: string[] | null
   sector_rate: string | null
   airbaltic_destination: string[] | null
-  final_destination: string | null
+  final_destination: string[] | null
   customer_id: string | null
   customers: {
     id: string
@@ -30,15 +31,21 @@ interface SectorRateV2 {
   updated_at: string
 }
 
-interface PreviewData {
-  id: string
+interface UploadData {
   origin: string
   destination: string
+  inbound: string
+  outbound: string
+}
+
+interface GeneratedData {
+  id: string
+  origin: string
   beforeBT: string
   inbound: string
   outbound: string
   afterBT: string
-  finalDestination: string
+  destination: string
   selectedSectorRate: SectorRateV2 | null
   created_at?: string
   updated_at?: string
@@ -46,15 +53,36 @@ interface PreviewData {
 
 export function PreviewV2() {
   const { toast } = useToast()
-  const [previewData, setPreviewData] = useState<PreviewData[]>([])
+  const [uploadData, setUploadData] = useState<UploadData[]>([
+    {
+      origin: "USFRAT",
+      destination: "USRIXT",
+      inbound: "BT234",
+      outbound: ""
+    },
+    {
+      origin: "USFRAT",
+      destination: "USROMT",
+      inbound: "BT234",
+      outbound: "BT633"
+    },
+    {
+      origin: "LTVNOA",
+      destination: "CLSCLE",
+      inbound: "BT965",
+      outbound: "BT965"
+    }
+  ])
+  const [generatedData, setGeneratedData] = useState<GeneratedData[]>([])
   const [sectorRates, setSectorRates] = useState<SectorRateV2[]>([])
   const [loading, setLoading] = useState(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(1)
 
   // Load data from database
   useEffect(() => {
     fetchSectorRates()
-    fetchPreviewData()
-  }, [])
+    generateSystemData()
+  }, [uploadData, refreshTrigger])
 
   const fetchSectorRates = async () => {
     try {
@@ -90,154 +118,64 @@ export function PreviewV2() {
     }
   }
 
-  const fetchPreviewData = async () => {
-    try {
-      const response = await fetch('/api/preview-price-assignment')
-      if (!response.ok) throw new Error('Failed to fetch preview data')
-      
-      const result = await response.json()
-      const formattedData = result.data?.map((item: any) => ({
-        id: item.id,
-        origin: item.origin,
-        destination: item.destination,
-        beforeBT: item.before_bt || '',
-        inbound: item.inbound || '',
-        outbound: item.outbound || '',
-        afterBT: item.after_bt || '',
-        finalDestination: item.final_destination || '',
-        selectedSectorRate: item.sector_rates_v2 ? {
-          id: item.sector_rates_v2.id,
-          text_label: item.sector_rates_v2.text_label,
-          sector_rate: item.sector_rates_v2.sector_rate,
-          customers: item.sector_rates_v2.customers
-        } : null,
-        created_at: item.created_at,
-        updated_at: item.updated_at
-      })) || []
-      
-      setPreviewData(formattedData)
-    } catch (error) {
-      console.error('Error fetching preview data:', error)
-    }
+  const generateSystemData = () => {
+    // Generate system data based on upload data
+    const generated = uploadData.map((item, index) => ({
+      id: `generated-${index}`,
+      origin: item.origin,
+      beforeBT: item.origin === "USFRAT" ? "FRA → DUS" : "n/a",
+      inbound: item.inbound ? `${item.inbound}, DUS → RIX` : "n/a",
+      outbound: item.outbound || "n/a",
+      afterBT: item.destination === "USRIXT" ? "n/a" : "(LGW → CVT)",
+      destination: item.destination,
+      selectedSectorRate: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }))
+    
+    setGeneratedData(generated)
   }
+
 
   const handleSectorRateChange = (rowId: string, sectorRateId: string) => {
     // Update local state immediately for better UX
     const selectedRate = sectorRates.find(rate => rate.id === sectorRateId)
-    setPreviewData(prev => 
+    setGeneratedData(prev => 
       prev.map(row => 
         row.id === rowId 
           ? { ...row, selectedSectorRate: selectedRate || null }
           : row
       )
     )
+  }
+
+  const handleAddNewRow = () => {
+    const newRow: GeneratedData = {
+      id: `generated-${Date.now()}`,
+      origin: "NEW",
+      beforeBT: "n/a",
+      inbound: "n/a",
+      outbound: "n/a",
+      afterBT: "n/a",
+      destination: "NEW",
+      selectedSectorRate: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
     
-    // Update in database
-    handleUpdateSectorRate(rowId, sectorRateId)
+    setGeneratedData(prev => [newRow, ...prev])
+    
+    toast({
+      title: "Success",
+      description: "New record created successfully",
+    })
   }
 
-  const handleAddNewRow = async () => {
-    try {
-      const response = await fetch('/api/preview-price-assignment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sector_rate_id: null
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create record')
-      }
-
-      const result = await response.json()
-      
-      // Add the new record to local state
-      const newRow: PreviewData = {
-        id: result.data.id,
-        origin: "",
-        destination: "",
-        beforeBT: "",
-        inbound: "",
-        outbound: "",
-        afterBT: "",
-        finalDestination: "",
-        selectedSectorRate: null,
-        created_at: result.data.created_at,
-        updated_at: result.data.updated_at
-      }
-      
-      setPreviewData(prev => [newRow, ...prev])
-      
-      toast({
-        title: "Success",
-        description: "New record created successfully",
-      })
-    } catch (error) {
-      console.error('Error creating record:', error)
-      toast({
-        title: "Error",
-        description: "Failed to create record",
-        variant: "destructive",
-      })
-    }
+  const handleUploadDataChange = (data: UploadData[]) => {
+    setUploadData(data)
+    // Trigger system data regeneration
+    setRefreshTrigger(prev => prev + 1)
   }
-
-  const handleUpdateSectorRate = async (rowId: string, sectorRateId: string) => {
-    try {
-      const response = await fetch(`/api/preview-price-assignment/${rowId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sector_rate_id: sectorRateId
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to update record')
-      }
-
-      const result = await response.json()
-      
-      // Update local state
-      setPreviewData(prev => 
-        prev.map(row => 
-          row.id === rowId 
-            ? {
-                ...row,
-                selectedSectorRate: result.data.sector_rates_v2 ? {
-                  id: result.data.sector_rates_v2.id,
-                  text_label: result.data.sector_rates_v2.text_label,
-                  origin_airport: result.data.sector_rates_v2.origin_airport,
-                  airbaltic_origin: result.data.sector_rates_v2.airbaltic_origin,
-                  sector_rate: result.data.sector_rates_v2.sector_rate,
-                  airbaltic_destination: result.data.sector_rates_v2.airbaltic_destination,
-                  final_destination: result.data.sector_rates_v2.final_destination,
-                  customer_id: result.data.sector_rates_v2.customer_id,
-                  customers: result.data.sector_rates_v2.customers,
-                  is_active: result.data.sector_rates_v2.is_active,
-                  created_at: result.data.sector_rates_v2.created_at,
-                  updated_at: result.data.sector_rates_v2.updated_at
-                } : null,
-                updated_at: result.data.updated_at
-              }
-            : row
-        )
-      )
-    } catch (error) {
-      console.error('Error updating sector rate:', error)
-      toast({
-        title: "Error",
-        description: "Failed to update sector rate",
-        variant: "destructive",
-      })
-    }
-  }
-
 
   // Skeleton component untuk loading state
   const SkeletonTable = () => (
@@ -282,24 +220,9 @@ export function PreviewV2() {
 
     if (result.isConfirmed) {
       try {
-        // Check if it's a temporary row (not saved to database yet)
-        if (id.startsWith('temp-')) {
-          const newData = previewData.filter(item => item.id !== id)
-          setPreviewData(newData)
-        } else {
-          // Delete from database
-          const response = await fetch(`/api/preview-price-assignment/${id}`, {
-            method: 'DELETE'
-          })
-
-          if (!response.ok) {
-            throw new Error('Failed to delete record')
-          }
-
-          // Update local state
-          const newData = previewData.filter(item => item.id !== id)
-          setPreviewData(newData)
-        }
+        // Update local state
+        const newData = generatedData.filter(item => item.id !== id)
+        setGeneratedData(newData)
 
         toast({
           title: "Success",
@@ -346,7 +269,7 @@ export function PreviewV2() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {previewData.map((row) => (
+                    {generatedData.map((row) => (
                       <TableRow key={row.id} className="h-10">
                         {/* Column 1: Sector Rates Dropdown */}
                         <TableCell className="py-1 px-1 text-xs w-[300px]">

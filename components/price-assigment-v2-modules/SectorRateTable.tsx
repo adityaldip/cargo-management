@@ -15,11 +15,11 @@ import Swal from 'sweetalert2'
 interface SectorRateV2 {
   id: string
   text_label: string | null
-  origin_airport: string | null
+  origin_airport: string[] | null
   airbaltic_origin: string[] | null
   sector_rate: string | null
   airbaltic_destination: string[] | null
-  final_destination: string | null
+  final_destination: string[] | null
   customer_id: string | null
   customers: {
     id: string
@@ -133,8 +133,20 @@ export function SectorRateTable({
     )
   }
 
-  const renderFinalDestination = (destination: string | null) => {
-    if (!destination) {
+  const renderOriginAirport = (airports: string[] | null, id: string) => {
+    if (!airports || airports.length === 0) {
+      return (
+        <div className="flex items-center gap-1">
+          <span className="text-sm text-gray-500">no previous stop</span>
+        </div>
+      )
+    }
+    
+    return renderAirportArray(airports, id, 'origin')
+  }
+
+  const renderFinalDestination = (destinations: string[] | null, id: string) => {
+    if (!destinations || destinations.length === 0) {
       return (
         <div className="flex items-center gap-1">
           <span className="text-sm text-gray-500">no additional</span>
@@ -142,25 +154,7 @@ export function SectorRateTable({
       )
     }
     
-    // Check if destination contains multiple values (comma-separated)
-    if (destination.includes(',')) {
-      const destinations = destination.split(',').map(d => d.trim())
-      return (
-        <div className="flex items-center gap-1">
-          {destinations.map((dest, index) => (
-            <span key={index} className="inline-block bg-gray-100 border border-gray-300 rounded px-2 py-1 text-xs">
-              {dest}
-            </span>
-          ))}
-        </div>
-      )
-    }
-    
-    return (
-      <div className="flex items-center gap-1">
-        <span className="text-sm">{destination}</span>
-      </div>
-    )
+    return renderAirportArray(destinations, id, 'destination')
   }
 
 
@@ -229,7 +223,7 @@ export function SectorRateTable({
                 <span className="text-sm">{rate.text_label || ""}</span>
               </TableCell>
               <TableCell className="py-1 px-2">
-                <span className="text-sm">{rate.origin_airport || "no previous stop"}</span>
+                {renderOriginAirport(rate.origin_airport, rate.id)}
               </TableCell>
               <TableCell className="py-1 px-2">
                 {renderAirportArray(rate.airbaltic_origin, rate.id, 'origin')}
@@ -241,7 +235,7 @@ export function SectorRateTable({
                 {renderAirportArray(rate.airbaltic_destination, rate.id, 'destination')}
               </TableCell>
               <TableCell className="py-1 px-2">
-                {renderFinalDestination(rate.final_destination)}
+                {renderFinalDestination(rate.final_destination, rate.id)}
               </TableCell>
               <TableCell className="py-1 px-2">
                 <span className="text-sm">

@@ -15,11 +15,11 @@ import { supabase } from "@/lib/supabase"
 interface SectorRateV2 {
   id: string
   text_label: string | null
-  origin_airport: string | null
+  origin_airport: string[] | null
   airbaltic_origin: string[] | null
   sector_rate: string | null
   airbaltic_destination: string[] | null
-  final_destination: string | null
+  final_destination: string[] | null
   customer_id: string | null
   customers: {
     id: string
@@ -64,11 +64,11 @@ export function SectorRateModal({
   
   const [formData, setFormData] = useState({
     textLabel: "",
-    originAirport: "",
-    airbalticOrigin: [] as string[],
+    originAirport: [] as string[],
+    airbalticOrigin: "",
     sectorRate: "",
-    airbalticDestination: [] as string[],
-    finalDestination: "",
+    airbalticDestination: "",
+    finalDestination: [] as string[],
     customerId: "",
     isActive: false
   })
@@ -97,21 +97,33 @@ export function SectorRateModal({
         sectorRateValue = sectorRateValue.replace('.00', '')
       }
       
-      // Parse airbaltic_origin and airbaltic_destination from array or string
+      // Parse airport arrays from array or string
       const parseAirports = (airportData: string | string[] | null) => {
         if (!airportData) return []
         if (Array.isArray(airportData)) return airportData
         if (airportData === "ALL") return []
         return airportData.split(',').map(airport => airport.trim()).filter(Boolean)
       }
+
+      // Parse single airport from array or string
+      const parseSingleAirport = (airportData: string | string[] | null) => {
+        if (!airportData) return ""
+        if (Array.isArray(airportData)) {
+          if (airportData.length === 0) return ""
+          if (airportData.includes("ALL")) return ""
+          return airportData[0] // Take first airport
+        }
+        if (airportData === "ALL") return ""
+        return airportData
+      }
       
       setFormData({
         textLabel: editingData.text_label || "",
-        originAirport: editingData.origin_airport || "",
-        airbalticOrigin: parseAirports(editingData.airbaltic_origin),
+        originAirport: parseAirports(editingData.origin_airport),
+        airbalticOrigin: parseSingleAirport(editingData.airbaltic_origin),
         sectorRate: sectorRateValue,
-        airbalticDestination: parseAirports(editingData.airbaltic_destination),
-        finalDestination: editingData.final_destination || "",
+        airbalticDestination: parseSingleAirport(editingData.airbaltic_destination),
+        finalDestination: parseAirports(editingData.final_destination),
         customerId: editingData.customer_id || "",
         isActive: editingData.is_active
       })
@@ -119,11 +131,11 @@ export function SectorRateModal({
       // Reset form for new entry
       setFormData({
         textLabel: "",
-        originAirport: "",
-        airbalticOrigin: [],
+        originAirport: [],
+        airbalticOrigin: "",
         sectorRate: "",
-        airbalticDestination: [],
-        finalDestination: "",
+        airbalticDestination: "",
+        finalDestination: [],
         customerId: "",
         isActive: false
       })
@@ -190,34 +202,59 @@ export function SectorRateModal({
     }
   }
 
-  const handleMultiSelectChange = (field: 'airbalticOrigin' | 'airbalticDestination', value: string) => {
+  const handleMultiSelectChange = (field: 'originAirport' | 'finalDestination', value: string[]) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleSingleSelectChange = (field: 'airbalticOrigin' | 'airbalticDestination', value: string) => {
     setFormData(prev => {
-      const currentValues = prev[field] as string[]
-      if (value === 'all') {
-        // If "Select All" is clicked, toggle between all airports and empty
-        return {
-          ...prev,
-          [field]: currentValues.length === airportCodes.length ? [] : airportCodes.map(airport => airport.code)
-        }
-      } else {
-        // Toggle individual airport
-        const newValues = currentValues.includes(value)
-          ? currentValues.filter(v => v !== value)
-          : [...currentValues, value]
-        return {
-          ...prev,
-          [field]: newValues
-        }
+      const newData = {
+        ...prev,
+        [field]: value
       }
+      
+      // Check if origin and destination are the same
+      if (field === 'airbalticOrigin' && value && value === prev.airbalticDestination) {
+        toast({
+          title: "Validation Error",
+          description: "AirBaltic Origin and Destination cannot be the same",
+          variant: "destructive",
+        })
+        return prev // Don't update if they're the same
+      }
+      
+      if (field === 'airbalticDestination' && value && value === prev.airbalticOrigin) {
+        toast({
+          title: "Validation Error", 
+          description: "AirBaltic Origin and Destination cannot be the same",
+          variant: "destructive",
+        })
+        return prev // Don't update if they're the same
+      }
+      
+      return newData
     })
   }
 
   const handleSave = async () => {
     // Validate required fields
-    if (!formData.textLabel || formData.airbalticOrigin.length === 0 || formData.airbalticDestination.length === 0 || !formData.sectorRate) {
+    if (!formData.textLabel || !formData.airbalticOrigin || !formData.airbalticDestination || !formData.sectorRate) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate that AirBaltic Origin and Destination are different
+    if (formData.airbalticOrigin === formData.airbalticDestination) {
+      toast({
+        title: "Validation Error",
+        description: "AirBaltic Origin and Destination cannot be the same",
         variant: "destructive",
       })
       return
@@ -247,11 +284,11 @@ export function SectorRateModal({
 
       const dataToSave = {
         text_label: formData.textLabel,
-        origin_airport: formData.originAirport,
-        airbaltic_origin: formData.airbalticOrigin.length === airportCodes.length ? ["ALL"] : formData.airbalticOrigin,
+        origin_airport: formData.originAirport.length === 0 ? null : formData.originAirport,
+        airbaltic_origin: formData.airbalticOrigin ? [formData.airbalticOrigin] : [],
         sector_rate: `€${formattedRate}`,
-        airbaltic_destination: formData.airbalticDestination.length === airportCodes.length ? ["ALL"] : formData.airbalticDestination,
-        final_destination: formData.finalDestination,
+        airbaltic_destination: formData.airbalticDestination ? [formData.airbalticDestination] : [],
+        final_destination: formData.finalDestination.length === 0 ? null : formData.finalDestination,
         customer_id: formData.customerId || null,
         is_active: formData.isActive
       }
@@ -270,11 +307,11 @@ export function SectorRateModal({
   const handleClose = () => {
     setFormData({
       textLabel: "",
-      originAirport: "",
-      airbalticOrigin: [],
+      originAirport: [],
+      airbalticOrigin: "",
       sectorRate: "",
-      airbalticDestination: [],
-      finalDestination: "",
+      airbalticDestination: "",
+      finalDestination: [],
       customerId: "",
       isActive: false
     })
@@ -311,9 +348,9 @@ export function SectorRateModal({
               Origin Airport
             </Label>
             <div className="col-span-3">
-              <SearchableSelect
+              <MultiSelect
                 options={[
-                  { value: "no previous stop", label: "no previous stop" },
+                  { value: "all", label: "Select All Airports" },
                   ...(loadingAirports 
                     ? [{ value: "", label: "Loading airports...", disabled: true }]
                     : airportCodes.map((airport) => ({
@@ -323,10 +360,11 @@ export function SectorRateModal({
                   )
                 ]}
                 value={formData.originAirport}
-                onValueChange={(value) => handleInputChange("originAirport", value)}
-                placeholder="Select origin airport"
-                searchPlaceholder="Search origin airport..."
+                onValueChange={(value) => handleMultiSelectChange("originAirport", value)}
+                placeholder="Select origin airports"
+                searchPlaceholder="Search origin airports..."
                 emptyMessage="No airport found."
+                maxDisplay={2}
               />
             </div>
           </div>
@@ -337,23 +375,21 @@ export function SectorRateModal({
               AirBaltic Origin
             </Label>
             <div className="col-span-3">
-              <MultiSelect
-                options={[
-                  { value: "all", label: "Select All Flights" },
-                  ...(loadingAirports 
-                    ? [{ value: "", label: "Loading airports...", disabled: true }]
-                    : airportCodes.map((airport) => ({
+              <SearchableSelect
+                options={loadingAirports 
+                  ? [{ value: "", label: "Loading airports...", disabled: true }]
+                  : airportCodes
+                      .filter((airport) => airport.code !== formData.airbalticDestination) // Hide selected destination
+                      .map((airport) => ({
                         value: airport.code,
                         label: airport.code
                       }))
-                  )
-                ]}
+                }
                 value={formData.airbalticOrigin}
-                onValueChange={(value) => handleInputChange("airbalticOrigin", value)}
-                placeholder="Select AirBaltic origins"
-                searchPlaceholder="Search AirBaltic origins..."
+                onValueChange={(value) => handleSingleSelectChange("airbalticOrigin", value)}
+                placeholder="Select AirBaltic origin"
+                searchPlaceholder="Search AirBaltic origin..."
                 emptyMessage="No airport found."
-                maxDisplay={2}
               />
             </div>
           </div>
@@ -386,23 +422,21 @@ export function SectorRateModal({
               AirBaltic Destination
             </Label>
             <div className="col-span-3">
-              <MultiSelect
-                options={[
-                  { value: "all", label: "Select All Flights" },
-                  ...(loadingAirports 
-                    ? [{ value: "", label: "Loading airports...", disabled: true }]
-                    : airportCodes.map((airport) => ({
+              <SearchableSelect
+                options={loadingAirports 
+                  ? [{ value: "", label: "Loading airports...", disabled: true }]
+                  : airportCodes
+                      .filter((airport) => airport.code !== formData.airbalticOrigin) // Hide selected origin
+                      .map((airport) => ({
                         value: airport.code,
                         label: airport.code
                       }))
-                  )
-                ]}
+                }
                 value={formData.airbalticDestination}
-                onValueChange={(value) => handleInputChange("airbalticDestination", value)}
-                placeholder="Select AirBaltic destinations"
-                searchPlaceholder="Search AirBaltic destinations..."
+                onValueChange={(value) => handleSingleSelectChange("airbalticDestination", value)}
+                placeholder="Select AirBaltic destination"
+                searchPlaceholder="Search AirBaltic destination..."
                 emptyMessage="No airport found."
-                maxDisplay={2}
               />
             </div>
           </div>
@@ -413,9 +447,9 @@ export function SectorRateModal({
               Final Destination
             </Label>
             <div className="col-span-3">
-              <SearchableSelect
+              <MultiSelect
                 options={[
-                  { value: "no additional", label: "no additional" },
+                  { value: "all", label: "Select All Destinations" },
                   ...(loadingAirports 
                     ? [{ value: "", label: "Loading airports...", disabled: true }]
                     : airportCodes.map((airport) => ({
@@ -425,10 +459,11 @@ export function SectorRateModal({
                   )
                 ]}
                 value={formData.finalDestination}
-                onValueChange={(value) => handleInputChange("finalDestination", value)}
-                placeholder="Select final destination"
-                searchPlaceholder="Search final destination..."
+                onValueChange={(value) => handleMultiSelectChange("finalDestination", value)}
+                placeholder="Select final destinations"
+                searchPlaceholder="Search final destinations..."
                 emptyMessage="No destination found."
+                maxDisplay={2}
               />
             </div>
           </div>

@@ -18,11 +18,11 @@ import { supabase } from "@/lib/supabase"
 interface SectorRateV2 {
   id: string
   text_label: string | null
-  origin_airport: string | null
+  origin_airport: string[] | null
   airbaltic_origin: string[] | null
   sector_rate: string | null
   airbaltic_destination: string[] | null
-  final_destination: string | null
+  final_destination: string[] | null
   customer_id: string | null
   customers: {
     id: string
@@ -285,8 +285,10 @@ export function SectorRatesV2() {
       rate.text_label?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.customers?.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rate.origin_airport?.some(origin => origin.toLowerCase().includes(searchTerm.toLowerCase())) ||
       rate.airbaltic_origin?.some(origin => origin.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      rate.airbaltic_destination?.some(dest => dest.toLowerCase().includes(searchTerm.toLowerCase()))
+      rate.airbaltic_destination?.some(dest => dest.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      rate.final_destination?.some(dest => dest.toLowerCase().includes(searchTerm.toLowerCase()))
     
     const matchesStatus = statusFilter === 'all' || 
       (statusFilter === 'active' && rate.is_active) ||
