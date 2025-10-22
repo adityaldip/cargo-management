@@ -7,6 +7,8 @@ import { Preview } from "@/components/price-assignment-modules/Preview"
 import { PriceAssignmentProps } from "@/components/price-assignment-modules/types"
 import { usePriceAssignmentV2TabStore } from "@/store/price-assignment-v2-tab-store"
 import { CustomerManagement } from "@/components/assign-customers-modules/CustomerManagement"
+import { SectorRatesV2 } from "./SectorRatesV2"
+import { PreviewV2 } from "./PreviewV2"
 
 export function PriceAssignmentV2Modules({ data, onSave, onExecute }: PriceAssignmentProps) {
   const { 
@@ -66,6 +68,36 @@ export function PriceAssignmentV2Modules({ data, onSave, onExecute }: PriceAssig
           >
             Customers
           </Button>
+          <Button
+            variant={activeTab === "sector-rates" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              setActiveTab("sector-rates")
+              setCurrentView("main")
+            }}
+            className={
+              activeTab === "sector-rates"
+                ? "bg-black text-white hover:bg-gray-800"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            Sector Rate
+          </Button>
+          <Button
+            variant={activeTab === "preview" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              setActiveTab("preview")
+              setCurrentView("main")
+            }}
+            className={
+              activeTab === "preview"
+                ? "bg-black text-white hover:bg-gray-800"
+                : "text-gray-600 hover:text-black hover:bg-gray-50"
+            }
+          >
+            Preview
+          </Button>
         </div>
       </div>
 
@@ -80,6 +112,12 @@ export function PriceAssignmentV2Modules({ data, onSave, onExecute }: PriceAssig
 
           {/* Customer Management Tab */}
           {activeTab === "customer-management" && <CustomerManagement />}
+
+          {/* Sector Rates Tab */}
+          {activeTab === "sector-rates" && <SectorRatesV2 />}
+
+          {/* Preview Tab */}
+          {activeTab === "preview" && <PreviewV2 />}
         </>
       )}
 

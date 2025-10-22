@@ -1,0 +1,119 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { UploadTable } from "@/components/price-assignment-modules/UploadTable"
+import { GenerateTable } from "@/components/price-assignment-modules/GenerateTable"
+
+// Dummy data for uploaded file section
+const dummyUploadedData = [
+  {
+    origin: "USFRAT",
+    destination: "USRIXT",
+    inbound: "BT234",
+    outbound: ""
+  },
+  {
+    origin: "USFRAT",
+    destination: "USROMT",
+    inbound: "BT234",
+    outbound: "BT633"
+  },
+  {
+    origin: "USFRAT",
+    destination: "USROMT",
+    inbound: "BT234",
+    outbound: "BT633"
+  },
+  {
+    origin: "LTVNOA",
+    destination: "CLSCLE",
+    inbound: "BT965",
+    outbound: "BT965"
+  }
+]
+
+// Dummy data for system generated section
+const dummyGeneratedData = [
+  {
+    origin: "FRA",
+    beforeBT: "FRA → DUS",
+    inbound: "BT234, DUS → RIX",
+    outbound: "n/a",
+    afterBT: "n/a",
+    destination: "RIX",
+    sectorRates: "All rates available",
+    appliedRate: "DUS → RIX, €3.00",
+    availableSectorRates: []
+  },
+  {
+    origin: "EVN",
+    beforeBT: "(EVN -> RMO)",
+    inbound: "BT421, (RMO -> RIX)",
+    outbound: "BT651, (RIX -> LGW)",
+    afterBT: "(LGW -> CVT)",
+    destination: "CVT",
+    sectorRates: "All rates available",
+    appliedRate: "DUS → RIX, €3.00",
+    availableSectorRates: []
+  },
+  {
+    origin: "VIE",
+    beforeBT: "n/a",
+    inbound: "BT272, (VIE -> RIX)",
+    outbound: "BT651, (RIX -> RMO)",
+    afterBT: "(RMO -> KIV)",
+    destination: "KIV",
+    sectorRates: "All rates available",
+    appliedRate: "DUS → RIX, €3.00",
+    availableSectorRates: []
+  },
+  {
+    origin: "VNO",
+    beforeBT: "n/a",
+    inbound: "n/a",
+    outbound: "BT965 (VNO -> CDG)",
+    afterBT: "(CDG -> SCL)",
+    destination: "SCL",
+    sectorRates: "All rates available",
+    appliedRate: "VNO → CDG, €3.00",
+    availableSectorRates: []
+  }
+]
+
+export function PreviewV2() {
+  const [uploadData, setUploadData] = useState(dummyUploadedData)
+  const [refreshGenerateTable, setRefreshGenerateTable] = useState(1)
+
+  const handleUploadDataChange = (data: any[]) => {
+    setUploadData(data)
+    // Trigger GenerateTable refresh whenever data changes (including deletions)
+    setRefreshGenerateTable(prev => prev + 1)
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Flight Data Preview</CardTitle>
+        </CardHeader>
+        <CardContent className="p-2">
+          <div className="grid grid-cols-10 gap-1">
+            {/* Upload Section - 40% */}
+            <div className="col-span-4">
+              <UploadTable 
+                data={uploadData} 
+                onDataChange={handleUploadDataChange} 
+              />
+            </div>
+
+            {/* Generate Section - 60% */}
+            <div className="col-span-6">
+              <GenerateTable data={dummyGeneratedData} refreshTrigger={refreshGenerateTable} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

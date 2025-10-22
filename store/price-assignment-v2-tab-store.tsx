@@ -3,7 +3,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
-export type PriceAssignmentV2TabType = "flights" | "airport-codes" | "customer-management" | "preview"
+export type PriceAssignmentV2TabType = "flights" | "airport-codes" | "customer-management" | "sector-rates" | "preview"
 export type PriceAssignmentViewType = "main" | "results"
 
 interface PriceAssignmentV2TabState {

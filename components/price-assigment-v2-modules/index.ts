@@ -1,1 +1,1 @@
-export { PriceAssignmentV2Modules } from "./PriceAssignment"
+export { PriceAssignmentV2Modules } from "./PriceAssignmentV2"

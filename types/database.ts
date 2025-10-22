@@ -6,6 +6,8 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+// Updated database types to include sector_rates_v2 table
+
 export interface Database {
   public: {
     Tables: {
@@ -491,6 +493,47 @@ export interface Database {
           customer?: string | null
           origin_oe?: string | null
           destination_oe?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      sector_rates_v2: {
+        Row: {
+          id: string
+          text_label: string | null
+          origin_airport: string | null
+          airbaltic_origin: string[] | null
+          sector_rate: string | null
+          airbaltic_destination: string[] | null
+          final_destination: string | null
+          customer_id: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          text_label?: string | null
+          origin_airport?: string | null
+          airbaltic_origin?: string[] | null
+          sector_rate?: string | null
+          airbaltic_destination?: string[] | null
+          final_destination?: string | null
+          customer_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          text_label?: string | null
+          origin_airport?: string | null
+          airbaltic_origin?: string[] | null
+          sector_rate?: string | null
+          airbaltic_destination?: string[] | null
+          final_destination?: string | null
+          customer_id?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string

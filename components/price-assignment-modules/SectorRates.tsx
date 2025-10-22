@@ -245,7 +245,7 @@ export function SectorRates() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Card className="bg-white border-gray-200 shadow-sm">
         <CardContent>
             <div className="flex items-center justify-between pb-4">
@@ -283,7 +283,7 @@ export function SectorRates() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       {/* Error Display */}
       {error && (
         <ErrorBanner
@@ -294,7 +294,7 @@ export function SectorRates() {
       )}
 
       {/* Sector Rate Management */}
-      <Card className="bg-white border-gray-200 shadow-sm w-full max-w-7xl">
+      <Card className="bg-white border-gray-200 shadow-sm w-full">
         <CardContent>
           <div className="flex items-center justify-between pb-2">
             <CardTitle className="text-black flex items-center gap-2">
