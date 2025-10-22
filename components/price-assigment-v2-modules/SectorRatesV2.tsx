@@ -361,23 +361,14 @@ export function SectorRatesV2() {
             />
           </div>
           
-          {filteredSectorRates.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              {searchTerm || statusFilter !== 'all' 
-                ? 'No sector rates found matching your criteria' 
-                : 'No sector rates found. Click "Add Sector Rate" to create one.'
-              }
-            </div>
-          ) : (
-            <SectorRateTable
-              sectorRates={filteredSectorRates}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onToggleStatus={handleToggleStatus}
-              airportCodes={airportCodes}
-              updatingStatus={updatingStatus}
-            />
-          )}
+          <SectorRateTable
+            sectorRates={filteredSectorRates}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onToggleStatus={handleToggleStatus}
+            airportCodes={airportCodes}
+            updatingStatus={updatingStatus}
+          />
         </CardContent>
       </Card>
 

@@ -90,7 +90,12 @@ export function SectorRateModal({
   useEffect(() => {
     if (editingData) {
       // Extract numeric value from sector_rate (remove € symbol)
-      const sectorRateValue = editingData.sector_rate?.replace('€', '') || ""
+      let sectorRateValue = editingData.sector_rate?.replace('€', '') || ""
+      
+      // Remove trailing .00 if it exists to show clean input
+      if (sectorRateValue.endsWith('.00')) {
+        sectorRateValue = sectorRateValue.replace('.00', '')
+      }
       
       // Parse airbaltic_origin and airbaltic_destination from array or string
       const parseAirports = (airportData: string | string[] | null) => {
@@ -178,6 +183,13 @@ export function SectorRateModal({
     }))
   }
 
+  const handleSectorRateChange = (value: string) => {
+    // Allow empty string, numbers, and one decimal point
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      handleInputChange("sectorRate", value)
+    }
+  }
+
   const handleMultiSelectChange = (field: 'airbalticOrigin' | 'airbalticDestination', value: string) => {
     setFormData(prev => {
       const currentValues = prev[field] as string[]
@@ -223,11 +235,21 @@ export function SectorRateModal({
     }
 
     try {
+      // Format sector rate properly - only add .00 if no decimal point exists
+      let formattedRate = formData.sectorRate
+      if (formattedRate && !formattedRate.includes('.')) {
+        formattedRate = `${formattedRate}.00`
+      } else if (formattedRate && formattedRate.endsWith('.')) {
+        formattedRate = `${formattedRate}00`
+      } else if (formattedRate && formattedRate.includes('.') && formattedRate.split('.')[1].length === 1) {
+        formattedRate = `${formattedRate}0`
+      }
+
       const dataToSave = {
         text_label: formData.textLabel,
         origin_airport: formData.originAirport,
         airbaltic_origin: formData.airbalticOrigin.length === airportCodes.length ? ["ALL"] : formData.airbalticOrigin,
-        sector_rate: `€${parseFloat(formData.sectorRate).toFixed(2)}`,
+        sector_rate: `€${formattedRate}`,
         airbaltic_destination: formData.airbalticDestination.length === airportCodes.length ? ["ALL"] : formData.airbalticDestination,
         final_destination: formData.finalDestination,
         customer_id: formData.customerId || null,
@@ -347,15 +369,9 @@ export function SectorRateModal({
                 <Input
                   id="sectorRate"
                   value={formData.sectorRate}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    // Allow only numbers and one decimal point
-                    if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
-                      handleInputChange("sectorRate", value)
-                    }
-                  }}
+                  onChange={(e) => handleSectorRateChange(e.target.value)}
                   className="pl-8"
-                  placeholder="2.00"
+                  placeholder="25.55"
                   type="text"
                   inputMode="decimal"
                 />

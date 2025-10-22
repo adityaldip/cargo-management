@@ -45,12 +45,20 @@ export function SectorRateModal({
 
   useEffect(() => {
     if (selectedSectorRate) {
+      // Extract numeric value from sector_rate
+      let sectorRateValue = selectedSectorRate.sector_rate?.toString() || ""
+      
+      // Remove trailing .00 if it exists to show clean input
+      if (sectorRateValue.endsWith('.00')) {
+        sectorRateValue = sectorRateValue.replace('.00', '')
+      }
+      
       setSectorRateForm({
         origin: selectedSectorRate.origin,
         destination: selectedSectorRate.destination,
         originAirportId: selectedSectorRate.origin_airport_id,
         destinationAirportId: selectedSectorRate.destination_airport_id,
-        sectorRate: selectedSectorRate.sector_rate.toString(),
+        sectorRate: sectorRateValue,
         customer: selectedSectorRate.customer || '',
         originOE: selectedSectorRate.origin_oe || '',
         destinationOE: selectedSectorRate.destination_oe || ''
@@ -70,6 +78,13 @@ export function SectorRateModal({
         ...prev,
         [field]: ""
       }))
+    }
+  }
+
+  const handleSectorRateChange = (value: string) => {
+    // Allow empty string, numbers, and one decimal point
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      handleInputChange("sectorRate", value)
     }
   }
 
@@ -133,12 +148,22 @@ export function SectorRateModal({
 
   const handleSave = () => {
     if (validateForm()) {
+      // Format sector rate properly - only add .00 if no decimal point exists
+      let formattedRate = sectorRateForm.sectorRate
+      if (formattedRate && !formattedRate.includes('.')) {
+        formattedRate = `${formattedRate}.00`
+      } else if (formattedRate && formattedRate.endsWith('.')) {
+        formattedRate = `${formattedRate}00`
+      } else if (formattedRate && formattedRate.includes('.') && formattedRate.split('.')[1].length === 1) {
+        formattedRate = `${formattedRate}0`
+      }
+
       onSave({
         origin: sectorRateForm.origin,
         destination: sectorRateForm.destination,
         originAirportId: sectorRateForm.originAirportId,
         destinationAirportId: sectorRateForm.destinationAirportId,
-        sectorRate: Number(sectorRateForm.sectorRate),
+        sectorRate: parseFloat(formattedRate),
         customer: sectorRateForm.customer,
         originOE: sectorRateForm.originOE,
         destinationOE: sectorRateForm.destinationOE
@@ -290,13 +315,12 @@ export function SectorRateModal({
             <Label htmlFor="sectorRate">Sector Rate *</Label>
             <Input
               id="sectorRate"
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
               value={sectorRateForm.sectorRate}
-              onChange={(e) => handleInputChange('sectorRate', e.target.value)}
-              placeholder="Enter sector rate"
+              onChange={(e) => handleSectorRateChange(e.target.value)}
+              placeholder="25.55"
               className={formErrors.sectorRate ? "border-red-500" : ""}
+              inputMode="decimal"
             />
             {formErrors.sectorRate && (
               <p className="text-sm text-red-500 mt-1">{formErrors.sectorRate}</p>

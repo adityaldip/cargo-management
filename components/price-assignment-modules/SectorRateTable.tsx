@@ -429,7 +429,8 @@ export function SectorRateTable({
                 </Button>
               </TableHead>
               <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
-              <TableHead className="h-8 py-1 text-xs">OE Route</TableHead>
+              <TableHead className="h-8 py-1 text-xs">Origin OE</TableHead>
+              <TableHead className="h-8 py-1 text-xs">Destination OE</TableHead>
               <TableHead className="h-8 py-1 text-xs">Alternative Routes</TableHead>
             </TableRow>
           </TableHeader>
@@ -509,12 +510,23 @@ export function SectorRateTable({
                 </TableCell>
                 <TableCell className="py-1 px-2">
                   <div className="text-xs">
-                    {sectorRate.origin_oe && sectorRate.destination_oe ? (
-                      <span className="font-mono text-green-600">
-                        {sectorRate.origin_oe} → {sectorRate.destination_oe}
-                      </span>
+                    {sectorRate.origin_oe ? (
+                      <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5 text-green-600">
+                        {sectorRate.origin_oe}
+                      </Badge>
                     ) : (
-                      <span className="text-gray-400">No OE route</span>
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="py-1 px-2">
+                  <div className="text-xs">
+                    {sectorRate.destination_oe ? (
+                      <Badge variant="outline" className="font-mono text-xs px-1 py-0 h-5 text-green-600">
+                        {sectorRate.destination_oe}
+                      </Badge>
+                    ) : (
+                      <span className="text-gray-400">-</span>
                     )}
                   </div>
                 </TableCell>
@@ -582,11 +594,6 @@ export function SectorRateTable({
         </div>
       )}
 
-      {paginationData.totalItems === 0 && (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No sector rates found matching your search criteria</p>
-        </div>
-      )}
     </div>
   )
 }

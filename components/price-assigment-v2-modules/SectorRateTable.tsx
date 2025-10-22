@@ -163,13 +163,6 @@ export function SectorRateTable({
     )
   }
 
-  if (sectorRates.length === 0) {
-    return (
-      <div className="text-center py-8 text-gray-500">
-        No sector rates found. Click "Add Sector Rate" to create one.
-      </div>
-    )
-  }
 
   return (
     <div className="overflow-x-auto">
