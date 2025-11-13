@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Filter, Eye } from "lucide-react"
 import { useWorkflowStore } from "@/store/workflow-store"
 import { PriceAssignmentV2Modules } from "@/components/price-assigment-v2-modules"
+import { PriceAssignmentV3Modules } from "@/components/price-assignment-v3-modules"
 
 interface FilterCondition {
   id: string
@@ -112,6 +113,14 @@ export function MailProcessingDashboard() {
         case "price-assignment-v2":
         return (
           <PriceAssignmentV2Modules
+            data={null}
+            onSave={(data) => console.log('Price assignment data saved:', data)}
+            onExecute={() => setActiveStep("review-invoices")}
+          />
+        )
+        case "price-assignment-v3":
+        return (
+          <PriceAssignmentV3Modules
             data={null}
             onSave={(data) => console.log('Price assignment data saved:', data)}
             onExecute={() => setActiveStep("review-invoices")}

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 
-type WorkflowStep = 
+export type WorkflowStep = 
   | "import-mail-agent"
   | "import-mail-system" 
   | "review-merged-excel"
@@ -10,6 +10,7 @@ type WorkflowStep =
   | "assign-rates"
   | "price-assignment"
   | "price-assignment-v2"
+  | "price-assignment-v3"
   | "review-rates"
   | "review-invoices"
   | "reporting"

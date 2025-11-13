@@ -5,18 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
 import { FileUp, Users, DollarSign, FileSpreadsheet, Receipt, UserCheck, Calculator, BarChart3, Menu, X, Coins, ChevronLeft, ChevronRight } from "lucide-react"
-
-type WorkflowStep = 
-  | "import-mail-agent"
-  | "import-mail-system" 
-  | "review-merged-excel"
-  | "assign-customers"
-  | "assign-rates"
-  | "price-assignment"
-  | "price-assignment-v2"
-  | "review-rates"
-  | "review-invoices"
-  | "reporting"
+import type { WorkflowStep } from "@/store/workflow-store"
 
 interface WorkflowNavigationProps {
   activeStep: WorkflowStep
@@ -54,6 +43,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
     { id: "assign-rates", label: "Assign Rates", icon: Calculator, tooltip: "Configure automated rate assignment rules and pricing calculations" },
     { id: "price-assignment", label: "Price Assignment", icon: Coins, tooltip: "Manage flight pricing, airport codes, and sector rates"},
     { id: "price-assignment-v2", label: "Price Assignment 2.0", icon: Coins, tooltip: "Manage flight pricing, airport codes, and sector rates"},
+    { id: "price-assignment-v3", label: "Price Assignment 3.0", icon: Coins, tooltip: "Manage flight pricing, airport codes, and sector rates"},
     // { id: "review-rates", label: "Review Rates", icon: DollarSign, tooltip: "Configure pricing for your routes and manage rate plans." },
     { id: "review-invoices", label: "Review Invoices", icon: Receipt, tooltip: "Review and manage generated invoices from processed cargo data"},
     { id: "reporting", label: "Reporting", icon: BarChart3, tooltip: "View comprehensive reports and analytics for cargo data", lighterColor: true },

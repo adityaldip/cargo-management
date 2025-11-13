@@ -1,0 +1,531 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { MultiSelect } from "@/components/ui/multi-select"
+import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase"
+
+interface SectorRateV3 {
+  id: string
+  text_label: string | null
+  origin_airport: string[] | null
+  airbaltic_origin: string[] | null
+  sector_rate: string | null
+  airbaltic_destination: string[] | null
+  final_destination: string[] | null
+  customer_id: string | null
+  customers: {
+    id: string
+    name: string
+    code: string
+  } | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+interface Customer {
+  id: string
+  name: string
+  code: string
+  email: string | null
+  phone: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  postal_code: string | null
+  country: string | null
+  is_active: boolean
+}
+
+interface SectorRateModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSave: (data: Partial<SectorRateV3>) => Promise<void>
+  editingData?: SectorRateV3 | null
+  isSaving: boolean
+}
+
+export function SectorRateModal({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  editingData, 
+  isSaving 
+}: SectorRateModalProps) {
+  const { toast } = useToast()
+  
+  const [formData, setFormData] = useState({
+    textLabel: "",
+    originAirport: [] as string[],
+    airbalticOrigin: "",
+    sectorRate: "",
+    airbalticDestination: "",
+    finalDestination: [] as string[],
+    customerId: "",
+    isActive: false
+  })
+  
+  const [airportCodes, setAirportCodes] = useState<Array<{id: string, code: string, is_active: boolean}>>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [loadingAirports, setLoadingAirports] = useState(false)
+  const [loadingCustomers, setLoadingCustomers] = useState(false)
+
+  // Load data when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchAirportCodes()
+      fetchCustomers()
+    }
+  }, [isOpen])
+
+  // Populate form when editing
+  useEffect(() => {
+    if (editingData) {
+      // Extract numeric value from sector_rate (remove € symbol)
+      let sectorRateValue = editingData.sector_rate?.replace('€', '') || ""
+      
+      // Remove trailing .00 if it exists to show clean input
+      if (sectorRateValue.endsWith('.00')) {
+        sectorRateValue = sectorRateValue.replace('.00', '')
+      }
+      
+      // Parse airport arrays from array or string
+      const parseAirports = (airportData: string | string[] | null) => {
+        if (!airportData) return []
+        if (Array.isArray(airportData)) return airportData
+        if (airportData === "ALL") return []
+        return airportData.split(',').map(airport => airport.trim()).filter(Boolean)
+      }
+
+      // Parse single airport from array or string
+      const parseSingleAirport = (airportData: string | string[] | null) => {
+        if (!airportData) return ""
+        if (Array.isArray(airportData)) {
+          if (airportData.length === 0) return ""
+          if (airportData.includes("ALL")) return ""
+          return airportData[0] // Take first airport
+        }
+        if (airportData === "ALL") return ""
+        return airportData
+      }
+      
+      setFormData({
+        textLabel: editingData.text_label || "",
+        originAirport: parseAirports(editingData.origin_airport),
+        airbalticOrigin: parseSingleAirport(editingData.airbaltic_origin),
+        sectorRate: sectorRateValue,
+        airbalticDestination: parseSingleAirport(editingData.airbaltic_destination),
+        finalDestination: parseAirports(editingData.final_destination),
+        customerId: editingData.customer_id || "",
+        isActive: editingData.is_active
+      })
+    } else {
+      // Reset form for new entry
+      setFormData({
+        textLabel: "",
+        originAirport: [],
+        airbalticOrigin: "",
+        sectorRate: "",
+        airbalticDestination: "",
+        finalDestination: [],
+        customerId: "",
+        isActive: false
+      })
+    }
+  }, [editingData, isOpen])
+
+  const fetchAirportCodes = async () => {
+    try {
+      setLoadingAirports(true)
+      const { data, error } = await (supabase as any)
+        .from('airport_code')
+        .select('id, code, is_active')
+        .eq('is_active', true)
+        .order('code', { ascending: true })
+
+      if (error) throw error
+      setAirportCodes(data || [])
+    } catch (error) {
+      console.error('Error fetching airport codes:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch airport codes",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingAirports(false)
+    }
+  }
+
+  const fetchCustomers = async () => {
+    try {
+      setLoadingCustomers(true)
+      const { data, error } = await (supabase as any)
+        .from('customers')
+        .select('id, name, code, email, phone, address, city, state, postal_code, country, is_active')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      setCustomers(data || [])
+    } catch (error) {
+      console.error('Error fetching customers:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch customers",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingCustomers(false)
+    }
+  }
+
+  const handleInputChange = (field: string, value: string | boolean | string[]) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleSectorRateChange = (value: string) => {
+    // Allow empty string, numbers, and one decimal point
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      handleInputChange("sectorRate", value)
+    }
+  }
+
+  const handleMultiSelectChange = (field: 'originAirport' | 'finalDestination', value: string[]) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleSingleSelectChange = (field: 'airbalticOrigin' | 'airbalticDestination', value: string) => {
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [field]: value
+      }
+      
+      // Check if origin and destination are the same
+      if (field === 'airbalticOrigin' && value && value === prev.airbalticDestination) {
+        toast({
+          title: "Validation Error",
+          description: "AirBaltic Origin and Destination cannot be the same",
+          variant: "destructive",
+        })
+        return prev // Don't update if they're the same
+      }
+      
+      if (field === 'airbalticDestination' && value && value === prev.airbalticOrigin) {
+        toast({
+          title: "Validation Error", 
+          description: "AirBaltic Origin and Destination cannot be the same",
+          variant: "destructive",
+        })
+        return prev // Don't update if they're the same
+      }
+      
+      return newData
+    })
+  }
+
+  const handleSave = async () => {
+    // Validate required fields
+    if (!formData.textLabel || !formData.airbalticOrigin || !formData.airbalticDestination || !formData.sectorRate) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate that AirBaltic Origin and Destination are different
+    if (formData.airbalticOrigin === formData.airbalticDestination) {
+      toast({
+        title: "Validation Error",
+        description: "AirBaltic Origin and Destination cannot be the same",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate sector rate format
+    const sectorRateValue = parseFloat(formData.sectorRate)
+    if (isNaN(sectorRateValue) || sectorRateValue < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid sector rate (positive number)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Format sector rate properly - only add .00 if no decimal point exists
+      let formattedRate = formData.sectorRate
+      if (formattedRate && !formattedRate.includes('.')) {
+        formattedRate = `${formattedRate}.00`
+      } else if (formattedRate && formattedRate.endsWith('.')) {
+        formattedRate = `${formattedRate}00`
+      } else if (formattedRate && formattedRate.includes('.') && formattedRate.split('.')[1].length === 1) {
+        formattedRate = `${formattedRate}0`
+      }
+
+      const dataToSave = {
+        text_label: formData.textLabel,
+        origin_airport: formData.originAirport.length === 0 ? null : formData.originAirport,
+        airbaltic_origin: formData.airbalticOrigin ? [formData.airbalticOrigin] : [],
+        sector_rate: `€${formattedRate}`,
+        airbaltic_destination: formData.airbalticDestination ? [formData.airbalticDestination] : [],
+        final_destination: formData.finalDestination.length === 0 ? null : formData.finalDestination,
+        customer_id: formData.customerId || null,
+        is_active: formData.isActive
+      }
+
+      await onSave(dataToSave)
+    } catch (error) {
+      console.error('Error saving sector rate:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save sector rate",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleClose = () => {
+    setFormData({
+      textLabel: "",
+      originAirport: [],
+      airbalticOrigin: "",
+      sectorRate: "",
+      airbalticDestination: "",
+      finalDestination: [],
+      customerId: "",
+      isActive: false
+    })
+    onClose()
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            {editingData ? "Edit Sector Rate" : "Add New Sector Rate"}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="grid gap-4 py-4">
+          {/* Text Label */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="textLabel" className="text-right">
+              Text Label
+            </Label>
+            <Input
+              id="textLabel"
+              value={formData.textLabel}
+              onChange={(e) => handleInputChange("textLabel", e.target.value)}
+              className="col-span-3"
+              placeholder="e.g., NL Post (AMS → IST)"
+            />
+          </div>
+
+          {/* Origin Airport */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="originAirport" className="text-right">
+              Origin Airport
+            </Label>
+            <div className="col-span-3">
+              <MultiSelect
+                options={[
+                  { value: "all", label: "Select All Airports" },
+                  ...(loadingAirports 
+                    ? [{ value: "", label: "Loading airports...", disabled: true }]
+                    : airportCodes.map((airport) => ({
+                        value: airport.code,
+                        label: airport.code
+                      }))
+                  )
+                ]}
+                value={formData.originAirport}
+                onValueChange={(value) => handleMultiSelectChange("originAirport", value)}
+                placeholder="Select origin airports"
+                searchPlaceholder="Search origin airports..."
+                emptyMessage="No airport found."
+                maxDisplay={2}
+              />
+            </div>
+          </div>
+
+          {/* AirBaltic Origin */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="airbalticOrigin" className="text-right">
+              AirBaltic Origin
+            </Label>
+            <div className="col-span-3">
+              <SearchableSelect
+                options={loadingAirports 
+                  ? [{ value: "", label: "Loading airports...", disabled: true }]
+                  : airportCodes
+                      .filter((airport) => airport.code !== formData.airbalticDestination) // Hide selected destination
+                      .map((airport) => ({
+                        value: airport.code,
+                        label: airport.code
+                      }))
+                }
+                value={formData.airbalticOrigin}
+                onValueChange={(value) => handleSingleSelectChange("airbalticOrigin", value)}
+                placeholder="Select AirBaltic origin"
+                searchPlaceholder="Search AirBaltic origin..."
+                emptyMessage="No airport found."
+              />
+            </div>
+          </div>
+
+          {/* Sector Rate */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="sectorRate" className="text-right">
+              Sector Rate
+            </Label>
+            <div className="col-span-3">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">€</span>
+                <Input
+                  id="sectorRate"
+                  value={formData.sectorRate}
+                  onChange={(e) => handleSectorRateChange(e.target.value)}
+                  className="pl-8"
+                  placeholder="25.55"
+                  type="text"
+                  inputMode="decimal"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Enter amount in euros (e.g., 2.00)</p>
+            </div>
+          </div>
+
+          {/* AirBaltic Destination */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="airbalticDestination" className="text-right">
+              AirBaltic Destination
+            </Label>
+            <div className="col-span-3">
+              <SearchableSelect
+                options={loadingAirports 
+                  ? [{ value: "", label: "Loading airports...", disabled: true }]
+                  : airportCodes
+                      .filter((airport) => airport.code !== formData.airbalticOrigin) // Hide selected origin
+                      .map((airport) => ({
+                        value: airport.code,
+                        label: airport.code
+                      }))
+                }
+                value={formData.airbalticDestination}
+                onValueChange={(value) => handleSingleSelectChange("airbalticDestination", value)}
+                placeholder="Select AirBaltic destination"
+                searchPlaceholder="Search AirBaltic destination..."
+                emptyMessage="No airport found."
+              />
+            </div>
+          </div>
+
+          {/* Final Destination */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="finalDestination" className="text-right">
+              Final Destination
+            </Label>
+            <div className="col-span-3">
+              <MultiSelect
+                options={[
+                  { value: "all", label: "Select All Destinations" },
+                  ...(loadingAirports 
+                    ? [{ value: "", label: "Loading airports...", disabled: true }]
+                    : airportCodes.map((airport) => ({
+                        value: airport.code,
+                        label: airport.code
+                      }))
+                  )
+                ]}
+                value={formData.finalDestination}
+                onValueChange={(value) => handleMultiSelectChange("finalDestination", value)}
+                placeholder="Select final destinations"
+                searchPlaceholder="Search final destinations..."
+                emptyMessage="No destination found."
+                maxDisplay={2}
+              />
+            </div>
+          </div>
+
+          {/* Customer */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="customer" className="text-right">
+              Customer
+            </Label>
+            <div className="col-span-3">
+              <SearchableSelect
+                options={loadingCustomers 
+                  ? [{ value: "", label: "Loading customers...", disabled: true }]
+                  : customers.map((customer) => ({
+                      value: customer.id,
+                      label: customer.name
+                    }))
+                }
+                value={formData.customerId}
+                onValueChange={(value) => handleInputChange("customerId", value)}
+                placeholder="Select customer"
+                searchPlaceholder="Search customer..."
+                emptyMessage="No customer found."
+              />
+            </div>
+          </div>
+
+          {/* Status */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="isActive" className="text-right">
+              Status
+            </Label>
+            <div className="col-span-3 flex items-center space-x-2">
+              <Switch
+                id="isActive"
+                checked={formData.isActive}
+                onCheckedChange={(checked) => handleInputChange("isActive", checked)}
+              />
+              <Label htmlFor="isActive" className="text-sm">
+                {formData.isActive ? "Active" : "Inactive"}
+              </Label>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                {editingData ? "Updating..." : "Creating..."}
+              </>
+            ) : (
+              editingData ? "Update" : "Create"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
