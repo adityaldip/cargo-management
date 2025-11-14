@@ -17,19 +17,19 @@ import { supabase } from "@/lib/supabase"
 
 interface SectorRateV3 {
   id: string
-  text_label: string | null
-  origin_airport: string[] | null
+  status: boolean
+  label: string | null
   airbaltic_origin: string[] | null
-  sector_rate: string | null
   airbaltic_destination: string[] | null
-  final_destination: string[] | null
+  sector_rate: number | null
+  transit_routes: string[] | null
+  transit_prices: number[] | null
   customer_id: string | null
   customers: {
     id: string
     name: string
     code: string
   } | null
-  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -62,7 +62,7 @@ export function SectorRatesV3() {
       
       // Get sector rates first
       const { data: sectorRatesData, error: sectorRatesError } = await (supabase as any)
-        .from('sector_rates_v2')
+        .from('sector_rates_v3')
         .select('*')
         .order('created_at', { ascending: false })
 
@@ -135,8 +135,8 @@ export function SectorRatesV3() {
       if (!rate) return
 
       const { error } = await (supabase as any)
-        .from('sector_rates_v2')
-        .update({ is_active: !rate.is_active })
+        .from('sector_rates_v3')
+        .update({ status: !rate.status })
         .eq('id', id)
 
       if (error) throw error
@@ -144,7 +144,7 @@ export function SectorRatesV3() {
       // Update local state
       setSectorRates(prev => 
         prev.map(r => 
-          r.id === id ? { ...r, is_active: !r.is_active } : r
+          r.id === id ? { ...r, status: !r.status } : r
         )
       )
 
@@ -175,7 +175,7 @@ export function SectorRatesV3() {
   const handleDelete = async (id: string) => {
     try {
       const { error } = await (supabase as any)
-        .from('sector_rates_v2')
+        .from('sector_rates_v3')
         .delete()
         .eq('id', id)
 
@@ -210,7 +210,7 @@ export function SectorRatesV3() {
       if (editingData) {
         // Update existing record
         const { data, error } = await (supabase as any)
-          .from('sector_rates_v2')
+          .from('sector_rates_v3')
           .update(dataToSave)
           .eq('id', editingData.id)
           .select(`
@@ -235,12 +235,12 @@ export function SectorRatesV3() {
 
         toast({
           title: "Sector Rate Updated",
-          description: `Sector rate "${dataToSave.text_label}" has been updated successfully`,
+          description: `Sector rate "${dataToSave.label}" has been updated successfully`,
         })
       } else {
         // Insert new record
         const { data, error } = await (supabase as any)
-          .from('sector_rates_v2')
+          .from('sector_rates_v3')
           .insert([dataToSave])
           .select(`
             *,
@@ -260,7 +260,7 @@ export function SectorRatesV3() {
 
         toast({
           title: "Sector Rate Created",
-          description: `Sector rate "${dataToSave.text_label}" has been created successfully`,
+          description: `Sector rate "${dataToSave.label}" has been created successfully`,
         })
       }
       
@@ -282,17 +282,16 @@ export function SectorRatesV3() {
   // Filter data based on search and status
   const filteredSectorRates = sectorRates.filter(rate => {
     const matchesSearch = !searchTerm || 
-      rate.text_label?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rate.label?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rate.customers?.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rate.origin_airport?.some(origin => origin.toLowerCase().includes(searchTerm.toLowerCase())) ||
       rate.airbaltic_origin?.some(origin => origin.toLowerCase().includes(searchTerm.toLowerCase())) ||
       rate.airbaltic_destination?.some(dest => dest.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      rate.final_destination?.some(dest => dest.toLowerCase().includes(searchTerm.toLowerCase()))
+      rate.transit_routes?.some(route => route.toLowerCase().includes(searchTerm.toLowerCase()))
     
     const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'active' && rate.is_active) ||
-      (statusFilter === 'inactive' && !rate.is_active)
+      (statusFilter === 'active' && rate.status) ||
+      (statusFilter === 'inactive' && !rate.status)
     
     return matchesSearch && matchesStatus
   })

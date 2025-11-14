@@ -14,19 +14,19 @@ import Swal from 'sweetalert2'
 
 interface SectorRateV3 {
   id: string
-  text_label: string | null
-  origin_airport: string[] | null
+  status: boolean
+  label: string | null
   airbaltic_origin: string[] | null
-  sector_rate: string | null
   airbaltic_destination: string[] | null
-  final_destination: string[] | null
+  sector_rate: number | null
+  transit_routes: string[] | null
+  transit_prices: number[] | null
   customer_id: string | null
   customers: {
     id: string
     name: string
     code: string
   } | null
-  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -75,10 +75,10 @@ export function SectorRateTable({
     })
   }
 
-  const handleDeleteWithConfirmation = async (id: string, textLabel: string | null) => {
+  const handleDeleteWithConfirmation = async (id: string, label: string | null) => {
     const result = await Swal.fire({
       title: 'Are you sure?',
-      text: `You are about to delete "${textLabel || 'this sector rate'}"`,
+      text: `You are about to delete "${label || 'this sector rate'}"`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
@@ -165,12 +165,12 @@ export function SectorRateTable({
           <TableRow className="h-8">
             <TableHead className="h-8 py-1 text-xs">Actions</TableHead>
             <TableHead className="h-8 py-1 text-xs">Status</TableHead>
-            <TableHead className="h-8 py-1 text-xs">text label (manual)</TableHead>
-            <TableHead className="h-8 py-1 text-xs">origin airport</TableHead>
-            <TableHead className="h-8 py-1 text-xs">airbaltic origin</TableHead>
-            <TableHead className="h-8 py-1 text-xs">sector rate</TableHead>
-            <TableHead className="h-8 py-1 text-xs">airbaltic destination</TableHead>
-            <TableHead className="h-8 py-1 text-xs">final destination</TableHead>
+            <TableHead className="h-8 py-1 text-xs">Label</TableHead>
+            <TableHead className="h-8 py-1 text-xs">AirBaltic Origin</TableHead>
+            <TableHead className="h-8 py-1 text-xs">AirBaltic Destination</TableHead>
+            <TableHead className="h-8 py-1 text-xs">Direct Sector Rate</TableHead>
+            <TableHead className="h-8 py-1 text-xs">Transit Routes</TableHead>
+            <TableHead className="h-8 py-1 text-xs">Transit Prices</TableHead>
             <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
           </TableRow>
         </TableHeader>
@@ -190,7 +190,7 @@ export function SectorRateTable({
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => handleDeleteWithConfirmation(rate.id, rate.text_label)}
+                    onClick={() => handleDeleteWithConfirmation(rate.id, rate.label)}
                     className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -207,35 +207,45 @@ export function SectorRateTable({
                   ) : (
                     <>
                       <Switch
-                        checked={rate.is_active}
+                        checked={rate.status}
                         onCheckedChange={() => onToggleStatus(rate.id)}
                         className="data-[state=checked]:bg-green-500"
                         disabled={updatingStatus === rate.id}
                       />
                       <span className="text-xs text-gray-600">
-                        {rate.is_active ? 'Active' : 'Inactive'}
+                        {rate.status ? 'Active' : 'Inactive'}
                       </span>
                     </>
                   )}
                 </div>
               </TableCell>
               <TableCell className="py-1 px-2">
-                <span className="text-sm">{rate.text_label || ""}</span>
-              </TableCell>
-              <TableCell className="py-1 px-2">
-                {renderOriginAirport(rate.origin_airport, rate.id)}
+                <span className="text-sm">{rate.label || ""}</span>
               </TableCell>
               <TableCell className="py-1 px-2">
                 {renderAirportArray(rate.airbaltic_origin, rate.id, 'origin')}
               </TableCell>
               <TableCell className="py-1 px-2">
-                <span className="text-sm font-medium">{rate.sector_rate || ""}</span>
-              </TableCell>
-              <TableCell className="py-1 px-2">
                 {renderAirportArray(rate.airbaltic_destination, rate.id, 'destination')}
               </TableCell>
               <TableCell className="py-1 px-2">
-                {renderFinalDestination(rate.final_destination, rate.id)}
+                <span className="text-sm font-medium">{rate.sector_rate ? `€${rate.sector_rate.toFixed(2)}` : ""}</span>
+              </TableCell>
+              <TableCell className="py-1 px-2">
+                {renderAirportArray(rate.transit_routes, rate.id, 'destination')}
+              </TableCell>
+              <TableCell className="py-1 px-2">
+                {rate.transit_prices && rate.transit_prices.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {rate.transit_prices.map((price, index) => (
+                      <span key={index} className="inline-block bg-gray-100 border border-gray-300 rounded px-2 py-1 text-xs">
+                        €{price.toFixed(2)}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-sm text-gray-500">-</span>
+                )}
               </TableCell>
               <TableCell className="py-1 px-2">
                 <span className="text-sm">

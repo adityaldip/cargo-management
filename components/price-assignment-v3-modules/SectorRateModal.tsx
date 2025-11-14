@@ -11,22 +11,23 @@ import { MultiSelect } from "@/components/ui/multi-select"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
+import { Trash2, Plus } from "lucide-react"
 
 interface SectorRateV3 {
   id: string
-  text_label: string | null
-  origin_airport: string[] | null
+  status: boolean
+  label: string | null
   airbaltic_origin: string[] | null
-  sector_rate: string | null
   airbaltic_destination: string[] | null
-  final_destination: string[] | null
+  sector_rate: number | null
+  transit_routes: string[] | null
+  transit_prices: number[] | null
   customer_id: string | null
   customers: {
     id: string
     name: string
     code: string
   } | null
-  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -63,14 +64,14 @@ export function SectorRateModal({
   const { toast } = useToast()
   
   const [formData, setFormData] = useState({
-    textLabel: "",
-    originAirport: [] as string[],
+    label: "",
     airbalticOrigin: "",
-    sectorRate: "",
     airbalticDestination: "",
-    finalDestination: [] as string[],
+    sectorRate: "",
+    transitRoutes: [] as string[],
+    transitPrices: [] as string[],
     customerId: "",
-    isActive: false
+    status: true
   })
   
   const [airportCodes, setAirportCodes] = useState<Array<{id: string, code: string, is_active: boolean}>>([])
@@ -89,55 +90,54 @@ export function SectorRateModal({
   // Populate form when editing
   useEffect(() => {
     if (editingData) {
-      // Extract numeric value from sector_rate (remove € symbol)
-      let sectorRateValue = editingData.sector_rate?.replace('€', '') || ""
+      // Convert numeric sector_rate to string for input
+      let sectorRateValue = editingData.sector_rate?.toString() || ""
       
       // Remove trailing .00 if it exists to show clean input
       if (sectorRateValue.endsWith('.00')) {
         sectorRateValue = sectorRateValue.replace('.00', '')
       }
       
-      // Parse airport arrays from array or string
-      const parseAirports = (airportData: string | string[] | null) => {
-        if (!airportData) return []
-        if (Array.isArray(airportData)) return airportData
-        if (airportData === "ALL") return []
-        return airportData.split(',').map(airport => airport.trim()).filter(Boolean)
+      // Parse single airport from array
+      const parseSingleAirport = (airportData: string[] | null) => {
+        if (!airportData || !Array.isArray(airportData) || airportData.length === 0) return ""
+        return airportData[0] // Take first airport
       }
 
-      // Parse single airport from array or string
-      const parseSingleAirport = (airportData: string | string[] | null) => {
-        if (!airportData) return ""
-        if (Array.isArray(airportData)) {
-          if (airportData.length === 0) return ""
-          if (airportData.includes("ALL")) return ""
-          return airportData[0] // Take first airport
-        }
-        if (airportData === "ALL") return ""
-        return airportData
+      // Parse airport arrays for transit routes
+      const parseAirports = (airportData: string[] | null) => {
+        if (!airportData) return []
+        if (Array.isArray(airportData)) return airportData
+        return []
+      }
+
+      // Parse transit prices to strings for input
+      const parseTransitPrices = (prices: number[] | null) => {
+        if (!prices) return []
+        return prices.map(p => p.toString())
       }
       
       setFormData({
-        textLabel: editingData.text_label || "",
-        originAirport: parseAirports(editingData.origin_airport),
+        label: editingData.label || "",
         airbalticOrigin: parseSingleAirport(editingData.airbaltic_origin),
-        sectorRate: sectorRateValue,
         airbalticDestination: parseSingleAirport(editingData.airbaltic_destination),
-        finalDestination: parseAirports(editingData.final_destination),
+        sectorRate: sectorRateValue,
+        transitRoutes: parseAirports(editingData.transit_routes),
+        transitPrices: parseTransitPrices(editingData.transit_prices),
         customerId: editingData.customer_id || "",
-        isActive: editingData.is_active
+        status: editingData.status
       })
     } else {
       // Reset form for new entry
       setFormData({
-        textLabel: "",
-        originAirport: [],
+        label: "",
         airbalticOrigin: "",
-        sectorRate: "",
         airbalticDestination: "",
-        finalDestination: [],
+        sectorRate: "",
+        transitRoutes: [],
+        transitPrices: [],
         customerId: "",
-        isActive: false
+        status: true
       })
     }
   }, [editingData, isOpen])
@@ -202,7 +202,7 @@ export function SectorRateModal({
     }
   }
 
-  const handleMultiSelectChange = (field: 'originAirport' | 'finalDestination', value: string[]) => {
+  const handleMultiSelectChange = (field: 'transitRoutes', value: string[]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -239,9 +239,40 @@ export function SectorRateModal({
     })
   }
 
+  const handleTransitPriceChange = (index: number, value: string) => {
+    // Allow empty string, numbers, and one decimal point
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setFormData(prev => {
+        const newPrices = [...prev.transitPrices]
+        newPrices[index] = value
+        return {
+          ...prev,
+          transitPrices: newPrices
+        }
+      })
+    }
+  }
+
+  const handleAddTransitRoute = () => {
+    setFormData(prev => ({
+      ...prev,
+      transitRoutes: [...prev.transitRoutes, ""],
+      transitPrices: [...prev.transitPrices, ""]
+    }))
+  }
+
+  const handleRemoveTransitRoute = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      transitRoutes: prev.transitRoutes.filter((_, i) => i !== index),
+      transitPrices: prev.transitPrices.filter((_, i) => i !== index)
+    }))
+  }
+
+
   const handleSave = async () => {
     // Validate required fields
-    if (!formData.textLabel || !formData.airbalticOrigin || !formData.airbalticDestination || !formData.sectorRate) {
+    if (!formData.label || !formData.airbalticOrigin || !formData.airbalticDestination || !formData.sectorRate) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
@@ -271,26 +302,45 @@ export function SectorRateModal({
       return
     }
 
-    try {
-      // Format sector rate properly - only add .00 if no decimal point exists
-      let formattedRate = formData.sectorRate
-      if (formattedRate && !formattedRate.includes('.')) {
-        formattedRate = `${formattedRate}.00`
-      } else if (formattedRate && formattedRate.endsWith('.')) {
-        formattedRate = `${formattedRate}00`
-      } else if (formattedRate && formattedRate.includes('.') && formattedRate.split('.')[1].length === 1) {
-        formattedRate = `${formattedRate}0`
+    // Validate transit prices if transit routes exist
+    if (formData.transitRoutes.length > 0) {
+      const invalidPrices = formData.transitPrices.some((price, index) => {
+        if (formData.transitRoutes[index]) {
+          const priceValue = parseFloat(price)
+          return isNaN(priceValue) || priceValue < 0
+        }
+        return false
+      })
+      
+      if (invalidPrices) {
+        toast({
+          title: "Validation Error",
+          description: "Please enter valid transit prices for all transit routes",
+          variant: "destructive",
+        })
+        return
       }
+    }
+
+    try {
+      // Convert transit prices to numbers
+      const transitPricesNumeric = formData.transitPrices
+        .map((price, index) => {
+          if (!formData.transitRoutes[index]) return null
+          const priceValue = parseFloat(price)
+          return isNaN(priceValue) ? null : priceValue
+        })
+        .filter((p): p is number => p !== null)
 
       const dataToSave = {
-        text_label: formData.textLabel,
-        origin_airport: formData.originAirport.length === 0 ? null : formData.originAirport,
-        airbaltic_origin: formData.airbalticOrigin ? [formData.airbalticOrigin] : [],
-        sector_rate: `€${formattedRate}`,
-        airbaltic_destination: formData.airbalticDestination ? [formData.airbalticDestination] : [],
-        final_destination: formData.finalDestination.length === 0 ? null : formData.finalDestination,
+        label: formData.label,
+        airbaltic_origin: formData.airbalticOrigin ? [formData.airbalticOrigin] : null,
+        airbaltic_destination: formData.airbalticDestination ? [formData.airbalticDestination] : null,
+        sector_rate: sectorRateValue,
+        transit_routes: formData.transitRoutes.length === 0 ? null : formData.transitRoutes,
+        transit_prices: transitPricesNumeric.length === 0 ? null : transitPricesNumeric,
         customer_id: formData.customerId || null,
-        is_active: formData.isActive
+        status: formData.status
       }
 
       await onSave(dataToSave)
@@ -306,14 +356,14 @@ export function SectorRateModal({
 
   const handleClose = () => {
     setFormData({
-      textLabel: "",
-      originAirport: [],
+      label: "",
       airbalticOrigin: "",
-      sectorRate: "",
       airbalticDestination: "",
-      finalDestination: [],
+      sectorRate: "",
+      transitRoutes: [],
+      transitPrices: [],
       customerId: "",
-      isActive: false
+      status: true
     })
     onClose()
   }
@@ -328,45 +378,18 @@ export function SectorRateModal({
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
-          {/* Text Label */}
+          {/* Label */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="textLabel" className="text-right">
-              Text Label
+            <Label htmlFor="label" className="text-right">
+              Label
             </Label>
             <Input
-              id="textLabel"
-              value={formData.textLabel}
-              onChange={(e) => handleInputChange("textLabel", e.target.value)}
+              id="label"
+              value={formData.label}
+              onChange={(e) => handleInputChange("label", e.target.value)}
               className="col-span-3"
               placeholder="e.g., NL Post (AMS → IST)"
             />
-          </div>
-
-          {/* Origin Airport */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="originAirport" className="text-right">
-              Origin Airport
-            </Label>
-            <div className="col-span-3">
-              <MultiSelect
-                options={[
-                  { value: "all", label: "Select All Airports" },
-                  ...(loadingAirports 
-                    ? [{ value: "", label: "Loading airports...", disabled: true }]
-                    : airportCodes.map((airport) => ({
-                        value: airport.code,
-                        label: airport.code
-                      }))
-                  )
-                ]}
-                value={formData.originAirport}
-                onValueChange={(value) => handleMultiSelectChange("originAirport", value)}
-                placeholder="Select origin airports"
-                searchPlaceholder="Search origin airports..."
-                emptyMessage="No airport found."
-                maxDisplay={2}
-              />
-            </div>
           </div>
 
           {/* AirBaltic Origin */}
@@ -379,7 +402,7 @@ export function SectorRateModal({
                 options={loadingAirports 
                   ? [{ value: "", label: "Loading airports...", disabled: true }]
                   : airportCodes
-                      .filter((airport) => airport.code !== formData.airbalticDestination) // Hide selected destination
+                      .filter((airport) => airport.code !== formData.airbalticDestination)
                       .map((airport) => ({
                         value: airport.code,
                         label: airport.code
@@ -426,7 +449,7 @@ export function SectorRateModal({
                 options={loadingAirports 
                   ? [{ value: "", label: "Loading airports...", disabled: true }]
                   : airportCodes
-                      .filter((airport) => airport.code !== formData.airbalticOrigin) // Hide selected origin
+                      .filter((airport) => airport.code !== formData.airbalticOrigin)
                       .map((airport) => ({
                         value: airport.code,
                         label: airport.code
@@ -437,33 +460,6 @@ export function SectorRateModal({
                 placeholder="Select AirBaltic destination"
                 searchPlaceholder="Search AirBaltic destination..."
                 emptyMessage="No airport found."
-              />
-            </div>
-          </div>
-
-          {/* Final Destination */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="finalDestination" className="text-right">
-              Final Destination
-            </Label>
-            <div className="col-span-3">
-              <MultiSelect
-                options={[
-                  { value: "all", label: "Select All Destinations" },
-                  ...(loadingAirports 
-                    ? [{ value: "", label: "Loading airports...", disabled: true }]
-                    : airportCodes.map((airport) => ({
-                        value: airport.code,
-                        label: airport.code
-                      }))
-                  )
-                ]}
-                value={formData.finalDestination}
-                onValueChange={(value) => handleMultiSelectChange("finalDestination", value)}
-                placeholder="Select final destinations"
-                searchPlaceholder="Search final destinations..."
-                emptyMessage="No destination found."
-                maxDisplay={2}
               />
             </div>
           </div>
@@ -491,19 +487,96 @@ export function SectorRateModal({
             </div>
           </div>
 
+          {/* Transit Routes and Prices */}
+          {formData.airbalticOrigin && formData.airbalticDestination && (
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label className="text-right pt-2">
+                Transit Routes
+              </Label>
+              <div className="col-span-3 space-y-2">
+                {formData.transitRoutes.map((route, index) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <div className="flex-1">
+                      <SearchableSelect
+                        options={loadingAirports 
+                          ? [{ value: "", label: "Loading airports...", disabled: true }]
+                          : airportCodes
+                              .filter((airport) => {
+                                // Exclude airports already selected in origin
+                                if (formData.airbalticOrigin === airport.code) return false
+                                // Exclude airports already selected in destination
+                                if (formData.airbalticDestination === airport.code) return false
+                                // Exclude airports already selected in other transit routes
+                                if (formData.transitRoutes.some((r, i) => i !== index && r === airport.code)) return false
+                                return true
+                              })
+                              .map((airport) => ({
+                                value: airport.code,
+                                label: airport.code
+                              }))
+                        }
+                        value={route}
+                        onValueChange={(value) => {
+                          const newRoutes = [...formData.transitRoutes]
+                          newRoutes[index] = value
+                          handleMultiSelectChange("transitRoutes", newRoutes)
+                        }}
+                        placeholder="Select transit route"
+                        searchPlaceholder="Search airport..."
+                        emptyMessage="No airport found."
+                      />
+                    </div>
+                    <div className="w-32">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-xs">€</span>
+                        <Input
+                          value={formData.transitPrices[index] || ""}
+                          onChange={(e) => handleTransitPriceChange(index, e.target.value)}
+                          className="pl-6"
+                          placeholder="0.00"
+                          type="text"
+                          inputMode="decimal"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveTransitRoute(index)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddTransitRoute}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Transit Route
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Status */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="isActive" className="text-right">
+            <Label htmlFor="status" className="text-right">
               Status
             </Label>
             <div className="col-span-3 flex items-center space-x-2">
               <Switch
-                id="isActive"
-                checked={formData.isActive}
-                onCheckedChange={(checked) => handleInputChange("isActive", checked)}
+                id="status"
+                checked={formData.status}
+                onCheckedChange={(checked) => handleInputChange("status", checked)}
               />
-              <Label htmlFor="isActive" className="text-sm">
-                {formData.isActive ? "Active" : "Inactive"}
+              <Label htmlFor="status" className="text-sm">
+                {formData.status ? "Active" : "Inactive"}
               </Label>
             </div>
           </div>
