@@ -477,14 +477,14 @@ export function SectorRateModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[98vh] overflow-visible">
         <DialogHeader>
           <DialogTitle>
             {editingData ? "Edit Sector Rate" : "Add New Sector Rate"}
           </DialogTitle>
         </DialogHeader>
         
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-4 py-4 max-h-[calc(98vh-140px)] overflow-y-auto">
           {/* Label */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="label" className="text-right">
