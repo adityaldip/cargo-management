@@ -309,6 +309,7 @@ CREATE TABLE IF NOT EXISTS public.sector_rates_v3 (
     sector_rate NUMERIC(10, 2) NULL,
     transit_routes TEXT[] NULL,
     transit_prices NUMERIC(10, 2)[] NULL,
+    selected_routes TEXT[] NULL,
     customer_id UUID NULL REFERENCES public.customers(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -369,6 +370,7 @@ COMMENT ON COLUMN public.sector_rates_v3.airbaltic_destination IS 'AirBaltic des
 COMMENT ON COLUMN public.sector_rates_v3.sector_rate IS 'Sector rate as numeric value (e.g., 2.00)';
 COMMENT ON COLUMN public.sector_rates_v3.transit_routes IS 'Transit routes as array of airport codes';
 COMMENT ON COLUMN public.sector_rates_v3.transit_prices IS 'Transit prices as array of numeric values corresponding to transit_routes';
+COMMENT ON COLUMN public.sector_rates_v3.selected_routes IS 'Array of selected transit route combinations (e.g., ["HKD -> YVR -> YYZ", "HKD -> HND -> YYZ"])';
 COMMENT ON COLUMN public.sector_rates_v3.customer_id IS 'Foreign key reference to customers table';
 
 -- Add comments for PreviewPriceAssignmentV3 table columns
@@ -470,6 +472,7 @@ CREATE INDEX IF NOT EXISTS idx_sector_rates_v3_label ON public.sector_rates_v3 U
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v3_airbaltic_origin ON public.sector_rates_v3 USING GIN (airbaltic_origin) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v3_airbaltic_destination ON public.sector_rates_v3 USING GIN (airbaltic_destination) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v3_transit_routes ON public.sector_rates_v3 USING GIN (transit_routes) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_sector_rates_v3_selected_routes ON public.sector_rates_v3 USING GIN (selected_routes) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v3_customer_id ON public.sector_rates_v3 USING btree (customer_id) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_v3_created_at ON public.sector_rates_v3 USING btree (created_at) TABLESPACE pg_default;
 

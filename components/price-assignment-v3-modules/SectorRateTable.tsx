@@ -21,6 +21,7 @@ interface SectorRateV3 {
   sector_rate: number | null
   transit_routes: string[] | null
   transit_prices: number[] | null
+  selected_routes: string[] | null
   customer_id: string | null
   customers: {
     id: string
@@ -170,7 +171,7 @@ export function SectorRateTable({
             <TableHead className="h-8 py-1 text-xs">AirBaltic Destination</TableHead>
             <TableHead className="h-8 py-1 text-xs">Direct Sector Rate</TableHead>
             <TableHead className="h-8 py-1 text-xs">Transit Routes</TableHead>
-            <TableHead className="h-8 py-1 text-xs">Transit Prices</TableHead>
+            <TableHead className="h-8 py-1 text-xs">Selected Routes & Prices</TableHead>
             <TableHead className="h-8 py-1 text-xs">Customer</TableHead>
           </TableRow>
         </TableHeader>
@@ -235,13 +236,23 @@ export function SectorRateTable({
                 {renderAirportArray(rate.transit_routes, rate.id, 'destination')}
               </TableCell>
               <TableCell className="py-1 px-2">
-                {rate.transit_prices && rate.transit_prices.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {rate.transit_prices.map((price, index) => (
-                      <span key={index} className="inline-block bg-gray-100 border border-gray-300 rounded px-2 py-1 text-xs">
-                        €{price.toFixed(2)}
-                      </span>
-                    ))}
+                {rate.selected_routes && rate.selected_routes.length > 0 && rate.transit_prices ? (
+                  <div className="flex flex-col gap-1">
+                    {rate.selected_routes.map((route, index) => {
+                      const price = rate.transit_prices && rate.transit_prices[index] !== undefined 
+                        ? rate.transit_prices[index] 
+                        : null
+                      return (
+                        <div key={index} className="flex items-center gap-2">
+                          <span className="text-xs font-medium">{route}</span>
+                          {price !== null && (
+                            <span className="text-xs text-gray-600 bg-gray-100 border border-gray-300 rounded px-2 py-0.5">
+                              €{price.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
                   <span className="text-sm text-gray-500">-</span>

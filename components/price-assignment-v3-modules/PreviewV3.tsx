@@ -22,6 +22,7 @@ interface SectorRateV3 {
   sector_rate: number | null
   transit_routes: string[] | null
   transit_prices: number[] | null
+  selected_routes: string[] | null
   customer_id: string | null
   customers: {
     id: string

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { Trash2, Plus } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface SectorRateV3 {
   id: string
@@ -22,6 +23,7 @@ interface SectorRateV3 {
   sector_rate: number | null
   transit_routes: string[] | null
   transit_prices: number[] | null
+  selected_routes: string[] | null
   customer_id: string | null
   customers: {
     id: string
@@ -73,6 +75,9 @@ export function SectorRateModal({
     customerId: "",
     status: true
   })
+
+  // State for selected transit combinations with prices
+  const [selectedTransitCombinations, setSelectedTransitCombinations] = useState<Record<string, string>>({})
   
   const [airportCodes, setAirportCodes] = useState<Array<{id: string, code: string, is_active: boolean}>>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -110,23 +115,23 @@ export function SectorRateModal({
         if (Array.isArray(airportData)) return airportData
         return []
       }
-
-      // Parse transit prices to strings for input
-      const parseTransitPrices = (prices: number[] | null) => {
-        if (!prices) return []
-        return prices.map(p => p.toString())
-      }
+      
+      const transitRoutes = parseAirports(editingData.transit_routes)
+      const transitPrices = editingData.transit_prices || []
       
       setFormData({
         label: editingData.label || "",
         airbalticOrigin: parseSingleAirport(editingData.airbaltic_origin),
         airbalticDestination: parseSingleAirport(editingData.airbaltic_destination),
         sectorRate: sectorRateValue,
-        transitRoutes: parseAirports(editingData.transit_routes),
-        transitPrices: parseTransitPrices(editingData.transit_prices),
+        transitRoutes: transitRoutes,
+        transitPrices: [],
         customerId: editingData.customer_id || "",
         status: editingData.status
       })
+      
+      // Reset selected combinations - will be reconstructed in next effect
+      setSelectedTransitCombinations({})
     } else {
       // Reset form for new entry
       setFormData({
@@ -139,8 +144,34 @@ export function SectorRateModal({
         customerId: "",
         status: true
       })
+      setSelectedTransitCombinations({})
     }
   }, [editingData, isOpen])
+
+  // Reconstruct selected combinations after formData is set
+  useEffect(() => {
+    if (editingData && formData.airbalticOrigin && formData.airbalticDestination && formData.transitRoutes.length > 0) {
+      const savedSelectedRoutes = editingData.selected_routes || []
+      const savedTransitPrices = editingData.transit_prices || []
+      const reconstructedSelections: Record<string, string> = {}
+      
+      const currentCombinations = getTransitRouteCombinations()
+      savedSelectedRoutes.forEach((savedRoute, index) => {
+        const matchingCombo = currentCombinations.find(combo => combo.route === savedRoute)
+        if (matchingCombo) {
+          // Get price from transit_prices array at the same index as selected_routes
+          // Each selected route has its own price at the same index
+          const price = savedTransitPrices[index]
+          if (price !== undefined && price !== null) {
+            reconstructedSelections[matchingCombo.routeKey] = price.toFixed(2)
+          } else {
+            reconstructedSelections[matchingCombo.routeKey] = ""
+          }
+        }
+      })
+      setSelectedTransitCombinations(reconstructedSelections)
+    }
+  }, [editingData, formData.airbalticOrigin, formData.airbalticDestination, formData.transitRoutes])
 
   const fetchAirportCodes = async () => {
     try {
@@ -239,34 +270,96 @@ export function SectorRateModal({
     })
   }
 
-  const handleTransitPriceChange = (index: number, value: string) => {
-    // Allow empty string, numbers, and one decimal point
-    if (value === '' || /^\d*\.?\d*$/.test(value)) {
-      setFormData(prev => {
-        const newPrices = [...prev.transitPrices]
-        newPrices[index] = value
-        return {
-          ...prev,
-          transitPrices: newPrices
-        }
-      })
-    }
-  }
-
   const handleAddTransitRoute = () => {
     setFormData(prev => ({
       ...prev,
-      transitRoutes: [...prev.transitRoutes, ""],
-      transitPrices: [...prev.transitPrices, ""]
+      transitRoutes: [...prev.transitRoutes, ""]
     }))
   }
 
   const handleRemoveTransitRoute = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      transitRoutes: prev.transitRoutes.filter((_, i) => i !== index),
-      transitPrices: prev.transitPrices.filter((_, i) => i !== index)
+      transitRoutes: prev.transitRoutes.filter((_, i) => i !== index)
     }))
+    // Reset selected combinations when transit routes change
+    setSelectedTransitCombinations({})
+  }
+
+  // Generate all permutations of transit routes
+  const generateTransitCombinations = (transits: string[]): string[][] => {
+    if (transits.length === 0) return []
+    
+    const combinations: string[][] = []
+    
+    // Generate all permutations for each length (1 to transits.length)
+    for (let length = 1; length <= transits.length; length++) {
+      // Get all combinations of this length
+      const getPermutations = (arr: string[], len: number): string[][] => {
+        if (len === 1) return arr.map(item => [item])
+        
+        const result: string[][] = []
+        for (let i = 0; i < arr.length; i++) {
+          const rest = arr.filter((_, index) => index !== i)
+          const perms = getPermutations(rest, len - 1)
+          perms.forEach(perm => {
+            result.push([arr[i], ...perm])
+          })
+        }
+        return result
+      }
+      
+      combinations.push(...getPermutations(transits, length))
+    }
+    
+    return combinations
+  }
+
+  // Get all transit route combinations formatted as routes
+  const getTransitRouteCombinations = () => {
+    if (!formData.airbalticOrigin || !formData.airbalticDestination || formData.transitRoutes.length === 0) {
+      return []
+    }
+    
+    const validTransits = formData.transitRoutes.filter(t => t && t.trim() !== "")
+    if (validTransits.length === 0) return []
+    
+    const combinations = generateTransitCombinations(validTransits)
+    
+    return combinations.map(combo => {
+      const route = [formData.airbalticOrigin, ...combo, formData.airbalticDestination].join(" -> ")
+      const routeKey = combo.join("->")
+      return {
+        route,
+        routeKey,
+        transitCodes: combo
+      }
+    })
+  }
+
+  const handleTransitCombinationToggle = (routeKey: string, checked: boolean) => {
+    setSelectedTransitCombinations(prev => {
+      const newState = { ...prev }
+      if (checked) {
+        // Initialize with empty string if not exists
+        if (!newState[routeKey]) {
+          newState[routeKey] = ""
+        }
+      } else {
+        delete newState[routeKey]
+      }
+      return newState
+    })
+  }
+
+  const handleTransitCombinationPriceChange = (routeKey: string, price: string) => {
+    // Allow empty string, numbers, and one decimal point
+    if (price === '' || /^\d*\.?\d*$/.test(price)) {
+      setSelectedTransitCombinations(prev => ({
+        ...prev,
+        [routeKey]: price
+      }))
+    }
   }
 
 
@@ -302,20 +395,18 @@ export function SectorRateModal({
       return
     }
 
-    // Validate transit prices if transit routes exist
-    if (formData.transitRoutes.length > 0) {
-      const invalidPrices = formData.transitPrices.some((price, index) => {
-        if (formData.transitRoutes[index]) {
-          const priceValue = parseFloat(price)
-          return isNaN(priceValue) || priceValue < 0
-        }
-        return false
+    // Validate selected transit combinations have prices
+    const selectedRoutes = Object.keys(selectedTransitCombinations)
+    if (selectedRoutes.length > 0) {
+      const missingPrices = selectedRoutes.filter(key => {
+        const price = selectedTransitCombinations[key]
+        return !price || price.trim() === "" || isNaN(parseFloat(price)) || parseFloat(price) < 0
       })
       
-      if (invalidPrices) {
+      if (missingPrices.length > 0) {
         toast({
           title: "Validation Error",
-          description: "Please enter valid transit prices for all transit routes",
+          description: "Please enter valid prices for all selected transit routes",
           variant: "destructive",
         })
         return
@@ -323,22 +414,37 @@ export function SectorRateModal({
     }
 
     try {
-      // Convert transit prices to numbers
-      const transitPricesNumeric = formData.transitPrices
-        .map((price, index) => {
-          if (!formData.transitRoutes[index]) return null
-          const priceValue = parseFloat(price)
-          return isNaN(priceValue) ? null : priceValue
-        })
-        .filter((p): p is number => p !== null)
+      // Build selected_routes and transit_prices from selected combinations
+      // Each selected route has its own price (one-to-one mapping)
+      const selectedRoutesArray: string[] = []
+      const transitPricesArray: number[] = []
+      
+      const combinations = getTransitRouteCombinations()
+      combinations.forEach(combo => {
+        const price = selectedTransitCombinations[combo.routeKey]
+        if (price && price.trim() !== "") {
+          selectedRoutesArray.push(combo.route)
+          transitPricesArray.push(parseFloat(price))
+        }
+      })
+
+      // Build transit_routes from all unique transit codes used in selected routes
+      const allTransitCodes = new Set<string>()
+      combinations.forEach(combo => {
+        if (selectedTransitCombinations[combo.routeKey] && selectedTransitCombinations[combo.routeKey].trim() !== "") {
+          combo.transitCodes.forEach(code => allTransitCodes.add(code))
+        }
+      })
+      const transitRoutesArray = Array.from(allTransitCodes)
 
       const dataToSave = {
         label: formData.label,
         airbaltic_origin: formData.airbalticOrigin ? [formData.airbalticOrigin] : null,
         airbaltic_destination: formData.airbalticDestination ? [formData.airbalticDestination] : null,
         sector_rate: sectorRateValue,
-        transit_routes: formData.transitRoutes.length === 0 ? null : formData.transitRoutes,
-        transit_prices: transitPricesNumeric.length === 0 ? null : transitPricesNumeric,
+        transit_routes: transitRoutesArray.length === 0 ? null : transitRoutesArray,
+        transit_prices: transitPricesArray.length === 0 ? null : transitPricesArray, // One price per selected route
+        selected_routes: selectedRoutesArray.length === 0 ? null : selectedRoutesArray,
         customer_id: formData.customerId || null,
         status: formData.status
       }
@@ -365,12 +471,13 @@ export function SectorRateModal({
       customerId: "",
       status: true
     })
+    setSelectedTransitCombinations({})
     onClose()
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingData ? "Edit Sector Rate" : "Add New Sector Rate"}
@@ -487,7 +594,7 @@ export function SectorRateModal({
             </div>
           </div>
 
-          {/* Transit Routes and Prices */}
+          {/* Transit Routes Input */}
           {formData.airbalticOrigin && formData.airbalticDestination && (
             <div className="grid grid-cols-4 items-start gap-4">
               <Label className="text-right pt-2">
@@ -526,19 +633,6 @@ export function SectorRateModal({
                         emptyMessage="No airport found."
                       />
                     </div>
-                    <div className="w-32">
-                      <div className="relative">
-                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-xs">€</span>
-                        <Input
-                          value={formData.transitPrices[index] || ""}
-                          onChange={(e) => handleTransitPriceChange(index, e.target.value)}
-                          className="pl-6"
-                          placeholder="0.00"
-                          type="text"
-                          inputMode="decimal"
-                        />
-                      </div>
-                    </div>
                     <Button
                       type="button"
                       variant="ghost"
@@ -560,6 +654,46 @@ export function SectorRateModal({
                   <Plus className="h-4 w-4 mr-2" />
                   Add Transit Route
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Transit Route Combinations */}
+          {formData.airbalticOrigin && formData.airbalticDestination && formData.transitRoutes.filter(r => r && r.trim() !== "").length > 0 && (
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label className="text-right pt-2">
+                Select Routes
+              </Label>
+              <div className="col-span-3 max-h-64 overflow-y-auto space-y-3 pr-2">
+                {getTransitRouteCombinations().map((combo, index) => {
+                  const isChecked = selectedTransitCombinations[combo.routeKey] !== undefined
+                  return (
+                    <div key={index} className="flex items-center gap-3 p-2 border rounded">
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={(checked) => handleTransitCombinationToggle(combo.routeKey, checked as boolean)}
+                      />
+                      <Label className="flex-1 text-sm font-medium cursor-pointer" onClick={() => handleTransitCombinationToggle(combo.routeKey, !isChecked)}>
+                        {combo.route}
+                      </Label>
+                      {isChecked && (
+                        <div className="w-32">
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-xs">€</span>
+                            <Input
+                              value={selectedTransitCombinations[combo.routeKey] || ""}
+                              onChange={(e) => handleTransitCombinationPriceChange(combo.routeKey, e.target.value)}
+                              className="pl-6"
+                              placeholder="0.00"
+                              type="text"
+                              inputMode="decimal"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
