@@ -333,6 +333,8 @@ CREATE TABLE IF NOT EXISTS public.preview_flights_v3 (
     inbound CHARACTER VARYING(50) NULL,
     outbound CHARACTER VARYING(50) NULL,
     sector_rate_id UUID NULL REFERENCES public.sector_rates_v3(id) ON DELETE SET NULL,
+    customer_id UUID NULL REFERENCES public.customers(id) ON DELETE SET NULL,
+    transit_route CHARACTER VARYING(255) NULL,
     created_at TIMESTAMP WITH TIME ZONE NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NULL DEFAULT NOW(),
     CONSTRAINT preview_flights_v3_pkey PRIMARY KEY (id)
@@ -384,6 +386,8 @@ COMMENT ON COLUMN public.preview_flights_v3.destination IS 'Destination airport 
 COMMENT ON COLUMN public.preview_flights_v3.inbound IS 'Inbound flight information';
 COMMENT ON COLUMN public.preview_flights_v3.outbound IS 'Outbound flight information';
 COMMENT ON COLUMN public.preview_flights_v3.sector_rate_id IS 'Foreign key reference to sector_rates_v3 table';
+COMMENT ON COLUMN public.preview_flights_v3.customer_id IS 'Foreign key reference to customers table for customer assignment';
+COMMENT ON COLUMN public.preview_flights_v3.transit_route IS 'Transit route information as string';
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_customers_code ON public.customers USING btree (code) TABLESPACE pg_default;
@@ -484,6 +488,8 @@ CREATE INDEX IF NOT EXISTS idx_preview_price_assignment_v3_created_at ON public.
 CREATE INDEX IF NOT EXISTS idx_preview_flights_v3_origin ON public.preview_flights_v3 USING btree (origin) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_preview_flights_v3_destination ON public.preview_flights_v3 USING btree (destination) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_preview_flights_v3_sector_rate_id ON public.preview_flights_v3 USING btree (sector_rate_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_preview_flights_v3_customer_id ON public.preview_flights_v3 USING btree (customer_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_preview_flights_v3_transit_route ON public.preview_flights_v3 USING btree (transit_route) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_preview_flights_v3_created_at ON public.preview_flights_v3 USING btree (created_at) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_flight_uploads_origin ON public.flight_uploads USING btree (origin) TABLESPACE pg_default;

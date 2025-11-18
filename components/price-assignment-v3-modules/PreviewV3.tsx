@@ -40,8 +40,17 @@ interface UploadData {
   inbound: string
   outbound: string
   sector_rate_id?: string
+  customer_id?: string | null
+  transit_route?: string | null
   created_at?: string
   updated_at?: string
+}
+
+interface SectorRateOption {
+  sectorRateId: string
+  transitRoute: string | null
+  displayText: string
+  sectorRate: SectorRateV3
 }
 
 interface GeneratedData {
@@ -73,10 +82,12 @@ export function PreviewV3() {
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
   const [editRecord, setEditRecord] = useState<UploadData | null>(null)
   const [flights, setFlights] = useState<any[]>([])
+  const [customers, setCustomers] = useState<Array<{ id: string; name: string; code: string }>>([])
 
   // Load data from database
   useEffect(() => {
     fetchSectorRates()
+    fetchCustomers()
     loadDataFromDatabase()
   }, [refreshTrigger])
 
@@ -123,6 +134,30 @@ export function PreviewV3() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchCustomers = async () => {
+    try {
+      const { data: customersData, error: customersError } = await (supabase as any)
+        .from('customers')
+        .select('id, name, code')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+
+      if (customersError) {
+        console.error('Error fetching customers:', customersError)
+        throw new Error(customersError.message || 'Failed to fetch customers')
+      }
+
+      setCustomers(customersData || [])
+    } catch (error: any) {
+      console.error('Error fetching customers:', error)
+      toast({
+        title: "Error",
+        description: error?.message || 'Failed to fetch customers.',
+        variant: "destructive"
+      })
     }
   }
 
@@ -253,11 +288,48 @@ export function PreviewV3() {
     setDeleteIndex(null)
   }
 
-  const handleSectorRateChange = async (rowId: string, sectorRateId: string) => {
+  // Generate sector rate options with transit routes
+  const generateSectorRateOptions = (): SectorRateOption[] => {
+    const options: SectorRateOption[] = []
+    
+    sectorRates.forEach((rate) => {
+      if (rate.selected_routes && rate.selected_routes.length > 0) {
+        // If has selected_routes, create one option per route
+        rate.selected_routes.forEach((route: string) => {
+          const displayText = `${rate.sector_rate ? `€${rate.sector_rate.toFixed(2)}` : 'No Rate'} - ${rate.label || 'No Label'} - ${route} - ${rate.customers?.name || 'No Customer'}`
+          options.push({
+            sectorRateId: rate.id,
+            transitRoute: route,
+            displayText,
+            sectorRate: rate
+          })
+        })
+      } else {
+        // If no selected_routes, create one option without transit route
+        const displayText = `${rate.sector_rate ? `€${rate.sector_rate.toFixed(2)}` : 'No Rate'} - ${rate.label || 'No Label'} - ${rate.customers?.name || 'No Customer'}`
+        options.push({
+          sectorRateId: rate.id,
+          transitRoute: null,
+          displayText,
+          sectorRate: rate
+        })
+      }
+    })
+    
+    return options
+  }
+
+  const handleSectorRateChange = async (rowId: string, value: string) => {
     try {
+      // Parse value: format is "sector_rate_id|transit_route" or just "sector_rate_id"
+      const [sectorRateId, transitRoute] = value.split('|')
+      
       const { error } = await (supabase as any)
         .from('preview_flights_v3')
-        .update({ sector_rate_id: sectorRateId })
+        .update({ 
+          sector_rate_id: sectorRateId,
+          transit_route: transitRoute || null
+        })
         .eq('id', rowId)
 
       if (error) {
@@ -267,7 +339,11 @@ export function PreviewV3() {
 
       // Update local state
       const newData = uploadData.map((item) => 
-        item.id === rowId ? { ...item, sector_rate_id: sectorRateId } : item
+        item.id === rowId ? { 
+          ...item, 
+          sector_rate_id: sectorRateId,
+          transit_route: transitRoute || null
+        } : item
       )
       setUploadData(newData)
 
@@ -284,6 +360,39 @@ export function PreviewV3() {
       })
     }
   }
+
+  const handleCustomerChange = async (rowId: string, customerId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('preview_flights_v3')
+        .update({ customer_id: customerId || null })
+        .eq('id', rowId)
+
+      if (error) {
+        console.error('Error updating customer:', error)
+        throw new Error(error.message || 'Failed to update customer')
+      }
+
+      // Update local state
+      const newData = uploadData.map((item) => 
+        item.id === rowId ? { ...item, customer_id: customerId || null } : item
+      )
+      setUploadData(newData)
+
+      toast({
+        title: "Updated!",
+        description: "Customer has been updated.",
+      })
+    } catch (error: any) {
+      console.error('Error updating customer:', error)
+      toast({
+        title: "Error!",
+        description: error?.message || "Failed to update customer.",
+        variant: "destructive"
+      })
+    }
+  }
+
 
   const handleUpload = async () => {
     setIsUploading(true)
@@ -310,7 +419,9 @@ export function PreviewV3() {
           destination: row.destination,
           inbound: row.inbound || null,
           outbound: row.outbound || null,
-          sector_rate_id: row.sector_rate_id || null
+          sector_rate_id: row.sector_rate_id || null,
+          customer_id: row.customer_id || null,
+          transit_route: row.transit_route || null
         })), {
           onConflict: 'id'
         })
@@ -386,7 +497,8 @@ export function PreviewV3() {
                           <TableHead className="text-xs py-1 min-w-[100px]">Outbound Flight</TableHead>
                           <TableHead className="text-xs py-1 min-w-[60px]">Actions</TableHead>
                           <TableHead className="border-0 w-8"></TableHead>
-                          <TableHead className="text-xs py-1 w-[50%]">Sector Rate</TableHead>
+                          <TableHead className="text-xs py-1 min-w-[40px] max-w-[45px]">Sector Rate</TableHead>
+                          <TableHead className="text-xs py-1 min-w-[40px] max-w-[45px]">Customer</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -414,6 +526,9 @@ export function PreviewV3() {
                             <TableCell className="py-1 text-xs h-8">
                               <div className="h-8 w-full bg-gray-200 rounded animate-pulse"></div>
                             </TableCell>
+                            <TableCell className="py-1 text-xs h-8">
+                              <div className="h-8 w-full bg-gray-200 rounded animate-pulse"></div>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -421,16 +536,17 @@ export function PreviewV3() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table className="table-fixed">
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="text-xs py-1 min-w-[80px]">Origin</TableHead>
-                          <TableHead className="text-xs py-1 min-w-[80px]">Destination</TableHead>
-                          <TableHead className="text-xs py-1 min-w-[100px]">Inbound Flight</TableHead>
-                          <TableHead className="text-xs py-1 min-w-[100px]">Outbound Flight</TableHead>
-                          <TableHead className="text-xs py-1 min-w-[60px]">Actions</TableHead>
+                          <TableHead className="text-xs py-1 w-[80px]">Origin</TableHead>
+                          <TableHead className="text-xs py-1 w-[80px]">Destination</TableHead>
+                          <TableHead className="text-xs py-1 w-[100px]">Inbound Flight</TableHead>
+                          <TableHead className="text-xs py-1 w-[100px]">Outbound Flight</TableHead>
+                          <TableHead className="text-xs py-1 w-[60px]">Actions</TableHead>
                           <TableHead className="border-0 w-8"></TableHead>
-                          <TableHead className="text-xs py-1 w-[50%]">Sector Rate</TableHead>
+                          <TableHead className="text-xs py-1 w-[225px]">Sector Rate</TableHead>
+                          <TableHead className="text-xs py-1 w-[225px]">Customer</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -473,30 +589,75 @@ export function PreviewV3() {
                               </div>
                             </TableCell>
                             <TableCell className="w-8 border-0"></TableCell>
-                            <TableCell className="py-1 text-xs h-8">
+                            <TableCell className="py-1 text-xs h-8 w-[225px]">
                               <Select 
-                                value={row.sector_rate_id || ""} 
+                                value={row.sector_rate_id && row.transit_route 
+                                  ? `${row.sector_rate_id}|${row.transit_route}`
+                                  : row.sector_rate_id || ""} 
                                 onValueChange={(value) => {
+                                  // Parse value: format is "sector_rate_id|transit_route" or just "sector_rate_id"
+                                  const [sectorRateId, transitRoute] = value.split('|')
+                                  
                                   if (row.id) {
                                     handleSectorRateChange(row.id, value)
                                   } else {
                                     // For new records without ID, update local state only
                                     const newData = uploadData.map((item, i) => 
-                                      i === index ? { ...item, sector_rate_id: value } : item
+                                      i === index ? { 
+                                        ...item, 
+                                        sector_rate_id: sectorRateId,
+                                        transit_route: transitRoute || null
+                                      } : item
                                     )
                                     setUploadData(newData)
                                   }
                                 }}
                               >
-                                <SelectTrigger className="h-8 text-xs px-2 py-1">
-                                  <SelectValue placeholder="Select rate..." />
+                                <SelectTrigger className="h-8 text-xs px-2 py-1 w-full max-w-full truncate">
+                                  <SelectValue placeholder="Select rate..." className="truncate" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {sectorRates.map((rate) => (
-                                    <SelectItem key={rate.id} value={rate.id}>
+                                  {generateSectorRateOptions().map((option, optIndex) => {
+                                    const value = option.transitRoute 
+                                      ? `${option.sectorRateId}|${option.transitRoute}`
+                                      : option.sectorRateId
+                                    return (
+                                      <SelectItem key={`${option.sectorRateId}-${optIndex}`} value={value}>
+                                        <div className="flex flex-col text-left">
+                                          <span className="font-medium text-sm text-left truncate">
+                                            {option.displayText}
+                                          </span>
+                                        </div>
+                                      </SelectItem>
+                                    )
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell className="py-1 text-xs h-8 w-[225px]">
+                              <Select 
+                                value={row.customer_id || ""} 
+                                onValueChange={(value) => {
+                                  if (row.id) {
+                                    handleCustomerChange(row.id, value)
+                                  } else {
+                                    // For new records without ID, update local state only
+                                    const newData = uploadData.map((item, i) => 
+                                      i === index ? { ...item, customer_id: value || null } : item
+                                    )
+                                    setUploadData(newData)
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs px-2 py-1 w-full max-w-full truncate">
+                                  <SelectValue placeholder="Select customer..." className="truncate" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {customers.map((customer) => (
+                                    <SelectItem key={customer.id} value={customer.id}>
                                       <div className="flex flex-col text-left">
                                         <span className="font-medium text-sm text-left">
-                                          {rate.sector_rate ? `€${rate.sector_rate.toFixed(2)}` : 'No Rate'} - {rate.label || 'No Label'} - {rate.customers?.name || 'No Customer'}
+                                          {customer.name} ({customer.code})
                                         </span>
                                       </div>
                                     </SelectItem>
