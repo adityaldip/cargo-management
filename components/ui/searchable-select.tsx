@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { createPortal } from "react-dom"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Check } from "lucide-react"
+import * as React from "react"
+import { useState, useMemo } from "react"
+import * as SelectPrimitive from "@radix-ui/react-select"
+import { Check, ChevronDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Input } from "@/components/ui/input"
 
 interface SearchableSelectOption {
   value: string
@@ -34,186 +34,123 @@ export function SearchableSelect({
   disabled = false,
   className = ""
 }: SearchableSelectProps) {
-  const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
-  const containerRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
 
-  // Filter options based on search term
-  const filteredOptions = options.filter(option =>
-    option.label.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Filter options based on search term and remove empty values
+  const filteredOptions = useMemo(() => {
+    // First filter out options with empty string values (Radix UI doesn't allow empty string values)
+    const validOptions = options.filter(option => option.value !== "")
+    
+    // Then filter by search term
+    if (!searchTerm) return validOptions
+    return validOptions.filter(option =>
+      option.label.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  }, [options, searchTerm])
 
-  // Calculate position when dropdown opens or window resizes/scrolls
-  useEffect(() => {
-    if (isOpen && containerRef.current) {
-      const updatePosition = () => {
-        if (containerRef.current) {
-          const rect = containerRef.current.getBoundingClientRect()
-          setPosition({
-            top: rect.bottom + 4,
-            left: rect.left,
-            width: rect.width
-          })
-        }
-      }
+  const selectedOption = options.find(option => option.value === value)
+  
+  // Use undefined instead of empty string for value (Radix UI requirement)
+  const selectValue = value === "" ? undefined : value
 
-      updatePosition()
-      
-      // Update position on scroll and resize
-      window.addEventListener('scroll', updatePosition, true)
-      window.addEventListener('resize', updatePosition)
-      
-      return () => {
-        window.removeEventListener('scroll', updatePosition, true)
-        window.removeEventListener('resize', updatePosition)
-      }
-    }
-  }, [isOpen])
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node
-      // Don't close if clicking inside dropdown or container
-      if (
-        dropdownRef.current && 
-        dropdownRef.current.contains(target)
-      ) {
-        return
-      }
-      if (
-        containerRef.current &&
-        containerRef.current.contains(target)
-      ) {
-        return
-      }
-      // Close if clicking outside
-      setIsOpen(false)
+  // Reset search term when dropdown closes
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen)
+    if (!newOpen) {
       setSearchTerm("")
-    }
-
-    if (isOpen) {
-      // Use setTimeout to ensure dropdown is rendered first
-      setTimeout(() => {
-        document.addEventListener('mousedown', handleClickOutside, true)
-      }, 0)
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside, true)
-      }
-    }
-  }, [isOpen])
-
-  // Close dropdown when value changes
-  useEffect(() => {
-    if (isOpen) {
-      setIsOpen(false)
-      setSearchTerm("")
-    }
-  }, [value])
-
-  const handleOptionClick = (optionValue: string) => {
-    if (!disabled) {
-      onValueChange(optionValue)
     }
   }
 
-  const selectedOption = options.find(option => option.value === value)
-
-  const dropdownContent = isOpen && typeof window !== 'undefined' ? (
-    <div
-      ref={dropdownRef}
-      className="fixed z-[99999] bg-white border shadow-lg rounded-md"
-      style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
-        width: `${position.width}px`,
-        pointerEvents: 'auto',
-      }}
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="p-2">
-        <Input
-          placeholder={searchPlaceholder}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="mb-2"
-          onClick={(e) => e.stopPropagation()}
-          autoFocus
-        />
-        <div className="max-h-48 overflow-y-auto">
-          {filteredOptions.map((option) => (
-            <div
-              key={option.value}
-              className={`flex items-center px-2 py-1.5 hover:bg-gray-100 cursor-pointer ${
-                option.disabled ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (!option.disabled) {
-                  handleOptionClick(option.value)
-                }
-              }}
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-              }}
-            >
-              <Check
-                className={cn(
-                  "mr-2 h-4 w-4",
-                  value === option.value ? "opacity-100" : "opacity-0"
-                )}
-              />
-              {option.label}
-            </div>
-          ))}
-          {filteredOptions.length === 0 && (
-            <div className="px-2 py-1.5 text-sm text-gray-500">
-              {emptyMessage}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  ) : null
+  // Handle value change - convert undefined to empty string for compatibility
+  const handleValueChange = (newValue: string) => {
+    onValueChange(newValue || "")
+  }
 
   return (
-    <>
-      <div ref={containerRef} className={`relative searchable-select-container ${className}`}>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={isOpen}
-          className={`w-full justify-between ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-          onClick={() => {
-            if (!disabled) {
-              setIsOpen(!isOpen)
-            }
+    <SelectPrimitive.Root
+      value={selectValue}
+      onValueChange={handleValueChange}
+      open={open}
+      onOpenChange={handleOpenChange}
+      disabled={disabled}
+    >
+      <SelectPrimitive.Trigger
+        className={cn(
+          "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+          className
+        )}
+      >
+        <SelectPrimitive.Value placeholder={placeholder}>
+          {selectedOption?.label || placeholder}
+        </SelectPrimitive.Value>
+        <SelectPrimitive.Icon asChild>
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </SelectPrimitive.Icon>
+      </SelectPrimitive.Trigger>
+      
+      <SelectPrimitive.Portal>
+        <SelectPrimitive.Content
+          className="relative z-[9999] max-h-96 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2"
+          position="popper"
+          style={{
+            width: 'var(--radix-select-trigger-width)',
+            minWidth: 'var(--radix-select-trigger-width)',
+            maxWidth: 'var(--radix-select-trigger-width)',
           }}
-          disabled={disabled}
         >
-          {selectedOption ? selectedOption.label : placeholder}
-          <svg
-            className="ml-2 h-4 w-4 shrink-0 opacity-50"
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={searchPlaceholder}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 h-9"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Escape') {
+                    handleOpenChange(false)
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+          </div>
+          
+          <SelectPrimitive.Viewport 
+            className="p-1 max-h-64 overflow-y-auto"
+            style={{
+              width: '100%',
+            }}
           >
-            <path d="m6 9 6 6 6-6"/>
-          </svg>
-        </Button>
-      </div>
-      {typeof window !== 'undefined' && createPortal(dropdownContent, document.body)}
-    </>
+            {filteredOptions.length === 0 ? (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                {emptyMessage}
+              </div>
+            ) : (
+              filteredOptions.map((option) => (
+                <SelectPrimitive.Item
+                  key={option.value}
+                  value={option.value}
+                  disabled={option.disabled}
+                  className={cn(
+                    "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                  )}
+                >
+                  <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                    <SelectPrimitive.ItemIndicator>
+                      <Check className="h-4 w-4" />
+                    </SelectPrimitive.ItemIndicator>
+                  </span>
+                  <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
+                </SelectPrimitive.Item>
+              ))
+            )}
+          </SelectPrimitive.Viewport>
+        </SelectPrimitive.Content>
+      </SelectPrimitive.Portal>
+    </SelectPrimitive.Root>
   )
 }
