@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
@@ -320,32 +320,44 @@ export function PreviewV3() {
     return total
   }
 
+  // Format original route from airbaltic_origin and airbaltic_destination
+  const formatOriginalRoute = (rate: SectorRateV3): string => {
+    const origins = rate.airbaltic_origin && rate.airbaltic_origin.length > 0 
+      ? rate.airbaltic_origin.join(', ') 
+      : 'N/A'
+    const destinations = rate.airbaltic_destination && rate.airbaltic_destination.length > 0 
+      ? rate.airbaltic_destination.join(', ') 
+      : 'N/A'
+    return `${origins} -> ${destinations}`
+  }
+
   // Generate sector rate options with transit routes
   const generateSectorRateOptions = (): SectorRateOption[] => {
     const options: SectorRateOption[] = []
     
     sectorRates.forEach((rate) => {
+      // Always add original rate option (without transit)
+      const basePrice = rate.sector_rate || 0
+      const originalRoute = formatOriginalRoute(rate)
+      const originalDisplayText = `${basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'}, ${rate.label || 'No Label'}, (${originalRoute}), ${rate.customers?.name || 'No Customer'}`
+      options.push({
+        sectorRateId: rate.id,
+        transitRoute: null,
+        displayText: originalDisplayText,
+        sectorRate: rate
+      })
+      
+      // If has selected_routes, also add options for each transit route
       if (rate.selected_routes && rate.selected_routes.length > 0) {
-        // If has selected_routes, create one option per route
         rate.selected_routes.forEach((route: string) => {
           const totalPrice = calculateTotalPrice(rate, route)
-          const displayText = `€${totalPrice.toFixed(2)} - ${rate.label || 'No Label'} - ${route} - ${rate.customers?.name || 'No Customer'}`
+          const displayText = `€${totalPrice.toFixed(2)}, ${rate.label || 'No Label'}, (${route}), ${rate.customers?.name || 'No Customer'}`
           options.push({
             sectorRateId: rate.id,
             transitRoute: route,
             displayText,
             sectorRate: rate
           })
-        })
-      } else {
-        // If no selected_routes, create one option without transit route
-        const basePrice = rate.sector_rate || 0
-        const displayText = `${basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'} - ${rate.label || 'No Label'} - ${rate.customers?.name || 'No Customer'}`
-        options.push({
-          sectorRateId: rate.id,
-          transitRoute: null,
-          displayText,
-          sectorRate: rate
         })
       }
     })
@@ -624,10 +636,16 @@ export function PreviewV3() {
                             </TableCell>
                             <TableCell className="w-8 border-0"></TableCell>
                             <TableCell className="py-1 text-xs h-8 w-[225px]">
-                              <Select 
+                              <SearchableSelect
+                                options={generateSectorRateOptions().map((option, optIndex) => ({
+                                  value: option.transitRoute 
+                                    ? `${option.sectorRateId}|${option.transitRoute}`
+                                    : option.sectorRateId,
+                                  label: option.displayText
+                                }))}
                                 value={row.sector_rate_id && row.transit_route 
                                   ? `${row.sector_rate_id}|${row.transit_route}`
-                                  : row.sector_rate_id || ""} 
+                                  : row.sector_rate_id || ""}
                                 onValueChange={(value) => {
                                   // Parse value: format is "sector_rate_id|transit_route" or just "sector_rate_id"
                                   const [sectorRateId, transitRoute] = value.split('|')
@@ -646,31 +664,19 @@ export function PreviewV3() {
                                     setUploadData(newData)
                                   }
                                 }}
-                              >
-                                <SelectTrigger className="h-8 text-xs px-2 py-1 w-full max-w-full truncate">
-                                  <SelectValue placeholder="Select rate..." className="truncate" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {generateSectorRateOptions().map((option, optIndex) => {
-                                    const value = option.transitRoute 
-                                      ? `${option.sectorRateId}|${option.transitRoute}`
-                                      : option.sectorRateId
-                                    return (
-                                      <SelectItem key={`${option.sectorRateId}-${optIndex}`} value={value}>
-                                        <div className="flex flex-col text-left">
-                                          <span className="font-medium text-sm text-left truncate">
-                                            {option.displayText}
-                                          </span>
-                                        </div>
-                                      </SelectItem>
-                                    )
-                                  })}
-                                </SelectContent>
-                              </Select>
+                                placeholder="Select rate..."
+                                searchPlaceholder="Search rate..."
+                                emptyMessage="No rate found."
+                                className="h-8 text-xs"
+                              />
                             </TableCell>
                             <TableCell className="py-1 text-xs h-8 w-[225px]">
-                              <Select 
-                                value={row.customer_id || ""} 
+                              <SearchableSelect
+                                options={customers.map((customer) => ({
+                                  value: customer.id,
+                                  label: `${customer.name} (${customer.code})`
+                                }))}
+                                value={row.customer_id || ""}
                                 onValueChange={(value) => {
                                   if (row.id) {
                                     handleCustomerChange(row.id, value)
@@ -682,22 +688,11 @@ export function PreviewV3() {
                                     setUploadData(newData)
                                   }
                                 }}
-                              >
-                                <SelectTrigger className="h-8 text-xs px-2 py-1 w-full max-w-full truncate">
-                                  <SelectValue placeholder="Select customer..." className="truncate" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {customers.map((customer) => (
-                                    <SelectItem key={customer.id} value={customer.id}>
-                                      <div className="flex flex-col text-left">
-                                        <span className="font-medium text-sm text-left">
-                                          {customer.name} ({customer.code})
-                                        </span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                placeholder="Select customer..."
+                                searchPlaceholder="Search customer..."
+                                emptyMessage="No customer found."
+                                className="h-8 text-xs"
+                              />
                             </TableCell>
                           </TableRow>
                         ))}
