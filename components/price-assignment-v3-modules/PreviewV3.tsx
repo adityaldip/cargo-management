@@ -339,7 +339,7 @@ export function PreviewV3() {
       // Always add original rate option (without transit)
       const basePrice = rate.sector_rate || 0
       const originalRoute = formatOriginalRoute(rate)
-      const originalDisplayText = `${basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'}, ${rate.label || 'No Label'}, (${originalRoute}), ${rate.customers?.name || 'No Customer'}`
+      const originalDisplayText = `${basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'}, ${rate.label || 'No Label'} |  (${originalRoute}), ${rate.customers?.name || 'No Customer'}`
       options.push({
         sectorRateId: rate.id,
         transitRoute: null,
@@ -351,7 +351,7 @@ export function PreviewV3() {
       if (rate.selected_routes && rate.selected_routes.length > 0) {
         rate.selected_routes.forEach((route: string) => {
           const totalPrice = calculateTotalPrice(rate, route)
-          const displayText = `€${totalPrice.toFixed(2)}, ${rate.label || 'No Label'}, (${route}), ${rate.customers?.name || 'No Customer'}`
+          const displayText = `€${totalPrice.toFixed(2)}, ${rate.label || 'No Label'} | (${route}), ${rate.customers?.name || 'No Customer'}`
           options.push({
             sectorRateId: rate.id,
             transitRoute: route,

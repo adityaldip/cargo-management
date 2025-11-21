@@ -81,8 +81,8 @@ export function SearchableSelect({
           className
         )}
       >
-        <SelectPrimitive.Value placeholder={placeholder}>
-          {selectedOption?.label || placeholder}
+        <SelectPrimitive.Value placeholder={placeholder} className="truncate">
+          {selectedOption?.label?.split('\n')[0] || placeholder}
         </SelectPrimitive.Value>
         <SelectPrimitive.Icon asChild>
           <ChevronDown className="h-4 w-4 opacity-50" />
@@ -144,7 +144,7 @@ export function SearchableSelect({
                       <Check className="h-4 w-4" />
                     </SelectPrimitive.ItemIndicator>
                   </span>
-                  <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
+                  <SelectPrimitive.ItemText className="whitespace-pre-line">{option.label}</SelectPrimitive.ItemText>
                 </SelectPrimitive.Item>
               ))
             )}
