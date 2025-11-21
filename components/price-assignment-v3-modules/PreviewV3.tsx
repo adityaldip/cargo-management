@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { AddFlightUploadModal } from "../price-assignment-modules/AddFlightUploadModal"
-import { EditFlightUploadModal } from "../price-assignment-modules/EditFlightUploadModal"
+import { AddFlightUploadModalV3 } from "./AddFlightUploadModalV3"
+import { EditFlightUploadModalV3 } from "./EditFlightUploadModalV3"
 import { Edit } from "lucide-react"
 import { SweetAlert } from "@/components/ui/sweet-alert"
 
@@ -21,7 +21,7 @@ interface SectorRateV3 {
   airbaltic_destination: string[] | null
   sector_rate: number | null
   transit_routes: string[] | null
-  transit_prices: number[] | null
+  transit_prices: (number | string)[] | null
   selected_routes: string[] | null
   customer_id: string | null
   customers: {
@@ -288,6 +288,38 @@ export function PreviewV3() {
     setDeleteIndex(null)
   }
 
+  // Calculate total price for a selected route
+  const calculateTotalPrice = (rate: SectorRateV3, selectedRoute: string): number => {
+    let total = rate.sector_rate || 0
+    
+    // If no transit_routes or transit_prices, return sector_rate only
+    if (!rate.transit_routes || !rate.transit_prices || rate.transit_routes.length === 0 || rate.transit_prices.length === 0) {
+      return total
+    }
+    
+    // Parse the selected route to get transit points
+    // Format: "AMS -> ATH -> BER" or "AMS -> ATH -> ARN -> BER"
+    const routeParts = selectedRoute.split('->').map(part => part.trim())
+    
+    // Skip first (origin) and last (destination), get transit points in between
+    const transitPoints = routeParts.slice(1, -1)
+    
+    // For each transit point, find its price
+    transitPoints.forEach((transitPoint) => {
+      const transitIndex = rate.transit_routes?.indexOf(transitPoint)
+      if (transitIndex !== undefined && transitIndex >= 0 && transitIndex < (rate.transit_prices?.length || 0) && rate.transit_prices) {
+        const price = rate.transit_prices[transitIndex]
+        // Handle both string and number prices
+        const priceValue = typeof price === 'string' ? parseFloat(price) : (price || 0)
+        if (!isNaN(priceValue)) {
+          total += priceValue
+        }
+      }
+    })
+    
+    return total
+  }
+
   // Generate sector rate options with transit routes
   const generateSectorRateOptions = (): SectorRateOption[] => {
     const options: SectorRateOption[] = []
@@ -296,7 +328,8 @@ export function PreviewV3() {
       if (rate.selected_routes && rate.selected_routes.length > 0) {
         // If has selected_routes, create one option per route
         rate.selected_routes.forEach((route: string) => {
-          const displayText = `${rate.sector_rate ? `€${rate.sector_rate.toFixed(2)}` : 'No Rate'} - ${rate.label || 'No Label'} - ${route} - ${rate.customers?.name || 'No Customer'}`
+          const totalPrice = calculateTotalPrice(rate, route)
+          const displayText = `€${totalPrice.toFixed(2)} - ${rate.label || 'No Label'} - ${route} - ${rate.customers?.name || 'No Customer'}`
           options.push({
             sectorRateId: rate.id,
             transitRoute: route,
@@ -306,7 +339,8 @@ export function PreviewV3() {
         })
       } else {
         // If no selected_routes, create one option without transit route
-        const displayText = `${rate.sector_rate ? `€${rate.sector_rate.toFixed(2)}` : 'No Rate'} - ${rate.label || 'No Label'} - ${rate.customers?.name || 'No Customer'}`
+        const basePrice = rate.sector_rate || 0
+        const displayText = `${basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'} - ${rate.label || 'No Label'} - ${rate.customers?.name || 'No Customer'}`
         options.push({
           sectorRateId: rate.id,
           transitRoute: null,
@@ -677,14 +711,14 @@ export function PreviewV3() {
       </Card>
 
       {/* Add Flight Upload Modal */}
-      <AddFlightUploadModal
+      <AddFlightUploadModalV3
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSuccess={handleAddSuccess}
       />
 
       {/* Edit Flight Upload Modal */}
-      <EditFlightUploadModal
+      <EditFlightUploadModalV3
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         onSuccess={handleEditSuccess}
