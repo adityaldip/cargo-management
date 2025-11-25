@@ -175,20 +175,37 @@ export function PreviewV3() {
   }
 
   // Extract origin and destination from inbound/outbound flight string
-  // Handles formats like "BT344, DUS → RIX" or gets from flights table
+  // Handles formats like "BT344 (DUS → RIX)", "BT344, DUS → RIX", or gets from flights table
   const extractFlightRoute = (flightString: string): { origin: string | null; destination: string | null } => {
     if (!flightString || flightString.trim() === "" || flightString === "-") {
       return { origin: null, destination: null }
     }
     
-    // Try to extract from format "BT344, DUS → RIX"
-    const matchArrow = flightString.match(/, ([A-Z]{3}) → ([A-Z]{3})/)
+    // Try to extract from format with parentheses: "AA123 (CDG → JFK)" or "AA123 (CDG -> JFK)"
+    // More flexible regex to handle various spacing and both arrow formats
+    const matchParenthesesArrow = flightString.match(/\(([A-Z]{3})\s*(?:→|->)\s*([A-Z]{3})\)/)
+    if (matchParenthesesArrow) {
+      return { origin: matchParenthesesArrow[1].trim(), destination: matchParenthesesArrow[2].trim() }
+    }
+    
+    // Also try without parentheses in case format is different
+    const matchNoParentheses = flightString.match(/([A-Z]{3})\s*(?:→|->)\s*([A-Z]{3})/)
+    if (matchNoParentheses) {
+      // Check if this is not part of flight number (should have space or comma before)
+      const beforeMatch = flightString.substring(0, matchNoParentheses.index || 0)
+      if (beforeMatch.match(/[,\s\(]/)) {
+        return { origin: matchNoParentheses[1].trim(), destination: matchNoParentheses[2].trim() }
+      }
+    }
+    
+    // Try to extract from format with comma: "BT344, DUS → RIX"
+    const matchArrow = flightString.match(/, ([A-Z]{3})\s*→\s*([A-Z]{3})/)
     if (matchArrow) {
       return { origin: matchArrow[1], destination: matchArrow[2] }
     }
     
-    // Try format with "->"
-    const matchDash = flightString.match(/, ([A-Z]{3}) -> ([A-Z]{3})/)
+    // Try format with "->" and comma
+    const matchDash = flightString.match(/, ([A-Z]{3})\s*->\s*([A-Z]{3})/)
     if (matchDash) {
       return { origin: matchDash[1], destination: matchDash[2] }
     }
@@ -400,12 +417,18 @@ export function PreviewV3() {
   const routeContainsAirportCodes = (route: string, airportCodes: string[]): boolean => {
     if (!route || airportCodes.length === 0) return false
     
+    // Normalize route: handle both "->" and "→", and normalize whitespace
+    const normalizedRoute = route.replace(/\s*->\s*/g, ' -> ').replace(/\s*→\s*/g, ' → ')
+    
     // Parse route format: "AMS -> ATH -> BER" or "AMS → ATH → BER"
-    const routeParts = route.split(/->|→/).map(part => part.trim().toUpperCase())
-    const codesUpper = airportCodes.map(code => code.toUpperCase())
+    // Split by both "->" and "→" and handle spaces
+    const routeParts = normalizedRoute.split(/\s*->\s*|\s*→\s*/).map(part => part.trim().toUpperCase()).filter(part => part.length > 0)
+    const codesUpper = airportCodes.map(code => code.trim().toUpperCase()).filter(code => code.length > 0)
     
     // Check if any airport code is in the route
-    return routeParts.some(part => codesUpper.includes(part))
+    const matches = routeParts.some(part => codesUpper.includes(part))
+    
+    return matches
   }
 
   // Check if sector rate matches filtering criteria
@@ -445,9 +468,29 @@ export function PreviewV3() {
       })
     }
     
-    // Add selected routes (transit routes)
+    // Add selected routes (transit routes) - these already have full route format
     if (rate.selected_routes && rate.selected_routes.length > 0) {
       allRoutes.push(...rate.selected_routes)
+    }
+    
+    // Also check individual origin and destination arrays for airport codes
+    // This handles cases where airport codes are in the arrays but not in a specific route
+    const allAirportCodesInRate: string[] = []
+    if (rate.airbaltic_origin && rate.airbaltic_origin.length > 0) {
+      allAirportCodesInRate.push(...rate.airbaltic_origin.map(code => code.toUpperCase()))
+    }
+    if (rate.airbaltic_destination && rate.airbaltic_destination.length > 0) {
+      allAirportCodesInRate.push(...rate.airbaltic_destination.map(code => code.toUpperCase()))
+    }
+    
+    // Check if any required airport code is in the rate's airport codes
+    const requiredCodesUpper = requiredAirportCodes.map(code => code.toUpperCase())
+    const hasMatchingAirportCode = requiredCodesUpper.some(code => 
+      allAirportCodesInRate.includes(code)
+    )
+    
+    if (hasMatchingAirportCode) {
+      return true
     }
     
     // Check if any route contains any of the required airport codes
@@ -461,7 +504,40 @@ export function PreviewV3() {
     return false
   }
 
+  // Check if original route matches airport codes
+  const originalRouteMatches = (
+    rate: SectorRateV3,
+    requiredAirportCodes: string[]
+  ): boolean => {
+    if (requiredAirportCodes.length === 0) return true
+    
+    // Generate all possible original routes from origins and destinations arrays
+    const allOriginalRoutes: string[] = []
+    if (rate.airbaltic_origin && rate.airbaltic_origin.length > 0 && 
+        rate.airbaltic_destination && rate.airbaltic_destination.length > 0) {
+      rate.airbaltic_origin.forEach(origin => {
+        rate.airbaltic_destination!.forEach(dest => {
+          allOriginalRoutes.push(`${origin} -> ${dest}`)
+        })
+      })
+    }
+    
+    // Check if any original route contains any of the required airport codes
+    for (const route of allOriginalRoutes) {
+      if (routeContainsAirportCodes(route, requiredAirportCodes)) {
+        return true
+      }
+    }
+    
+    return false
+  }
+
   // Generate sector rate options with transit routes, filtered by customer and flight routes
+  // Handles all cases:
+  // 1. Inbound has value, outbound empty -> filter by inbound airport codes
+  // 2. Inbound empty, outbound has value -> filter by outbound airport codes
+  // 3. Both have values -> filter by both inbound and outbound airport codes
+  // 4. Both empty -> show all routes (no filtering by airport codes)
   const generateSectorRateOptions = (row: UploadData): SectorRateOption[] => {
     const options: SectorRateOption[] = []
     
@@ -469,34 +545,76 @@ export function PreviewV3() {
     const inboundRoute = extractFlightRoute(row.inbound || "")
     const outboundRoute = extractFlightRoute(row.outbound || "")
     
-    // Filter sector rates based on customer and flight routes (origin/destination)
-    const filteredRates = sectorRates.filter(rate => 
-      matchesFilterCriteria(rate, row.customer_id, inboundRoute, outboundRoute)
-    )
+    // Collect all airport codes from inbound and outbound flights
+    // Only include valid airport codes (not null/empty)
+    // This works for all cases:
+    // - Inbound only: collects from inboundRoute
+    // - Outbound only: collects from outboundRoute
+    // - Both: collects from both
+    // - Neither: empty array (will show all routes)
+    const requiredAirportCodes: string[] = []
+    if (inboundRoute.origin && inboundRoute.origin.trim()) {
+      requiredAirportCodes.push(inboundRoute.origin.trim())
+    }
+    if (inboundRoute.destination && inboundRoute.destination.trim()) {
+      requiredAirportCodes.push(inboundRoute.destination.trim())
+    }
+    if (outboundRoute.origin && outboundRoute.origin.trim()) {
+      requiredAirportCodes.push(outboundRoute.origin.trim())
+    }
+    if (outboundRoute.destination && outboundRoute.destination.trim()) {
+      requiredAirportCodes.push(outboundRoute.destination.trim())
+    }
     
-    filteredRates.forEach((rate) => {
-      // Always add original rate option (without transit)
-      const basePrice = rate.sector_rate || 0
-      const originalRoute = formatOriginalRoute(rate)
-      const originalDisplayText = `${basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'}, ${rate.label || 'No Label'} |  (${originalRoute}), ${rate.customers?.name || 'No Customer'}`
-      options.push({
-        sectorRateId: rate.id,
-        transitRoute: null,
-        displayText: originalDisplayText,
-        sectorRate: rate
-      })
+    // Filter sector rates based on customer
+    const customerFilteredRates = sectorRates.filter(rate => {
+      if (row.customer_id && rate.customer_id !== row.customer_id) {
+        return false
+      }
+      return true
+    })
+    
+    customerFilteredRates.forEach((rate) => {
+      // Only filter by airport codes if we have at least one airport code
+      // If no airport codes (both inbound and outbound empty), show all routes (no filtering)
+      const hasAirportCodes = requiredAirportCodes.length > 0
       
-      // If has selected_routes, also add options for each transit route
-      if (rate.selected_routes && rate.selected_routes.length > 0) {
+      // Check if original route matches (only show if matches or no filtering needed)
+      const originalMatches = !hasAirportCodes || originalRouteMatches(rate, requiredAirportCodes)
+      
+      if (originalMatches) {
+        // Add original rate option (without transit) only if it matches
+        const basePrice = rate.sector_rate || 0
+        const originalRoute = formatOriginalRoute(rate)
+        const originalDisplayText = `${basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'}, ${rate.label || 'No Label'} |  (${originalRoute}), ${rate.customers?.name || 'No Customer'}`
+        options.push({
+          sectorRateId: rate.id,
+          transitRoute: null,
+          displayText: originalDisplayText,
+          sectorRate: rate
+        })
+      }
+      
+      // Process selected_routes array from database
+      // Format: ["AMS -> BER -> FRA", "AMS -> BER -> CPH -> FRA", ...]
+      if (rate.selected_routes && Array.isArray(rate.selected_routes) && rate.selected_routes.length > 0) {
         rate.selected_routes.forEach((route: string) => {
-          const totalPrice = calculateTotalPrice(rate, route)
-          const displayText = `€${totalPrice.toFixed(2)}, ${rate.label || 'No Label'} | (${route}), ${rate.customers?.name || 'No Customer'}`
-          options.push({
-            sectorRateId: rate.id,
-            transitRoute: route,
-            displayText,
-            sectorRate: rate
-          })
+          // Ensure route is a string
+          const routeString = typeof route === 'string' ? route : String(route)
+          
+          // Only add transit route if:
+          // 1. No airport codes to filter by (both inbound and outbound empty) -> show all, OR
+          // 2. Route contains any of the required airport codes (from inbound, outbound, or both)
+          if (!hasAirportCodes || routeContainsAirportCodes(routeString, requiredAirportCodes)) {
+            const totalPrice = calculateTotalPrice(rate, routeString)
+            const displayText = `€${totalPrice.toFixed(2)}, ${rate.label || 'No Label'} | (${routeString}), ${rate.customers?.name || 'No Customer'}`
+            options.push({
+              sectorRateId: rate.id,
+              transitRoute: routeString,
+              displayText,
+              sectorRate: rate
+            })
+          }
         })
       }
     })
