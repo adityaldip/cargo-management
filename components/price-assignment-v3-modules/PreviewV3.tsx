@@ -174,6 +174,42 @@ export function PreviewV3() {
     return ""
   }
 
+  // Extract origin and destination from inbound/outbound flight string
+  // Handles formats like "BT344, DUS → RIX" or gets from flights table
+  const extractFlightRoute = (flightString: string): { origin: string | null; destination: string | null } => {
+    if (!flightString || flightString.trim() === "" || flightString === "-") {
+      return { origin: null, destination: null }
+    }
+    
+    // Try to extract from format "BT344, DUS → RIX"
+    const matchArrow = flightString.match(/, ([A-Z]{3}) → ([A-Z]{3})/)
+    if (matchArrow) {
+      return { origin: matchArrow[1], destination: matchArrow[2] }
+    }
+    
+    // Try format with "->"
+    const matchDash = flightString.match(/, ([A-Z]{3}) -> ([A-Z]{3})/)
+    if (matchDash) {
+      return { origin: matchDash[1], destination: matchDash[2] }
+    }
+    
+    // If no route in string, try to get from flights table
+    const flightNumber = extractFlightNumber(flightString)
+    if (flightNumber && flights.length > 0) {
+      const flight = flights.find(f => 
+        f.flight_number?.toLowerCase() === flightNumber.toLowerCase()
+      )
+      if (flight) {
+        return { 
+          origin: flight.origin || null, 
+          destination: flight.destination || null 
+        }
+      }
+    }
+    
+    return { origin: null, destination: null }
+  }
+
   // Check if flight exists in flights table
   const isFlightValid = (flightString: string): boolean => {
     if (!flightString || flightString.trim() === "" || flightString === "-") return true
@@ -185,6 +221,35 @@ export function PreviewV3() {
     return flights.some(flight => 
       flight.flight_number?.toLowerCase() === flightNumber.toLowerCase()
     )
+  }
+
+  // Format flight display with origin and destination
+  const formatFlightDisplay = (flightString: string): string => {
+    if (!flightString || flightString.trim() === "" || flightString === "-") {
+      return "-"
+    }
+    
+    // Extract flight number
+    const flightNumber = extractFlightNumber(flightString)
+    
+    // If already has route format, extract and reformat
+    if (flightString.includes("→") || flightString.includes("->")) {
+      const route = extractFlightRoute(flightString)
+      if (route.origin && route.destination) {
+        return `${flightNumber} (${route.origin} → ${route.destination})`
+      }
+      // If can't extract route, return original
+      return flightString
+    }
+    
+    // Try to get route from flights table
+    const route = extractFlightRoute(flightString)
+    if (route.origin && route.destination) {
+      return `${flightNumber} (${route.origin} → ${route.destination})`
+    }
+    
+    // If no route found, return original string
+    return flightString
   }
 
   const loadDataFromDatabase = async () => {
@@ -331,11 +396,85 @@ export function PreviewV3() {
     return `${origins} -> ${destinations}`
   }
 
-  // Generate sector rate options with transit routes
-  const generateSectorRateOptions = (): SectorRateOption[] => {
+  // Check if a route contains any of the specified airport codes
+  const routeContainsAirportCodes = (route: string, airportCodes: string[]): boolean => {
+    if (!route || airportCodes.length === 0) return false
+    
+    // Parse route format: "AMS -> ATH -> BER" or "AMS → ATH → BER"
+    const routeParts = route.split(/->|→/).map(part => part.trim().toUpperCase())
+    const codesUpper = airportCodes.map(code => code.toUpperCase())
+    
+    // Check if any airport code is in the route
+    return routeParts.some(part => codesUpper.includes(part))
+  }
+
+  // Check if sector rate matches filtering criteria
+  const matchesFilterCriteria = (
+    rate: SectorRateV3,
+    customerId: string | null | undefined,
+    inboundRoute: { origin: string | null; destination: string | null },
+    outboundRoute: { origin: string | null; destination: string | null }
+  ): boolean => {
+    // Filter by customer if customer is selected
+    if (customerId && rate.customer_id !== customerId) {
+      return false
+    }
+    
+    // Collect all airport codes from inbound and outbound flights
+    const requiredAirportCodes: string[] = []
+    if (inboundRoute.origin) requiredAirportCodes.push(inboundRoute.origin)
+    if (inboundRoute.destination) requiredAirportCodes.push(inboundRoute.destination)
+    if (outboundRoute.origin) requiredAirportCodes.push(outboundRoute.origin)
+    if (outboundRoute.destination) requiredAirportCodes.push(outboundRoute.destination)
+    
+    // If no airport codes specified, return true (show all)
+    if (requiredAirportCodes.length === 0) {
+      return true
+    }
+    
+    // Check if rate has routes that include any of the required airport codes
+    const allRoutes: string[] = []
+    
+    // Generate all possible original routes from origins and destinations arrays
+    if (rate.airbaltic_origin && rate.airbaltic_origin.length > 0 && 
+        rate.airbaltic_destination && rate.airbaltic_destination.length > 0) {
+      rate.airbaltic_origin.forEach(origin => {
+        rate.airbaltic_destination!.forEach(dest => {
+          allRoutes.push(`${origin} -> ${dest}`)
+        })
+      })
+    }
+    
+    // Add selected routes (transit routes)
+    if (rate.selected_routes && rate.selected_routes.length > 0) {
+      allRoutes.push(...rate.selected_routes)
+    }
+    
+    // Check if any route contains any of the required airport codes
+    for (const route of allRoutes) {
+      if (routeContainsAirportCodes(route, requiredAirportCodes)) {
+        return true
+      }
+    }
+    
+    // No route matches the required airport codes
+    return false
+  }
+
+  // Generate sector rate options with transit routes, filtered by customer and flight routes
+  const generateSectorRateOptions = (row: UploadData): SectorRateOption[] => {
     const options: SectorRateOption[] = []
     
-    sectorRates.forEach((rate) => {
+    // Get origin and destination from inbound and outbound flights
+    const inboundRoute = extractFlightRoute(row.inbound || "")
+    const outboundRoute = extractFlightRoute(row.outbound || "")
+    
+    // Filter sector rates based on customer and flight routes (origin/destination)
+    const filteredRates = sectorRates.filter(rate => 
+      matchesFilterCriteria(rate, row.customer_id, inboundRoute, outboundRoute)
+    )
+    
+    filteredRates.forEach((rate) => {
       // Always add original rate option (without transit)
       const basePrice = rate.sector_rate || 0
       const originalRoute = formatOriginalRoute(rate)
@@ -606,12 +745,12 @@ export function PreviewV3() {
                             </TableCell>
                             <TableCell className="py-1 text-xs h-8">
                               <span className={!isFlightValid(row.inbound) ? "text-red-500" : ""}>
-                                {row.inbound || "-"}
+                                {formatFlightDisplay(row.inbound || "")}
                               </span>
                             </TableCell>
                             <TableCell className="py-1 text-xs h-8">
                               <span className={!isFlightValid(row.outbound) ? "text-red-500" : ""}>
-                                {row.outbound || "-"}
+                                {formatFlightDisplay(row.outbound || "")}
                               </span>
                             </TableCell>
                             <TableCell className="py-1 h-8">
@@ -637,7 +776,7 @@ export function PreviewV3() {
                             <TableCell className="w-8 border-0"></TableCell>
                             <TableCell className="py-1 text-xs h-8 w-[225px]">
                               <SearchableSelect
-                                options={generateSectorRateOptions().map((option, optIndex) => ({
+                                options={generateSectorRateOptions(row).map((option, optIndex) => ({
                                   value: option.transitRoute 
                                     ? `${option.sectorRateId}|${option.transitRoute}`
                                     : option.sectorRateId,
