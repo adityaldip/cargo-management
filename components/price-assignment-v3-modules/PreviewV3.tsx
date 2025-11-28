@@ -545,6 +545,17 @@ export function PreviewV3() {
     const inboundRoute = extractFlightRoute(row.inbound || "")
     const outboundRoute = extractFlightRoute(row.outbound || "")
     
+    // Check if inbound and outbound are empty or invalid
+    const hasInbound = row.inbound && row.inbound.trim() !== "" && row.inbound !== "-" && 
+                       (inboundRoute.origin || inboundRoute.destination)
+    const hasOutbound = row.outbound && row.outbound.trim() !== "" && row.outbound !== "-" && 
+                        (outboundRoute.origin || outboundRoute.destination)
+    
+    // If both inbound and outbound are empty, don't show any options
+    if (!hasInbound && !hasOutbound) {
+      return options
+    }
+    
     // Collect all airport codes from inbound and outbound flights
     // Only include valid airport codes (not null/empty)
     // This works for all cases:
@@ -566,13 +577,9 @@ export function PreviewV3() {
       requiredAirportCodes.push(outboundRoute.destination.trim())
     }
     
-    // Filter sector rates based on customer
-    const customerFilteredRates = sectorRates.filter(rate => {
-      if (row.customer_id && rate.customer_id !== row.customer_id) {
-        return false
-      }
-      return true
-    })
+    // Show all sector rates when customer is selected
+    // Customer selection is only for validation (must select customer first), not for filtering rates
+    const customerFilteredRates = sectorRates
     
     customerFilteredRates.forEach((rate) => {
       // Only filter by airport codes if we have at least one airport code
@@ -666,9 +673,14 @@ export function PreviewV3() {
 
   const handleCustomerChange = async (rowId: string, customerId: string) => {
     try {
+      // Clear sector rate when customer changes
       const { error } = await (supabase as any)
         .from('preview_flights_v3')
-        .update({ customer_id: customerId || null })
+        .update({ 
+          customer_id: customerId || null,
+          sector_rate_id: null,
+          transit_route: null
+        })
         .eq('id', rowId)
 
       if (error) {
@@ -676,15 +688,20 @@ export function PreviewV3() {
         throw new Error(error.message || 'Failed to update customer')
       }
 
-      // Update local state
+      // Update local state - clear sector rate when customer changes
       const newData = uploadData.map((item) => 
-        item.id === rowId ? { ...item, customer_id: customerId || null } : item
+        item.id === rowId ? { 
+          ...item, 
+          customer_id: customerId || null,
+          sector_rate_id: undefined,
+          transit_route: undefined
+        } : item
       )
       setUploadData(newData)
 
       toast({
         title: "Updated!",
-        description: "Customer has been updated.",
+        description: "Customer has been updated. Please select sector rate again.",
       })
     } catch (error: any) {
       console.error('Error updating customer:', error)
@@ -800,8 +817,8 @@ export function PreviewV3() {
                           <TableHead className="text-xs py-1 min-w-[100px]">Outbound Flight</TableHead>
                           <TableHead className="text-xs py-1 min-w-[60px]">Actions</TableHead>
                           <TableHead className="border-0 w-8"></TableHead>
-                          <TableHead className="text-xs py-1 min-w-[40px] max-w-[45px]">Sector Rate</TableHead>
                           <TableHead className="text-xs py-1 min-w-[40px] max-w-[45px]">Customer</TableHead>
+                          <TableHead className="text-xs py-1 min-w-[40px] max-w-[45px]">Sector Rate</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -848,8 +865,8 @@ export function PreviewV3() {
                           <TableHead className="text-xs py-1 w-[100px]">Outbound Flight</TableHead>
                           <TableHead className="text-xs py-1 w-[60px]">Actions</TableHead>
                           <TableHead className="border-0 w-8"></TableHead>
-                          <TableHead className="text-xs py-1 w-[225px]">Sector Rate</TableHead>
                           <TableHead className="text-xs py-1 w-[225px]">Customer</TableHead>
+                          <TableHead className="text-xs py-1 w-[225px]">Sector Rate</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -894,6 +911,36 @@ export function PreviewV3() {
                             <TableCell className="w-8 border-0"></TableCell>
                             <TableCell className="py-1 text-xs h-8 w-[225px]">
                               <SearchableSelect
+                                options={customers.map((customer) => ({
+                                  value: customer.id,
+                                  label: `${customer.name} (${customer.code})`
+                                }))}
+                                value={row.customer_id || ""}
+                                onValueChange={(value) => {
+                                  if (row.id) {
+                                    handleCustomerChange(row.id, value)
+                                  } else {
+                                    // For new records without ID, update local state only
+                                    // Clear sector rate when customer changes
+                                    const newData = uploadData.map((item, i) => 
+                                      i === index ? { 
+                                        ...item, 
+                                        customer_id: value || null,
+                                        sector_rate_id: undefined,
+                                        transit_route: undefined
+                                      } : item
+                                    )
+                                    setUploadData(newData)
+                                  }
+                                }}
+                                placeholder="Select customer..."
+                                searchPlaceholder="Search customer..."
+                                emptyMessage="No customer found."
+                                className="h-8 text-xs"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1 text-xs h-8 w-[225px]">
+                              <SearchableSelect
                                 options={generateSectorRateOptions(row).map((option, optIndex) => ({
                                   value: option.transitRoute 
                                     ? `${option.sectorRateId}|${option.transitRoute}`
@@ -921,34 +968,22 @@ export function PreviewV3() {
                                     setUploadData(newData)
                                   }
                                 }}
-                                placeholder="Select rate..."
+                                placeholder={
+                                  !row.customer_id 
+                                    ? "Select customer first..." 
+                                    : (!row.inbound || row.inbound.trim() === "" || row.inbound === "-") && 
+                                      (!row.outbound || row.outbound.trim() === "" || row.outbound === "-")
+                                    ? "Add inbound/outbound first..."
+                                    : "Select rate..."
+                                }
                                 searchPlaceholder="Search rate..."
                                 emptyMessage="No rate found."
                                 className="h-8 text-xs"
-                              />
-                            </TableCell>
-                            <TableCell className="py-1 text-xs h-8 w-[225px]">
-                              <SearchableSelect
-                                options={customers.map((customer) => ({
-                                  value: customer.id,
-                                  label: `${customer.name} (${customer.code})`
-                                }))}
-                                value={row.customer_id || ""}
-                                onValueChange={(value) => {
-                                  if (row.id) {
-                                    handleCustomerChange(row.id, value)
-                                  } else {
-                                    // For new records without ID, update local state only
-                                    const newData = uploadData.map((item, i) => 
-                                      i === index ? { ...item, customer_id: value || null } : item
-                                    )
-                                    setUploadData(newData)
-                                  }
-                                }}
-                                placeholder="Select customer..."
-                                searchPlaceholder="Search customer..."
-                                emptyMessage="No customer found."
-                                className="h-8 text-xs"
+                                disabled={
+                                  !row.customer_id || 
+                                  ((!row.inbound || row.inbound.trim() === "" || row.inbound === "-") && 
+                                   (!row.outbound || row.outbound.trim() === "" || row.outbound === "-"))
+                                }
                               />
                             </TableCell>
                           </TableRow>
