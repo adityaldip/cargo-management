@@ -626,12 +626,10 @@ export function PreviewV3() {
         const originalRoute = formatOriginalRoute(rate)
         // Format: Price, Route di baris pertama, (Customer) di baris baru dengan spacing
         const priceText = basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'
-        const customerText = rate.customers?.name
-        // Format: "€2.00, AMS → BRU → ARN\n\n(Customer Name)" atau "€2.00, AMS → BRU → ARN" jika tidak ada customer
-        // Menggunakan double newline untuk spacing yang jelas
-        const originalDisplayText = customerText 
-          ? `${priceText}, ${originalRoute}\n\n(${customerText})`
-          : `${priceText}, ${originalRoute}`
+        const customerText = rate.customers?.name || 'no customer'
+        // Format: "€2.00, AMS → BRU → ARN\n\n(Customer Name)" atau "€2.00, AMS → BRU → ARN\n\n(no customer)"
+        // Menggunakan double newline untuk spacing yang jelas, selalu menampilkan customer line
+        const originalDisplayText = `${priceText}, ${originalRoute}\n\n(${customerText})`
         options.push({
           sectorRateId: rate.id,
           transitRoute: null,
@@ -654,12 +652,10 @@ export function PreviewV3() {
             const totalPrice = calculateTotalPrice(rate, routeString)
             // Format: Price, Route di baris pertama, (Customer) di baris baru dengan spacing
             const priceText = `€${totalPrice.toFixed(2)}`
-            const customerText = rate.customers?.name
-            // Format: "€2.00, AMS → BRU → ARN\n\n(Customer Name)" atau "€2.00, AMS → BRU → ARN" jika tidak ada customer
-            // Menggunakan double newline untuk spacing yang jelas
-            const displayText = customerText
-              ? `${priceText}, ${routeString}\n\n(${customerText})`
-              : `${priceText}, ${routeString}`
+            const customerText = rate.customers?.name || 'no customer'
+            // Format: "€2.00, AMS → BRU → ARN\n\n(Customer Name)" atau "€2.00, AMS → BRU → ARN\n\n(no customer)"
+            // Menggunakan double newline untuk spacing yang jelas, selalu menampilkan customer line
+            const displayText = `${priceText}, ${routeString}\n\n(${customerText})`
             options.push({
               sectorRateId: rate.id,
               transitRoute: routeString,
