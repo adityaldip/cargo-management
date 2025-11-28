@@ -77,14 +77,14 @@ export function SearchableSelect({
     >
       <SelectPrimitive.Trigger
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+          "flex min-h-[2.5rem] w-full items-start justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 overflow-hidden",
           className
         )}
       >
-        <SelectPrimitive.Value placeholder={placeholder} className="truncate">
-          {selectedOption?.label?.split('\n')[0] || placeholder}
+        <SelectPrimitive.Value placeholder={placeholder} className="whitespace-pre-line leading-relaxed block w-full text-left flex-1 min-w-0 pr-2 break-words overflow-visible">
+          {selectedOption?.label || placeholder}
         </SelectPrimitive.Value>
-        <SelectPrimitive.Icon asChild>
+        <SelectPrimitive.Icon asChild className="flex-shrink-0 mt-0.5">
           <ChevronDown className="h-4 w-4 opacity-50" />
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
@@ -136,15 +136,15 @@ export function SearchableSelect({
                   value={option.value}
                   disabled={option.disabled}
                   className={cn(
-                    "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                    "relative flex w-full cursor-default select-none items-start rounded-sm py-2 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 min-h-[4rem]"
                   )}
                 >
-                  <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                  <span className="absolute left-2 top-2 flex h-3.5 w-3.5 items-center justify-center">
                     <SelectPrimitive.ItemIndicator>
                       <Check className="h-4 w-4" />
                     </SelectPrimitive.ItemIndicator>
                   </span>
-                  <SelectPrimitive.ItemText className="whitespace-pre-line">{option.label}</SelectPrimitive.ItemText>
+                  <SelectPrimitive.ItemText className="whitespace-pre-line leading-relaxed block w-full break-words">{option.label}</SelectPrimitive.ItemText>
                 </SelectPrimitive.Item>
               ))
             )}

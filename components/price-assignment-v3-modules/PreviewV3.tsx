@@ -161,6 +161,17 @@ export function PreviewV3() {
     }
   }
 
+  // Extract airport code from origin/destination (3rd to 5th characters)
+  // If code is like "USFRAT" (length >= 5), extract "FRA" from position 3-5
+  // If code is like "PRG" (length < 5), use it directly
+  const extractAirportCode = (code: string): string => {
+    if (!code) return ""
+    if (code.length >= 5) {
+      return code.substring(2, 5).toUpperCase()
+    }
+    return code.toUpperCase()
+  }
+
   // Extract flight number from inbound/outbound string
   const extractFlightNumber = (flightString: string): string => {
     if (!flightString) return ""
@@ -403,12 +414,13 @@ export function PreviewV3() {
   }
 
   // Format original route from airbaltic_origin and airbaltic_destination
+  // Extract airport codes if needed (handle formats like "USFRAT" -> "FRA" or "PRG" -> "PRG")
   const formatOriginalRoute = (rate: SectorRateV3): string => {
     const origins = rate.airbaltic_origin && rate.airbaltic_origin.length > 0 
-      ? rate.airbaltic_origin.join(', ') 
+      ? rate.airbaltic_origin.map(code => extractAirportCode(code)).join(', ') 
       : 'N/A'
     const destinations = rate.airbaltic_destination && rate.airbaltic_destination.length > 0 
-      ? rate.airbaltic_destination.join(', ') 
+      ? rate.airbaltic_destination.map(code => extractAirportCode(code)).join(', ') 
       : 'N/A'
     return `${origins} -> ${destinations}`
   }
@@ -459,11 +471,14 @@ export function PreviewV3() {
     const allRoutes: string[] = []
     
     // Generate all possible original routes from origins and destinations arrays
+    // Extract airport codes if needed (handle formats like "USFRAT" -> "FRA" or "PRG" -> "PRG")
     if (rate.airbaltic_origin && rate.airbaltic_origin.length > 0 && 
         rate.airbaltic_destination && rate.airbaltic_destination.length > 0) {
       rate.airbaltic_origin.forEach(origin => {
         rate.airbaltic_destination!.forEach(dest => {
-          allRoutes.push(`${origin} -> ${dest}`)
+          const extractedOrigin = extractAirportCode(origin)
+          const extractedDest = extractAirportCode(dest)
+          allRoutes.push(`${extractedOrigin} -> ${extractedDest}`)
         })
       })
     }
@@ -474,13 +489,14 @@ export function PreviewV3() {
     }
     
     // Also check individual origin and destination arrays for airport codes
+    // Extract airport codes if needed (handle formats like "USFRAT" -> "FRA" or "PRG" -> "PRG")
     // This handles cases where airport codes are in the arrays but not in a specific route
     const allAirportCodesInRate: string[] = []
     if (rate.airbaltic_origin && rate.airbaltic_origin.length > 0) {
-      allAirportCodesInRate.push(...rate.airbaltic_origin.map(code => code.toUpperCase()))
+      allAirportCodesInRate.push(...rate.airbaltic_origin.map(code => extractAirportCode(code).toUpperCase()))
     }
     if (rate.airbaltic_destination && rate.airbaltic_destination.length > 0) {
-      allAirportCodesInRate.push(...rate.airbaltic_destination.map(code => code.toUpperCase()))
+      allAirportCodesInRate.push(...rate.airbaltic_destination.map(code => extractAirportCode(code).toUpperCase()))
     }
     
     // Check if any required airport code is in the rate's airport codes
@@ -512,12 +528,15 @@ export function PreviewV3() {
     if (requiredAirportCodes.length === 0) return true
     
     // Generate all possible original routes from origins and destinations arrays
+    // Extract airport codes if needed (handle formats like "USFRAT" -> "FRA" or "PRG" -> "PRG")
     const allOriginalRoutes: string[] = []
     if (rate.airbaltic_origin && rate.airbaltic_origin.length > 0 && 
         rate.airbaltic_destination && rate.airbaltic_destination.length > 0) {
       rate.airbaltic_origin.forEach(origin => {
         rate.airbaltic_destination!.forEach(dest => {
-          allOriginalRoutes.push(`${origin} -> ${dest}`)
+          const extractedOrigin = extractAirportCode(origin)
+          const extractedDest = extractAirportCode(dest)
+          allOriginalRoutes.push(`${extractedOrigin} -> ${extractedDest}`)
         })
       })
     }
@@ -556,14 +575,26 @@ export function PreviewV3() {
       return options
     }
     
-    // Collect all airport codes from inbound and outbound flights
+    // Collect all airport codes from inbound and outbound flights, and from row origin/destination
+    // Extract airport codes from row.origin and row.destination (handle formats like "USFRAT" -> "FRA" or "PRG" -> "PRG")
     // Only include valid airport codes (not null/empty)
-    // This works for all cases:
-    // - Inbound only: collects from inboundRoute
-    // - Outbound only: collects from outboundRoute
-    // - Both: collects from both
-    // - Neither: empty array (will show all routes)
     const requiredAirportCodes: string[] = []
+    
+    // Add origin and destination from row (extract airport code if needed)
+    if (row.origin && row.origin.trim() && row.origin.trim() !== "-") {
+      const extractedOrigin = extractAirportCode(row.origin.trim())
+      if (extractedOrigin) {
+        requiredAirportCodes.push(extractedOrigin)
+      }
+    }
+    if (row.destination && row.destination.trim() && row.destination.trim() !== "-") {
+      const extractedDestination = extractAirportCode(row.destination.trim())
+      if (extractedDestination) {
+        requiredAirportCodes.push(extractedDestination)
+      }
+    }
+    
+    // Add airport codes from inbound and outbound flights
     if (inboundRoute.origin && inboundRoute.origin.trim()) {
       requiredAirportCodes.push(inboundRoute.origin.trim())
     }
@@ -593,7 +624,14 @@ export function PreviewV3() {
         // Add original rate option (without transit) only if it matches
         const basePrice = rate.sector_rate || 0
         const originalRoute = formatOriginalRoute(rate)
-        const originalDisplayText = `${basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'}, ${rate.label || 'No Label'} |  (${originalRoute}), ${rate.customers?.name || 'No Customer'}`
+        // Format: Price, Route di baris pertama, (Customer) di baris baru dengan spacing
+        const priceText = basePrice > 0 ? `€${basePrice.toFixed(2)}` : 'No Rate'
+        const customerText = rate.customers?.name
+        // Format: "€2.00, AMS → BRU → ARN\n\n(Customer Name)" atau "€2.00, AMS → BRU → ARN" jika tidak ada customer
+        // Menggunakan double newline untuk spacing yang jelas
+        const originalDisplayText = customerText 
+          ? `${priceText}, ${originalRoute}\n\n(${customerText})`
+          : `${priceText}, ${originalRoute}`
         options.push({
           sectorRateId: rate.id,
           transitRoute: null,
@@ -614,7 +652,14 @@ export function PreviewV3() {
           // 2. Route contains any of the required airport codes (from inbound, outbound, or both)
           if (!hasAirportCodes || routeContainsAirportCodes(routeString, requiredAirportCodes)) {
             const totalPrice = calculateTotalPrice(rate, routeString)
-            const displayText = `€${totalPrice.toFixed(2)}, ${rate.label || 'No Label'} | (${routeString}), ${rate.customers?.name || 'No Customer'}`
+            // Format: Price, Route di baris pertama, (Customer) di baris baru dengan spacing
+            const priceText = `€${totalPrice.toFixed(2)}`
+            const customerText = rate.customers?.name
+            // Format: "€2.00, AMS → BRU → ARN\n\n(Customer Name)" atau "€2.00, AMS → BRU → ARN" jika tidak ada customer
+            // Menggunakan double newline untuk spacing yang jelas
+            const displayText = customerText
+              ? `${priceText}, ${routeString}\n\n(${customerText})`
+              : `${priceText}, ${routeString}`
             options.push({
               sectorRateId: rate.id,
               transitRoute: routeString,
@@ -978,7 +1023,7 @@ export function PreviewV3() {
                                 }
                                 searchPlaceholder="Search rate..."
                                 emptyMessage="No rate found."
-                                className="h-8 text-xs"
+                                className="min-h-[2.5rem] text-xs"
                                 disabled={
                                   !row.customer_id || 
                                   ((!row.inbound || row.inbound.trim() === "" || row.inbound === "-") && 
