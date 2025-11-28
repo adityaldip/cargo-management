@@ -81,7 +81,7 @@ export function SearchableSelect({
           className
         )}
       >
-        <SelectPrimitive.Value placeholder={placeholder} className="whitespace-pre-line leading-relaxed block w-full text-left flex-1 min-w-0 pr-2 break-words overflow-visible">
+        <SelectPrimitive.Value placeholder={placeholder} className="whitespace-pre-line leading-normal block w-full text-left flex-1 min-w-0 pr-2 break-words overflow-visible">
           {selectedOption?.label || placeholder}
         </SelectPrimitive.Value>
         <SelectPrimitive.Icon asChild className="flex-shrink-0 mt-0.5">
@@ -136,15 +136,15 @@ export function SearchableSelect({
                   value={option.value}
                   disabled={option.disabled}
                   className={cn(
-                    "relative flex w-full cursor-default select-none items-start rounded-sm py-2 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 min-h-[4rem]"
+                    "relative flex w-full cursor-default select-none items-start rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                   )}
                 >
-                  <span className="absolute left-2 top-2 flex h-3.5 w-3.5 items-center justify-center">
+                  <span className="absolute left-2 top-1.5 flex h-3.5 w-3.5 items-center justify-center">
                     <SelectPrimitive.ItemIndicator>
                       <Check className="h-4 w-4" />
                     </SelectPrimitive.ItemIndicator>
                   </span>
-                  <SelectPrimitive.ItemText className="whitespace-pre-line leading-relaxed block w-full break-words">{option.label}</SelectPrimitive.ItemText>
+                  <SelectPrimitive.ItemText className="whitespace-pre-line leading-normal block w-full break-words">{option.label}</SelectPrimitive.ItemText>
                 </SelectPrimitive.Item>
               ))
             )}
