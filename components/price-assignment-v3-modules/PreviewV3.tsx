@@ -608,9 +608,16 @@ export function PreviewV3() {
       requiredAirportCodes.push(outboundRoute.destination.trim())
     }
     
-    // Show all sector rates when customer is selected
-    // Customer selection is only for validation (must select customer first), not for filtering rates
-    const customerFilteredRates = sectorRates
+    // Filter sector rates based on customer
+    // Show rates that have no customer assigned (customer_id is null) OR rates that match the selected customer
+    const customerFilteredRates = sectorRates.filter(rate => {
+      if (row.customer_id) {
+        // If customer is selected, show rates with no customer OR rates for that customer
+        return rate.customer_id === null || rate.customer_id === row.customer_id
+      }
+      // If no customer selected, show all rates (though this shouldn't happen as sector rate is disabled)
+      return true
+    })
     
     customerFilteredRates.forEach((rate) => {
       // Only filter by airport codes if we have at least one airport code
