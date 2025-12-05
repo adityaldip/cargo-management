@@ -609,11 +609,16 @@ export function PreviewV3() {
     }
     
     // Filter sector rates based on customer
-    // Show rates that have no customer assigned (customer_id is null) OR rates that match the selected customer
+    // Show rates that have no customer assigned OR rates that do NOT match the selected customer
+    // Example: If AirBaltic is selected, show all rates EXCEPT those assigned to AirBaltic
     const customerFilteredRates = sectorRates.filter(rate => {
       if (row.customer_id) {
-        // If customer is selected, show rates with no customer OR rates for that customer
-        return rate.customer_id === null || rate.customer_id === row.customer_id
+        // If customer is selected, show rates with no customer OR rates for OTHER customers (not the selected one)
+        // Check for null, undefined, or empty string - these are rates available for all customers
+        const rateHasNoCustomer = !rate.customer_id || rate.customer_id === null || rate.customer_id === undefined || rate.customer_id === ''
+        // Check if rate's customer_id does NOT match the selected customer_id
+        const rateNotForSelectedCustomer = String(rate.customer_id) !== String(row.customer_id)
+        return rateHasNoCustomer || rateNotForSelectedCustomer
       }
       // If no customer selected, show all rates (though this shouldn't happen as sector rate is disabled)
       return true
