@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SweetAlert } from "@/components/ui/sweet-alert"
 import { AirportCodeTable } from "./AirportCodeTable"
-import { triggerActivity } from "@/lib/liveblocks";
+
 
 export function AirportCodes() {
   const { toast } = useToast()
@@ -157,13 +157,6 @@ export function AirportCodes() {
         title: "Airport Deleted",
         description: `Airport ${airportToDelete.code} has been deleted`,
       })
-
-      await triggerActivity({
-        title: "Airport Deleted",
-        description: `${airportToDelete.code} airport deleted`,
-        type: "airport_deleted",
-        subjectId: airportToDelete.id,
-      })
     } catch (err) {
       const errorMsg = `Failed to delete airport: ${err instanceof Error ? err.message : 'Unknown error'}`
       setError(errorMsg)
@@ -199,12 +192,6 @@ export function AirportCodes() {
         })
         
         if (result?.success) {
-          await triggerActivity({
-            title: "Airport Updated",
-            description: `${airportData.code} airport updated`,
-            type: "airport_updated",
-            subjectId: selectedAirport.id,
-          })
           handleCloseModal()
           toast({
             title: "Airport Updated",
@@ -224,15 +211,8 @@ export function AirportCodes() {
           code: airportData.code.trim(),
           is_eu: airportData.isEU
         })
-        await triggerActivity({
-          title: "Airport Created",
-          description: `${airportData.code} airport created`,
-          type: "airport_created",
-          subjectId: airportData.code,
-        })
         
         if (result?.success) {
-          
           handleCloseModal()
           toast({
             title: "Airport Created",
