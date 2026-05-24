@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useBroadcastEvent } from "@liveblocks/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,13 +20,13 @@ import { AirportCode } from "./types"
 import { AirportCodeModal } from "./AirportCodeModal"
 import { useAirportCodeData } from "./hooks"
 import { useToast } from "@/hooks/use-toast"
+import { useTriggerActivityNotification } from "@/hooks/use-trigger-activity-notification"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SweetAlert } from "@/components/ui/sweet-alert"
 import { AirportCodeTable } from "./AirportCodeTable"
-import { triggerActivity } from "@/lib/liveblocks";
 
 export function AirportCodes() {
-  const broadcastEvent = useBroadcastEvent()
+  const notifyActivity = useTriggerActivityNotification()
   const { toast } = useToast()
   const {
     airportCodes,
@@ -59,6 +58,14 @@ export function AirportCodes() {
     code: "",
     isEU: false
   })
+
+  const handleNotificationFailure = (action: string) => {
+    toast({
+      title: "Notification Delayed",
+      description: `${action} succeeded, but the activity feed did not refresh immediately.`,
+      variant: "destructive",
+    })
+  }
 
   // Remove the filteredAirportCodes logic as it's now handled in AirportCodeTable
 
@@ -160,15 +167,22 @@ export function AirportCodes() {
         description: `Airport ${airportToDelete.code} has been deleted`,
       })
 
-      await triggerActivity({
-        title: "Airport Deleted",
-        description: `${airportToDelete.code} airport deleted`,
-        type: "airport_deleted",
-        subjectId: airportToDelete.id,
-      })
-      broadcastEvent({
-        type: "notification:refresh",
-      })
+      try {
+        await notifyActivity({
+          title: "Airport Deleted",
+          description: `${airportToDelete.code} airport deleted`,
+          type: "airport_deleted",
+          subjectId: airportToDelete.id,
+        })
+      } catch (err) {
+        console.error(
+          "Failed to notify airport deletion",
+          err
+        )
+        handleNotificationFailure(
+          "Airport deletion"
+        )
+      }
     } catch (err) {
       const errorMsg = `Failed to delete airport: ${err instanceof Error ? err.message : 'Unknown error'}`
       setError(errorMsg)
@@ -204,20 +218,28 @@ export function AirportCodes() {
         })
         
         if (result?.success) {
-          await triggerActivity({
-            title: "Airport Updated",
-            description: `${airportData.code} airport updated`,
-            type: "airport_updated",
-            subjectId: selectedAirport.id,
-          })
-          broadcastEvent({
-            type: "notification:refresh",
-          })
           handleCloseModal()
           toast({
             title: "Airport Updated",
             description: `Airport ${airportData.code} has been updated successfully`,
           })
+
+          try {
+            await notifyActivity({
+              title: "Airport Updated",
+              description: `${airportData.code} airport updated`,
+              type: "airport_updated",
+              subjectId: selectedAirport.id,
+            })
+          } catch (err) {
+            console.error(
+              "Failed to notify airport update",
+              err
+            )
+            handleNotificationFailure(
+              "Airport update"
+            )
+          }
         } else {
           setError(result?.error || 'Failed to update airport')
           toast({
@@ -232,23 +254,30 @@ export function AirportCodes() {
           code: airportData.code.trim(),
           is_eu: airportData.isEU
         })
-        await triggerActivity({
-          title: "Airport Created",
-          description: `${airportData.code} airport created`,
-          type: "airport_created",
-          subjectId: airportData.code,
-        })
-        broadcastEvent({
-          type: "notification:refresh",
-        })
         
         if (result?.success) {
-          
           handleCloseModal()
           toast({
             title: "Airport Created",
             description: `Airport ${airportData.code} has been created successfully`,
           })
+
+          try {
+            await notifyActivity({
+              title: "Airport Created",
+              description: `${airportData.code} airport created`,
+              type: "airport_created",
+              subjectId: airportData.code,
+            })
+          } catch (err) {
+            console.error(
+              "Failed to notify airport creation",
+              err
+            )
+            handleNotificationFailure(
+              "Airport creation"
+            )
+          }
         } else {
           setError(result?.error || 'Failed to create airport')
           toast({
