@@ -1,39 +1,20 @@
-export const LIVEBLOCKS_ROOM_ID =
-  "mail-processing-room";
+import { createClient } from "@liveblocks/client";
 
-export const NOTIFICATION_REFRESH_EVENT =
-  "notification:refresh";
-
-export type NotificationRefreshEvent = {
-  type: typeof NOTIFICATION_REFRESH_EVENT;
-};
-
-export type TriggerActivityInput = {
-  title: string;
-  description: string;
-  type: string;
-  subjectId: string;
-};
-
-export const createNotificationRefreshEvent =
-  (): NotificationRefreshEvent => ({
-    type: NOTIFICATION_REFRESH_EVENT,
-  });
-
-export const isNotificationRefreshEvent = (
-  event: unknown
-): event is NotificationRefreshEvent =>
-  typeof event === "object" &&
-  event !== null &&
-  "type" in event &&
-  event.type === NOTIFICATION_REFRESH_EVENT;
+export const client = createClient({
+  publicApiKey: process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY!,
+});
 
 export const triggerActivity = async ({
   title,
   description,
   type,
   subjectId,
-}: TriggerActivityInput) => {
+}: {
+  title: string;
+  description: string;
+  type: string;
+  subjectId: string;
+}) => {
   await fetch("/api/activity", {
     method: "POST",
     headers: {

@@ -1,5 +1,11 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
+import {
+  useClient,
+  useEventListener,
+} from "@liveblocks/react";
+
 import {
   Plane,
   Edit,
@@ -7,8 +13,6 @@ import {
   Clock3,
   Trash
 } from "lucide-react";
-
-import { useRealtimeInboxNotifications } from "@/hooks/use-realtime-inbox-notifications";
 
 const getActivityIcon = (type?: string) => {
   switch (type) {
@@ -49,8 +53,55 @@ const formatTimeAgo = (dateString?: string) => {
 };
 
 export function Newsfeed() {
-  const { inboxNotifications, isLoading } =
-    useRealtimeInboxNotifications();
+  const client = useClient();
+  const [
+    inboxNotifications,
+    setInboxNotifications,
+  ] = useState<any[]>([]);
+
+  const fetchInboxNotifications =
+    useCallback(async () => {
+      const result =
+        await client.getInboxNotifications({
+          query: {
+            roomId: "mail-processing-room",
+          },
+        });
+
+      setInboxNotifications(
+        result.inboxNotifications
+      );
+    }, [client]);
+
+  useEffect(() => {
+    void fetchInboxNotifications();
+
+    const intervalId = window.setInterval(
+      () => {
+        if (
+          document.visibilityState === "visible"
+        ) {
+          void fetchInboxNotifications();
+        }
+      },
+      3000
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [fetchInboxNotifications]);
+
+  useEventListener(({ event }) => {
+    if (
+      event &&
+      typeof event === "object" &&
+      "type" in event &&
+      event.type === "notification:refresh"
+    ) {
+      void fetchInboxNotifications();
+    }
+  });
   
   return (
     <div className="h-[calc(100vh-2rem)] overflow-hidden rounded-2xl border bg-white shadow-sm">
@@ -67,21 +118,14 @@ export function Newsfeed() {
 
       <div className="h-[calc(100%-80px)] overflow-y-auto p-4">
         <div className="space-y-3">
-          {isLoading && (
-            <div className="py-10 text-center text-sm text-gray-500">
-              Loading activity...
-            </div>
-          )}
-
-          {!isLoading &&
-            inboxNotifications?.length === 0 && (
+          {inboxNotifications?.length === 0 && (
             <div className="py-10 text-center text-sm text-gray-500">
               No activity yet
             </div>
           )}
 
           {inboxNotifications?.map(
-            (notification) => {
+            (notification: any) => {
               const data =
                 notification.activities[0];
 
