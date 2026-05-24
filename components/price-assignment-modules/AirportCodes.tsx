@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useBroadcastEvent } from "@liveblocks/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -26,6 +27,7 @@ import { AirportCodeTable } from "./AirportCodeTable"
 import { triggerActivity } from "@/lib/liveblocks";
 
 export function AirportCodes() {
+  const broadcastEvent = useBroadcastEvent()
   const { toast } = useToast()
   const {
     airportCodes,
@@ -164,6 +166,9 @@ export function AirportCodes() {
         type: "airport_deleted",
         subjectId: airportToDelete.id,
       })
+      broadcastEvent({
+        type: "notification:refresh",
+      })
     } catch (err) {
       const errorMsg = `Failed to delete airport: ${err instanceof Error ? err.message : 'Unknown error'}`
       setError(errorMsg)
@@ -205,6 +210,9 @@ export function AirportCodes() {
             type: "airport_updated",
             subjectId: selectedAirport.id,
           })
+          broadcastEvent({
+            type: "notification:refresh",
+          })
           handleCloseModal()
           toast({
             title: "Airport Updated",
@@ -229,6 +237,9 @@ export function AirportCodes() {
           description: `${airportData.code} airport created`,
           type: "airport_created",
           subjectId: airportData.code,
+        })
+        broadcastEvent({
+          type: "notification:refresh",
         })
         
         if (result?.success) {

@@ -1,6 +1,10 @@
 "use client";
 
-import { useInboxNotifications } from "@liveblocks/react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  useClient,
+  useEventListener,
+} from "@liveblocks/react";
 
 import {
   Plane,
@@ -49,9 +53,56 @@ const formatTimeAgo = (dateString?: string) => {
 };
 
 export function Newsfeed() {
-  const { inboxNotifications } =
-    useInboxNotifications();
+  const client = useClient();
+  const [
+    inboxNotifications,
+    setInboxNotifications,
+  ] = useState<any[]>([]);
 
+  const fetchInboxNotifications =
+    useCallback(async () => {
+      const result =
+        await client.getInboxNotifications({
+          query: {
+            roomId: "mail-processing-room",
+          },
+        });
+
+      setInboxNotifications(
+        result.inboxNotifications
+      );
+    }, [client]);
+
+  useEffect(() => {
+    void fetchInboxNotifications();
+
+    const intervalId = window.setInterval(
+      () => {
+        if (
+          document.visibilityState === "visible"
+        ) {
+          void fetchInboxNotifications();
+        }
+      },
+      10000
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [fetchInboxNotifications]);
+
+  useEventListener(({ event }) => {
+    if (
+      event &&
+      typeof event === "object" &&
+      "type" in event &&
+      event.type === "notification:refresh"
+    ) {
+      void fetchInboxNotifications();
+    }
+  });
+  
   return (
     <div className="h-[calc(100vh-2rem)] overflow-hidden rounded-2xl border bg-white shadow-sm">
       
