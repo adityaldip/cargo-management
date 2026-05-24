@@ -7,9 +7,23 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Create custom types first (before tables that reference them)
-CREATE TYPE priority_level AS ENUM ('high', 'medium', 'low');
-CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'paid', 'overdue', 'cancelled');
-CREATE TYPE rate_type AS ENUM ('fixed', 'per_kg', 'distance_based', 'zone_based');
+DO $$ BEGIN
+    CREATE TYPE priority_level AS ENUM ('high', 'medium', 'low');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'paid', 'overdue', 'cancelled');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE rate_type AS ENUM ('fixed', 'per_kg', 'distance_based', 'zone_based');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Create the update_updated_at_column function (needed for triggers)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -21,7 +35,7 @@ END;
 $$ language 'plpgsql';
 
 -- 1. Create customers table
-CREATE TABLE public.customers (
+CREATE TABLE IF NOT EXISTS public.customers (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     name CHARACTER VARYING(255) NOT NULL,
     code CHARACTER VARYING(50) NOT NULL,
@@ -45,7 +59,7 @@ CREATE TABLE public.customers (
 ) TABLESPACE pg_default;
 
 -- 2. Create customer_codes table
-CREATE TABLE public.customer_codes (
+CREATE TABLE IF NOT EXISTS public.customer_codes (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     code CHARACTER VARYING(50) NOT NULL,
@@ -59,7 +73,7 @@ CREATE TABLE public.customer_codes (
 ) TABLESPACE pg_default;
 
 -- 3. Create rates table
-CREATE TABLE public.rates (
+CREATE TABLE IF NOT EXISTS public.rates (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     name CHARACTER VARYING(255) NOT NULL,
     description TEXT NULL,
@@ -75,7 +89,10 @@ CREATE TABLE public.rates (
 ) TABLESPACE pg_default;
 
 -- 4. Create customer_rules table
-CREATE TABLE public.customer_rules (
+-- IMPORTANT: where_fields must contain database column names (e.g., 'orig_oe', 'dest_oe'), 
+-- NOT source file column names (e.g., 'Orig.OE', 'Des.OE')
+-- Valid database column names for cargo_data: orig_oe, dest_oe, mail_cat, mail_class, total_kg, etc.
+CREATE TABLE IF NOT EXISTS public.customer_rules (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     name CHARACTER VARYING(255) NOT NULL,
     description TEXT NULL,
@@ -93,7 +110,7 @@ CREATE TABLE public.customer_rules (
 ) TABLESPACE pg_default;
 
 -- 5. Create rate_rules table
-CREATE TABLE public.rate_rules (
+CREATE TABLE IF NOT EXISTS public.rate_rules (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     name CHARACTER VARYING(255) NOT NULL,
     description TEXT NULL,
@@ -111,7 +128,7 @@ CREATE TABLE public.rate_rules (
 ) TABLESPACE pg_default;
 
 -- 6. Create cargo_data table
-CREATE TABLE public.cargo_data (
+CREATE TABLE IF NOT EXISTS public.cargo_data (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     rec_id CHARACTER VARYING(255) NOT NULL,
     inb_flight_date CHARACTER VARYING(50) NULL,
@@ -143,7 +160,7 @@ CREATE TABLE public.cargo_data (
 ) TABLESPACE pg_default;
 
 -- 7. Create column_mappings table
-CREATE TABLE public.column_mappings (
+CREATE TABLE IF NOT EXISTS public.column_mappings (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     original_name CHARACTER VARYING(255) NOT NULL,
     mapped_name CHARACTER VARYING(255) NOT NULL,
@@ -157,7 +174,7 @@ CREATE TABLE public.column_mappings (
 ) TABLESPACE pg_default;
 
 -- 8. Create airport_code table
-CREATE TABLE public.airport_code (
+CREATE TABLE IF NOT EXISTS public.airport_code (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     code CHARACTER VARYING(255) NOT NULL,
     is_active BOOLEAN DEFAULT true,
@@ -169,7 +186,7 @@ CREATE TABLE public.airport_code (
 ) TABLESPACE pg_default;
 
 -- 9. Create flights table
-CREATE TABLE public.flights (
+CREATE TABLE IF NOT EXISTS public.flights (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     flight_number CHARACTER VARYING(50) NOT NULL,
     origin CHARACTER VARYING(10) NOT NULL,
@@ -186,7 +203,7 @@ CREATE TABLE public.flights (
 ) TABLESPACE pg_default;
 
 -- 10. Create invoices table
-CREATE TABLE public.invoices (
+CREATE TABLE IF NOT EXISTS public.invoices (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     invoice_number CHARACTER VARYING(100) NOT NULL,
     customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
@@ -204,7 +221,7 @@ CREATE TABLE public.invoices (
 ) TABLESPACE pg_default;
 
 -- 11. Create sector_rates table
-CREATE TABLE public.sector_rates (
+CREATE TABLE IF NOT EXISTS public.sector_rates (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     origin CHARACTER VARYING(10) NOT NULL,
     destination CHARACTER VARYING(10) NOT NULL,
@@ -222,8 +239,13 @@ CREATE TABLE public.sector_rates (
     CONSTRAINT check_different_airports CHECK (origin_airport_id != destination_airport_id)
 ) TABLESPACE pg_default;
 
+-- Ensure origin_airport_id and destination_airport_id columns exist in sector_rates
+ALTER TABLE public.sector_rates 
+ADD COLUMN IF NOT EXISTS origin_airport_id UUID REFERENCES public.airport_code(id) ON DELETE CASCADE,
+ADD COLUMN IF NOT EXISTS destination_airport_id UUID REFERENCES public.airport_code(id) ON DELETE CASCADE;
+
 -- 12. Create flight_uploads table
-CREATE TABLE public.flight_uploads (
+CREATE TABLE IF NOT EXISTS public.flight_uploads (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     origin CHARACTER VARYING(50) NOT NULL,
     destination CHARACTER VARYING(50) NOT NULL,
@@ -262,7 +284,7 @@ COMMENT ON COLUMN public.flight_uploads.customer IS 'Customer information for th
 COMMENT ON COLUMN public.flight_uploads.is_converted IS 'Whether this record has been converted using ConvertModal';
 
 -- Create sector_rates_v2 table for SectorRatesV2 component
-CREATE TABLE public.sector_rates_v2 (
+CREATE TABLE IF NOT EXISTS public.sector_rates_v2 (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     text_label VARCHAR(255) NULL,
     origin_airport TEXT[] NULL,
@@ -278,7 +300,7 @@ CREATE TABLE public.sector_rates_v2 (
 ) TABLESPACE pg_default;
 
 -- Create preview_price_assignment table for PreviewV2 component
-CREATE TABLE public.preview_price_assignment (
+CREATE TABLE IF NOT EXISTS public.preview_price_assignment (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     sector_rate_id UUID NULL REFERENCES public.sector_rates_v2(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -287,7 +309,7 @@ CREATE TABLE public.preview_price_assignment (
 ) TABLESPACE pg_default;
 
 -- Create preview_flights table for PreviewV2New component
-CREATE TABLE public.preview_flights (
+CREATE TABLE IF NOT EXISTS public.preview_flights (
     id UUID NOT NULL DEFAULT extensions.uuid_generate_v4(),
     origin CHARACTER VARYING(50) NOT NULL,
     destination CHARACTER VARYING(50) NOT NULL,
@@ -448,7 +470,7 @@ CREATE INDEX IF NOT EXISTS idx_sector_rates_origin_oe ON public.sector_rates USI
 CREATE INDEX IF NOT EXISTS idx_sector_rates_destination_oe ON public.sector_rates USING btree (destination_oe) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_customer_origin_destination ON public.sector_rates USING btree (customer, origin, destination) TABLESPACE pg_default;
 CREATE INDEX IF NOT EXISTS idx_sector_rates_origin_oe_destination_oe ON public.sector_rates USING btree (origin_oe, destination_oe) TABLESPACE pg_default;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sector_rates_unique_route ON public.sector_rates USING btree (origin_airport_id, destination_airport_id) WHERE is_active = true TABLESPACE pg_default;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sector_rates_unique_route ON public.sector_rates USING btree (origin_airport_id, destination_airport_id) TABLESPACE pg_default WHERE is_active = true;
 
 
 -- Indexes for SectorRatesV2 table
@@ -600,25 +622,25 @@ CREATE TRIGGER update_preview_flights_v3_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
--- Enable Row Level Security (RLS)
-ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.customer_codes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.rates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.customer_rules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.rate_rules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cargo_data ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.column_mappings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.airport_code ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.flights ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sector_rates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.flight_uploads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sector_rates_v2 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.preview_price_assignment ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.preview_flights ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sector_rates_v3 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.preview_price_assignment_v3 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.preview_flights_v3 ENABLE ROW LEVEL SECURITY;
+-- Disable Row Level Security (RLS) for all tables
+ALTER TABLE public.customers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_codes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rates DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_rules DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rate_rules DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cargo_data DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.column_mappings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.airport_code DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.flights DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sector_rates DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.flight_uploads DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sector_rates_v2 DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_price_assignment DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_flights DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sector_rates_v3 DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_price_assignment_v3 DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_flights_v3 DISABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies (allow all operations for authenticated users)
 CREATE POLICY "Allow all operations for authenticated users" ON public.customers
@@ -738,31 +760,32 @@ INSERT INTO public.rates (name, description, rate_type, base_rate, currency, mul
 ('Heavy Cargo Discount', 'Discounted rates for heavy shipments', 'per_kg', 3.25, 'EUR', 0.85, ARRAY['Heavy', 'Discount'], true);
 
 -- Insert sample customer rules (using customer code IDs)
+-- NOTE: where_fields uses database column names (orig_oe, dest_oe), NOT source file column names (Orig.OE, Des.OE)
 INSERT INTO public.customer_rules (name, description, priority, conditions, actions, where_fields) VALUES
-('DKCPHA', 'Route rule for DKCPHA', 1, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHA"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'PREM001') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('DKCPHB', 'Route rule for DKCPHB', 2, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHB"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'PREM001-EXPRESS') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('DKCPHC', 'Route rule for DKCPHC', 3, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHC"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'PREM001') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('DKCPHP', 'Route rule for DKCPHP', 4, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHP"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'PREM001-EXPRESS') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('ISREKA', 'Route rule for ISREKA', 5, '[{"field": "orig_oe", "operator": "equals", "value": "ISREKA"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'NORD002') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('SESTOK', 'Route rule for SESTOK', 6, '[{"field": "orig_oe", "operator": "equals", "value": "SESTOK"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'NORD002-PRIORITY') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('USEWRZ', 'Route rule for USEWRZ', 7, '[{"field": "orig_oe", "operator": "equals", "value": "USEWRZ"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'CARG004') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('USCHIX', 'Route rule for USCHIX', 8, '[{"field": "orig_oe", "operator": "equals", "value": "USCHIX"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'CARG004-HEAVY') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('USLAXS', 'Route rule for USLAXS', 9, '[{"field": "orig_oe", "operator": "equals", "value": "USLAXS"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'CARG004') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']),
-('SEARND', 'Route rule for SEARND', 10, '[{"field": "orig_oe", "operator": "equals", "value": "SEARND"}]'::jsonb, '{"assignTo": "' || (SELECT id FROM public.customer_codes WHERE code = 'BALT003') || '"}'::jsonb, ARRAY['orig_oe', 'dest_oe']);
+('DKCPHA', 'Route rule for DKCPHA', 1, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHA"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'PREM001')::text), ARRAY['orig_oe', 'dest_oe']),
+('DKCPHB', 'Route rule for DKCPHB', 2, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHB"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'PREM001-EXPRESS')::text), ARRAY['orig_oe', 'dest_oe']),
+('DKCPHC', 'Route rule for DKCPHC', 3, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHC"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'PREM001')::text), ARRAY['orig_oe', 'dest_oe']),
+('DKCPHP', 'Route rule for DKCPHP', 4, '[{"field": "orig_oe", "operator": "equals", "value": "DKCPHP"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'PREM001-EXPRESS')::text), ARRAY['orig_oe', 'dest_oe']),
+('ISREKA', 'Route rule for ISREKA', 5, '[{"field": "orig_oe", "operator": "equals", "value": "ISREKA"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'NORD002')::text), ARRAY['orig_oe', 'dest_oe']),
+('SESTOK', 'Route rule for SESTOK', 6, '[{"field": "orig_oe", "operator": "equals", "value": "SESTOK"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'NORD002-PRIORITY')::text), ARRAY['orig_oe', 'dest_oe']),
+('USEWRZ', 'Route rule for USEWRZ', 7, '[{"field": "orig_oe", "operator": "equals", "value": "USEWRZ"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'CARG004')::text), ARRAY['orig_oe', 'dest_oe']),
+('USCHIX', 'Route rule for USCHIX', 8, '[{"field": "orig_oe", "operator": "equals", "value": "USCHIX"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'CARG004-HEAVY')::text), ARRAY['orig_oe', 'dest_oe']),
+('USLAXS', 'Route rule for USLAXS', 9, '[{"field": "orig_oe", "operator": "equals", "value": "USLAXS"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'CARG004')::text), ARRAY['orig_oe', 'dest_oe']),
+('SEARND', 'Route rule for SEARND', 10, '[{"field": "orig_oe", "operator": "equals", "value": "SEARND"}]'::jsonb, jsonb_build_object('assignTo', (SELECT id FROM public.customer_codes WHERE code = 'BALT003')::text), ARRAY['orig_oe', 'dest_oe']);
 
 -- Insert sample rate rules
 INSERT INTO public.rate_rules (name, description, priority, conditions, actions, rate_id) VALUES
 ('EU Zone Standard Rate', 'Standard rate for EU destinations under 25kg', 1, 
  '[{"field": "route", "operator": "contains", "value": "FRANK,DEBER,CZPRG,ITFCO"}, {"field": "weight", "operator": "less_than", "value": "25"}, {"field": "mail_category", "operator": "equals", "value": "A"}]'::jsonb,
- '{"assignRate": "' || (SELECT id FROM public.rates WHERE name = 'EU Standard Rate') || '"}'::jsonb,
+ jsonb_build_object('assignRate', (SELECT id FROM public.rates WHERE name = 'EU Standard Rate')::text),
  (SELECT id FROM public.rates WHERE name = 'EU Standard Rate')),
 ('Nordic Express Premium', 'Premium rates for Nordic routes with priority handling', 2, 
  '[{"field": "route", "operator": "contains", "value": "SEARNK,NOKRS,DKAAR,FICPH"}, {"field": "mail_category", "operator": "equals", "value": "A"}, {"field": "weight", "operator": "greater_than", "value": "10"}]'::jsonb,
- '{"assignRate": "' || (SELECT id FROM public.rates WHERE name = 'Nordic Express Premium') || '"}'::jsonb,
+ jsonb_build_object('assignRate', (SELECT id FROM public.rates WHERE name = 'Nordic Express Premium')::text),
  (SELECT id FROM public.rates WHERE name = 'Nordic Express Premium')),
 ('Heavy Cargo Discount', 'Discounted rates for heavy shipments over 50kg', 3, 
  '[{"field": "weight", "operator": "greater_than", "value": "50"}, {"field": "mail_category", "operator": "equals", "value": "B"}]'::jsonb,
- '{"assignRate": "' || (SELECT id FROM public.rates WHERE name = 'Heavy Cargo Discount') || '"}'::jsonb,
+ jsonb_build_object('assignRate', (SELECT id FROM public.rates WHERE name = 'Heavy Cargo Discount')::text),
  (SELECT id FROM public.rates WHERE name = 'Heavy Cargo Discount'));
 
 -- Insert sample airport codes
@@ -810,11 +833,8 @@ LEFT JOIN public.airport_code destination ON f.destination_airport_id = destinat
 GRANT ALL ON public.flights_with_airports TO authenticated;
 GRANT ALL ON public.flights_with_airports TO service_role;
 
--- Add RLS policy for the view
-ALTER TABLE public.flights_with_airports ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Allow all operations for authenticated users" ON public.flights_with_airports
-    FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- Note: RLS cannot be enabled on views, only on tables
+-- Security is handled through the underlying tables (flights, airport_code)
 
 -- Insert sample flights with airport relationships
 INSERT INTO public.flights (flight_number, origin, destination, origin_airport_id, destination_airport_id, status, is_active) VALUES
