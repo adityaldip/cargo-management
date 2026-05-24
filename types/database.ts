@@ -11,6 +11,119 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      app_users: {
+        Row: {
+          id: string
+          email: string
+          name: string
+          last_login_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          name: string
+          last_login_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          name?: string
+          last_login_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      app_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          token_hash: string
+          expires_at: string
+          created_at: string
+          last_used_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          token_hash: string
+          expires_at: string
+          created_at?: string
+          last_used_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          token_hash?: string
+          expires_at?: string
+          created_at?: string
+          last_used_at?: string
+        }
+      }
+      feed_posts: {
+        Row: {
+          id: string
+          liveblocks_room_id: string
+          author_user_id: string
+          title: string
+          body_preview: string
+          body_plain_text: string
+          hashtags: string[]
+          is_published: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          liveblocks_room_id?: string
+          author_user_id: string
+          title?: string
+          body_preview?: string
+          body_plain_text?: string
+          hashtags?: string[]
+          is_published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          liveblocks_room_id?: string
+          author_user_id?: string
+          title?: string
+          body_preview?: string
+          body_plain_text?: string
+          hashtags?: string[]
+          is_published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      feed_post_reactions: {
+        Row: {
+          id: string
+          feed_post_id: string
+          user_id: string
+          emoji: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          feed_post_id: string
+          user_id: string
+          emoji: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          feed_post_id?: string
+          user_id?: string
+          emoji?: string
+          created_at?: string
+        }
+      }
       customers: {
         Row: {
           id: string

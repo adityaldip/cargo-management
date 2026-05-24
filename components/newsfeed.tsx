@@ -5,10 +5,13 @@ import {
   Edit,
   Plus,
   Clock3,
-  Trash
+  Trash,
+  MessageCircle,
+  FileText,
 } from "lucide-react";
 
 import { useRealtimeInboxNotifications } from "@/hooks/use-realtime-inbox-notifications";
+import { formatTimeAgo } from "@/lib/format-times";
 
 const getActivityIcon = (type?: string) => {
   switch (type) {
@@ -26,6 +29,14 @@ const getActivityIcon = (type?: string) => {
       return(
         <Trash className="h-4 w-4 text-red-500" />
       );
+    case "feed-comment":
+      return (
+        <MessageCircle className="h-4 w-4 text-sky-600" />
+      );
+    case "feed-post":
+      return (
+        <FileText className="h-4 w-4 text-emerald-600" />
+      );
     default:
       return (
         <Plane className="h-4 w-4 text-gray-500" />
@@ -33,20 +44,7 @@ const getActivityIcon = (type?: string) => {
   }
 };
 
-const formatTimeAgo = (dateString?: string) => {
-  if (!dateString) return "";
 
-  const date = new Date(dateString);
-
-  return new Intl.RelativeTimeFormat("en", {
-    numeric: "auto",
-  }).format(
-    -Math.floor(
-      (Date.now() - date.getTime()) / 60000
-    ),
-    "minute"
-  );
-};
 
 export function Newsfeed() {
   const { inboxNotifications, isLoading } =
@@ -84,6 +82,11 @@ export function Newsfeed() {
             (notification) => {
               const data =
                 notification.activities[0];
+              const activityData =
+                data?.data;
+              const actorName =
+                activityData?.actorName ||
+                "Someone";
 
               return (
                 <div
@@ -98,9 +101,16 @@ export function Newsfeed() {
 
                   <div className="flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-medium">
-                        {data?.data?.title}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900">
+                          {actorName}
+                        </p>
+                        <div className="rounded-full bg-gray-100 p-1.5">
+                          {getActivityIcon(
+                            activityData?.type
+                          )}
+                        </div>
+                      </div>
 
                       <div className="flex items-center gap-1 text-xs text-gray-400">
                         <Clock3 className="h-3 w-3" />
@@ -111,13 +121,16 @@ export function Newsfeed() {
                       </div>
                     </div>
 
-                    <p className="mt-1 text-sm text-gray-500">
-                      {data?.data?.description}
+                    <p className="mt-2 text-sm text-gray-600">
+                      {activityData?.description}
                     </p>
 
-                    <div className="mt-3">
+                    <div className="mt-3 flex items-center gap-2">
                       <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
-                        {data?.data?.type}
+                        {activityData?.title}
+                      </span>
+                      <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                        {activityData?.type}
                       </span>
                     </div>
                   </div>

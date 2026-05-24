@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
-import { FileUp, Users, DollarSign, FileSpreadsheet, Receipt, UserCheck, Calculator, BarChart3, Menu, X, Coins, ChevronLeft, ChevronRight } from "lucide-react"
+import { FileUp, Users, DollarSign, FileSpreadsheet, Receipt, UserCheck, Calculator, BarChart3, Menu, X, Coins, ChevronLeft, ChevronRight, Newspaper, LogOut } from "lucide-react"
 import type { WorkflowStep } from "@/store/workflow-store"
 
 interface WorkflowNavigationProps {
@@ -20,9 +21,12 @@ interface WorkflowNavigationProps {
 }
 
 export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = false, isClearingData = false, isExporting = false, isBulkDeleting = false, isExecutingRules = false, isMappingAndSaving = false, onCollapseChange }: WorkflowNavigationProps) {
+  const pathname = usePathname()
+  const router = useRouter()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
   
   // Track hydration to prevent className mismatches
   useEffect(() => {
@@ -47,14 +51,45 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
     // { id: "review-rates", label: "Review Rates", icon: DollarSign, tooltip: "Configure pricing for your routes and manage rate plans." },
     { id: "review-invoices", label: "Review Invoices", icon: Receipt, tooltip: "Review and manage generated invoices from processed cargo data"},
     { id: "reporting", label: "Reporting", icon: BarChart3, tooltip: "View comprehensive reports and analytics for cargo data", lighterColor: true },
+    { id: "feeds", label: "Feeds", icon: Newspaper, tooltip: "Open the shared workspace feed" },
   ]
 
-  const handleStepChange = (stepId: WorkflowStep) => {
+  const handleStepChange = (stepId: WorkflowStep | "feeds") => {
     // Don't allow navigation when processing, clearing data, exporting, bulk deleting, executing rules, or mapping and saving
     if (isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules || isMappingAndSaving) return
-    
+
+    if (stepId === "feeds") {
+      router.push("/feeds")
+      setIsMobileMenuOpen(false)
+      return
+    }
+
     onStepChange(stepId)
+    if (pathname.startsWith("/feeds")) {
+      router.push("/")
+    }
     setIsMobileMenuOpen(false) // Close mobile menu when step is selected
+  }
+
+  const isFeedActive =
+    isHydrated &&
+    (pathname === "/feeds" ||
+      pathname.startsWith("/feeds/") ||
+      pathname.startsWith("/feeds?"))
+
+  const handleLogout = async () => {
+    setIsSigningOut(true)
+
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      })
+      router.push("/login")
+      router.refresh()
+    } finally {
+      setIsSigningOut(false)
+      setIsMobileMenuOpen(false)
+    }
   }
 
   return (
@@ -140,13 +175,24 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
               {steps.map((step) => {
                 const Icon = step.icon
                 // Prevent hydration mismatch by ensuring consistent initial state
-                const isActive = isHydrated && activeStep === step.id
+                const isActive =
+                  isHydrated &&
+                  (step.id === "feeds"
+                    ? isFeedActive
+                    : !isFeedActive &&
+                      activeStep === step.id)
                 const hasLighterColor = step.lighterColor
                 return (
                   <Tooltip key={step.id}>
                     <TooltipTrigger asChild>
                       <div
-                        onClick={() => handleStepChange(step.id as WorkflowStep)}
+                        onClick={() =>
+                          handleStepChange(
+                            step.id as
+                              | WorkflowStep
+                              | "feeds"
+                          )
+                        }
                         className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 rounded-lg transition-colors ${
                           isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules || isMappingAndSaving
                             ? "cursor-not-allowed opacity-50 text-gray-400" 
@@ -196,6 +242,29 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
               })}
             </div>
           </nav>
+
+          <div className="border-t border-gray-100 px-1 py-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isSigningOut}
+                  className={`flex w-full items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 rounded-lg transition-colors text-gray-600 hover:text-black hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <LogOut className="h-4 w-4 flex-shrink-0" />
+                  {!isCollapsed && (
+                    <span className="ml-3 text-sm font-medium truncate">
+                      {isSigningOut ? "Signing out..." : "Sign out"}
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className={`bg-black text-white text-xs whitespace-nowrap ${isCollapsed ? 'block' : 'hidden lg:block'}`}>
+                <p>Sign out of the workspace</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </aside>
     </TooltipProvider>

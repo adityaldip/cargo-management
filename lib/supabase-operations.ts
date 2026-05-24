@@ -1051,3 +1051,24 @@ export const sectorRateOperations = {
   },
 }
 
+export const appUsersOperations = {
+    // Get sector rate by ID
+    async getById(id: any) {
+      return safeSupabaseOperation(() =>
+        supabase
+          .from('app_users')
+          .select('*')
+          .eq('id', id)
+          .single()
+      )
+    },
+    async getByIds(id: any){
+      return safeSupabaseOperation(() =>
+      supabase
+        .from("app_users")
+        .select("id, name")
+        .in("id", id)
+      )
+    }
+}
+
