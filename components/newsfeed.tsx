@@ -84,7 +84,7 @@ export function Newsfeed() {
           void fetchInboxNotifications();
         }
       },
-      3000
+      10000
     );
 
     return () => {
