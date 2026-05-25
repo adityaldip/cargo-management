@@ -130,23 +130,35 @@
 }
 
 .feed-compose-editor {
+  position: relative;
+  overflow: hidden;
   min-height: 320px;
   border-radius: 1.5rem;
-  border: 1px solid var(--border);
-  background: white;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
 .feed-compose-editor__mount {
+  display: block;
   min-height: 280px;
+  width: 100%;
 }
 
-.feed-compose-editor__prosemirror {
+.feed-compose-editor__mount .tiptap,
+.feed-compose-editor__prosemirror,
+.feed-compose-editor .ProseMirror {
+  display: block;
+  box-sizing: border-box;
   min-height: 280px;
+  width: 100%;
   padding: 1rem 1.25rem;
   font-size: 1rem;
   line-height: 1.75;
   color: #1f2937;
+  background: #ffffff;
   outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .feed-compose-editor__prosemirror:focus {
@@ -163,4 +175,27 @@
 
 .feed-compose-editor__prosemirror p:last-child {
   margin-bottom: 0;
+}
+
+.feed-collaborative-editor {
+  min-height: 360px;
+  border-radius: 1rem;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.feed-collaborative-editor .tiptap,
+.feed-collaborative-editor__prosemirror,
+.feed-collaborative-editor .ProseMirror {
+  display: block;
+  box-sizing: border-box;
+  min-height: 320px;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: #1f2937;
+  background: #ffffff;
+  outline: none;
 }

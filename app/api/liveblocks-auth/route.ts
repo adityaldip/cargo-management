@@ -2,6 +2,7 @@ import { Liveblocks } from "@liveblocks/node";
 import { NextResponse } from "next/server";
 
 import { getCurrentAppUser } from "@/lib/app-auth";
+import { pickLiveblocksUserColor } from "@/lib/liveblocks-user-color";
 
 const liveblocks = new Liveblocks({
   secret: process.env.LIVEBLOCKS_SECRET_KEY!,
@@ -23,6 +24,7 @@ export async function POST() {
       userInfo: {
         name: user.name,
         email: user.email,
+        color: pickLiveblocksUserColor(user.id),
       },
     }
   );

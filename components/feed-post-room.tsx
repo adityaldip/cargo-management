@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic";
 
+import { FeedCollaborativeEditor } from "@/components/feed-collaborative-editor";
 import { FeedPostReactions } from "@/components/feed-post-reactions";
-import { FeedPostView } from "@/components/feed-post-view";
 import type { FeedPostListItem } from "@/lib/feed-posts";
 
 const LazyFeedPostComments = dynamic(
@@ -30,7 +30,7 @@ export function FeedPostRoom({
 }) {
   return (
     <div className="space-y-6">
-      <FeedPostView post={post} />
+      <FeedCollaborativeEditor post={post} />
 
       <section className="rounded-3xl border bg-white p-5 shadow-sm">
         <div className="mb-4 flex flex-wrap gap-2">

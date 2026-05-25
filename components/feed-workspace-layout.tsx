@@ -20,14 +20,14 @@ export function FeedWorkspaceLayout({
   subtitle,
   actions,
   children,
-  enableLiveblocksRoom = false,
+  collaborationRoomId,
 }: {
   title: string;
   subtitle: string;
   actions?: ReactNode;
   children: ReactNode;
-  /** When true, wraps the whole page in RoomProvider (post detail + comments). */
-  enableLiveblocksRoom?: boolean;
+  /** Per-post room for collaborative editor + comments on detail pages. */
+  collaborationRoomId?: string;
 }) {
   const router = useRouter();
   const [isSidebarCollapsed, setIsSidebarCollapsed] =
@@ -69,54 +69,60 @@ export function FeedWorkspaceLayout({
   const activityVisible =
     hasHydrated && showActivity;
 
-  const needsLiveblocksRoom =
-    enableLiveblocksRoom || activityVisible;
+  const mainColumnContent = (
+    <>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gray-400">
+            Workspace feed
+          </p>
+          <h1 className="text-4xl font-semibold tracking-tight text-gray-900">
+            {title}
+          </h1>
+          <p className="max-w-3xl text-sm text-gray-500">
+            {subtitle}
+          </p>
+        </div>
+
+        {actions}
+      </div>
+
+      {children}
+    </>
+  );
+
+  const mainColumn = (
+    <div
+      className={
+        activityVisible
+          ? "col-span-8 overflow-y-auto rounded-3xl border bg-white p-6 shadow-sm"
+          : "col-span-12 overflow-y-auto rounded-3xl border bg-white p-6 shadow-sm"
+      }
+    >
+      {collaborationRoomId ? (
+        <RoomProvider id={collaborationRoomId}>
+          {mainColumnContent}
+        </RoomProvider>
+      ) : (
+        mainColumnContent
+      )}
+    </div>
+  );
 
   const feedGrid = (
     <div className="grid h-full grid-cols-12 gap-4">
-      <div
-        className={
-          activityVisible
-            ? "col-span-8 overflow-y-auto rounded-3xl border bg-white p-6 shadow-sm"
-            : "col-span-12 overflow-y-auto rounded-3xl border bg-white p-6 shadow-sm"
-        }
-      >
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gray-400">
-              Workspace feed
-            </p>
-            <h1 className="text-4xl font-semibold tracking-tight text-gray-900">
-              {title}
-            </h1>
-            <p className="max-w-3xl text-sm text-gray-500">
-              {subtitle}
-            </p>
-          </div>
-
-          {actions}
-        </div>
-
-        {children}
-      </div>
+      {mainColumn}
 
       {activityVisible ? (
         <div className="col-span-4">
-          <FeedActivitySidebar />
+          <RoomProvider id={LIVEBLOCKS_ROOM_ID}>
+            <FeedActivityRefreshBridge />
+            <FeedActivitySidebar />
+          </RoomProvider>
         </div>
       ) : null}
     </div>
   );
-
-  const feedGridWithOptionalRoom =
-    needsLiveblocksRoom ? (
-      <RoomProvider id={LIVEBLOCKS_ROOM_ID}>
-        <FeedActivityRefreshBridge />
-        {feedGrid}
-      </RoomProvider>
-    ) : (
-      feedGrid
-    );
 
   const layout = (
     <div className="h-screen bg-white p-4 text-black">
@@ -158,7 +164,7 @@ export function FeedWorkspaceLayout({
           </button>
         </div>
 
-        {feedGridWithOptionalRoom}
+        {feedGrid}
       </div>
     </div>
   );

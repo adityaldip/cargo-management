@@ -20,7 +20,6 @@ export function FeedLightShell({
       title={title}
       subtitle={subtitle}
       actions={actions}
-      enableLiveblocksRoom={false}
     >
       {children}
     </FeedWorkspaceLayout>

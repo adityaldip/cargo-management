@@ -7,17 +7,19 @@ import { FeedWorkspaceLayout } from "@/components/feed-workspace-layout";
 export function FeedDetailShell({
   title,
   subtitle,
+  collaborationRoomId,
   children,
 }: {
   title: string;
   subtitle: string;
+  collaborationRoomId: string;
   children: ReactNode;
 }) {
   return (
     <FeedWorkspaceLayout
       title={title}
       subtitle={subtitle}
-      enableLiveblocksRoom
+      collaborationRoomId={collaborationRoomId}
     >
       {children}
     </FeedWorkspaceLayout>

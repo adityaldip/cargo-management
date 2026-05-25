@@ -6,7 +6,6 @@ import {
   FEED_POST_EMOJIS,
   FEED_POSTS_PAGE_SIZE,
 } from "@/lib/feed-constants";
-import { LIVEBLOCKS_ROOM_ID } from "@/lib/liveblocks";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export type FeedPostListItem = {
@@ -28,8 +27,8 @@ export type FeedPostListItem = {
   currentUserReactions: string[];
 };
 
-export function buildFeedRoomId(id: string) {
-  return `${LIVEBLOCKS_ROOM_ID}`;
+export function buildFeedRoomId(postId: string) {
+  return `feed-post-${postId}`;
 }
 
 export function extractHashtags(

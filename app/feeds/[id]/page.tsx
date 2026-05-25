@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { FeedPostRoom } from "@/components/feed-post-room";
 import { FeedDetailShell } from "@/components/feed-detail-shell";
 import { getCurrentAppUser } from "@/lib/app-auth";
-import { getFeedPost } from "@/lib/feed-posts";
+import {
+  buildFeedRoomId,
+  getFeedPost,
+} from "@/lib/feed-posts";
 
 export default async function FeedPostPage({
   params,
@@ -33,6 +36,7 @@ export default async function FeedPostPage({
     <FeedDetailShell
       title={post.title}
       subtitle={`${post.author?.name ?? "Unknown author"} · ${new Date(post.updated_at).toLocaleString()}`}
+      collaborationRoomId={buildFeedRoomId(post.id)}
     >
       <FeedPostRoom post={post} />
     </FeedDetailShell>
