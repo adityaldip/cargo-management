@@ -6,7 +6,13 @@ import {
   FEED_POST_EMOJIS,
   FEED_POSTS_PAGE_SIZE,
 } from "@/lib/feed-constants";
+import {
+  buildFeedRoomId,
+  isValidFeedPostId,
+} from "@/lib/feed-room";
 import { supabaseAdmin } from "@/lib/supabase";
+
+export { buildFeedRoomId } from "@/lib/feed-room";
 
 export type FeedPostListItem = {
   id: string;
@@ -26,10 +32,6 @@ export type FeedPostListItem = {
   reactions: Record<string, number>;
   currentUserReactions: string[];
 };
-
-export function buildFeedRoomId(postId: string) {
-  return `feed-post-${postId}`;
-}
 
 export function extractHashtags(
   text: string
@@ -83,13 +85,31 @@ function mapReactions(
 
 export async function createFeedPost(
   input: {
+    id?: string;
     authorUserId: string;
     title: string;
     bodyPlainText: string;
     isPublished?: boolean;
   }
 ) {
-  const id = randomUUID();
+  const id =
+    input.id?.trim() || randomUUID();
+
+  if (!isValidFeedPostId(id)) {
+    throw new Error("Invalid post id.");
+  }
+
+  const { data: existingPost } =
+    await supabaseAdmin
+      .from("feed_posts")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+
+  if (existingPost) {
+    throw new Error("Post id already exists.");
+  }
+
   const liveblocksRoomId = buildFeedRoomId(id);
   const plainText =
     input.bodyPlainText.trim();

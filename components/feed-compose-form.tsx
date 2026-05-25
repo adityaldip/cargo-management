@@ -1,42 +1,23 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import {
   FormEvent,
   useCallback,
-  useEffect,
   useRef,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
 import type { Editor } from "@tiptap/core";
 
+import { FeedComposeCollaborativeEditor } from "@/components/feed-compose-collaborative-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { logFeedComposeEditor } from "@/lib/feed-compose-editor-debug";
 
-const FeedComposeEditor = dynamic(
-  () =>
-    import("@/components/feed-compose-editor").then(
-      (module) => {
-        logFeedComposeEditor("dynamic import resolved");
-        return module.FeedComposeEditor;
-      }
-    ),
-  {
-    ssr: false,
-    loading: () => {
-      logFeedComposeEditor("dynamic loading placeholder");
-      return (
-        <div className="feed-compose-editor flex min-h-[320px] items-center justify-center text-sm text-gray-500">
-          Loading editor...
-        </div>
-      );
-    },
-  }
-);
-
-export function FeedComposeForm() {
+export function FeedComposeForm({
+  draftId,
+}: {
+  draftId: string;
+}) {
   const router = useRouter();
   const editorRef = useRef<Editor | null>(null);
   const [title, setTitle] = useState("");
@@ -49,26 +30,11 @@ export function FeedComposeForm() {
 
   const handleEditorReady = useCallback(
     (editor: Editor) => {
-      logFeedComposeEditor("form handleEditorReady", {
-        isDestroyed: editor.isDestroyed,
-        isInitialized: editor.isInitialized,
-      });
       editorRef.current = editor;
       setIsEditorReady(true);
     },
     []
   );
-
-  useEffect(() => {
-    logFeedComposeEditor("form mount");
-  }, []);
-
-  useEffect(() => {
-    logFeedComposeEditor("form isEditorReady", {
-      isEditorReady,
-      hasEditorRef: Boolean(editorRef.current),
-    });
-  }, [isEditorReady]);
 
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
@@ -94,6 +60,7 @@ export function FeedComposeForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          id: draftId,
           title,
           bodyPlainText: editor.getText(),
           isPublished: true,
@@ -159,7 +126,8 @@ export function FeedComposeForm() {
         <label className="text-sm font-medium text-gray-700">
           Post
         </label>
-        <FeedComposeEditor
+        <FeedComposeCollaborativeEditor
+          draftId={draftId}
           onEditorReady={handleEditorReady}
         />
       </div>

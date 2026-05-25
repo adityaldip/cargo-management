@@ -1,5 +1,4 @@
-import { FeedComposeForm } from "@/components/feed-compose-form";
-import { FeedLightShell } from "@/components/feed-light-shell";
+import { FeedNewPostPage } from "@/components/feed-new-post-page";
 import { getCurrentAppUser } from "@/lib/app-auth";
 
 export default async function NewFeedPostPage() {
@@ -10,12 +9,5 @@ export default async function NewFeedPostPage() {
     return null;
   }
 
-  return (
-    <FeedLightShell
-      title="Create a post"
-      subtitle="Draft the title and message, then publish. On the post page you can react and comment."
-    >
-      <FeedComposeForm />
-    </FeedLightShell>
-  );
+  return <FeedNewPostPage />;
 }

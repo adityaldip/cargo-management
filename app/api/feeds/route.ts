@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createFeedPost, listFeedPosts } from "@/lib/feed-posts";
 import { getCurrentAppUser } from "@/lib/app-auth";
+import { isValidFeedPostId } from "@/lib/feed-room";
 import {
   notifyWorkspaceActivity,
   truncateActivityTitle,
@@ -62,11 +63,25 @@ export async function POST(
   }
 
   const body = await request.json();
+  const requestedId =
+    typeof body?.id === "string"
+      ? body.id.trim()
+      : undefined;
   const title = body?.title?.trim() ?? "";
   const bodyPlainText =
     body?.bodyPlainText?.trim() ?? "";
   const isPublished =
     body?.isPublished !== false;
+
+  if (
+    requestedId &&
+    !isValidFeedPostId(requestedId)
+  ) {
+    return NextResponse.json(
+      { error: "Invalid post id." },
+      { status: 400 }
+    );
+  }
 
   if (
     isPublished &&
@@ -81,12 +96,39 @@ export async function POST(
     );
   }
 
-  const post = await createFeedPost({
-    authorUserId: currentUser.id,
-    title,
-    bodyPlainText,
-    isPublished,
-  });
+  let post;
+
+  try {
+    post = await createFeedPost({
+      id: requestedId,
+      authorUserId: currentUser.id,
+      title,
+      bodyPlainText,
+      isPublished,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "Post id already exists."
+    ) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 409 }
+      );
+    }
+
+    if (
+      error instanceof Error &&
+      error.message === "Invalid post id."
+    ) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+
+    throw error;
+  }
 
   if (isPublished) {
     try {

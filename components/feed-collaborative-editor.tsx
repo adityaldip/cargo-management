@@ -1,59 +1,35 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useStatus } from "@liveblocks/react";
-import {
-  Toolbar,
-  useIsEditorReady,
-  useLiveblocksExtension,
-} from "@liveblocks/react-tiptap";
 import type { Editor } from "@tiptap/core";
-import { EditorContent, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 
-import { FeedCollaborativeEditorLoading } from "@/components/feed-collaborative-editor-loading";
+import { FeedCollaborativeEditorCore } from "@/components/feed-collaborative-editor-core";
+import { FeedCollaborativeEditorGate } from "@/components/feed-collaborative-editor-gate";
 import { plainTextToInitialContent } from "@/lib/feed-editor-content";
 import type { FeedPostListItem } from "@/lib/feed-posts";
 
 const SAVE_DEBOUNCE_MS = 1500;
 
-/**
- * Waits for Liveblocks RoomProvider to finish connecting before mounting
- * TipTap. Otherwise useEditor binds to a stale pre-connect room instance on
- * client-side navigation and useIsEditorReady never becomes true.
- */
 export function FeedCollaborativeEditor({
   post,
 }: {
   post: FeedPostListItem;
 }) {
-  const roomStatus = useStatus();
-  const canMountEditor =
-    roomStatus === "connected" ||
-    roomStatus === "reconnecting";
-
-  if (!canMountEditor) {
-    return (
-      <FeedCollaborativeEditorLoading
-        status={roomStatus}
-      />
-    );
-  }
-
   return (
-    <FeedCollaborativeEditorCore
-      key={post.id}
-      post={post}
-    />
+    <FeedCollaborativeEditorGate>
+      <FeedCollaborativeEditorDetail
+        key={post.id}
+        post={post}
+      />
+    </FeedCollaborativeEditorGate>
   );
 }
 
-function FeedCollaborativeEditorCore({
+function FeedCollaborativeEditorDetail({
   post,
 }: {
   post: FeedPostListItem;
 }) {
-  const isEditorReady = useIsEditorReady();
   const saveTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -68,12 +44,6 @@ function FeedCollaborativeEditorCore({
       ),
     [post.body_plain_text]
   );
-
-  const liveblocks = useLiveblocksExtension({
-    initialContent,
-    comments: false,
-    mentions: true,
-  });
 
   const persistSnapshot = useCallback(
     async (editor: Editor) => {
@@ -106,8 +76,10 @@ function FeedCollaborativeEditorCore({
     [post.id, post.title]
   );
 
-  const scheduleSave = useCallback(
+  const handleUpdate = useCallback(
     (editor: Editor) => {
+      setSaveState("idle");
+
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
@@ -119,22 +91,6 @@ function FeedCollaborativeEditorCore({
     [persistSnapshot]
   );
 
-  const editor = useEditor({
-    extensions: [liveblocks, StarterKit],
-    immediatelyRender: false,
-    shouldRerenderOnTransaction: false,
-    autofocus: false,
-    editorProps: {
-      attributes: {
-        class: "feed-collaborative-editor__prosemirror",
-      },
-    },
-    onUpdate: ({ editor: updatedEditor }) => {
-      setSaveState("idle");
-      scheduleSave(updatedEditor);
-    },
-  });
-
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
@@ -142,9 +98,6 @@ function FeedCollaborativeEditorCore({
       }
     };
   }, []);
-
-  const showEditorUi =
-    isEditorReady && editor !== null;
 
   return (
     <article className="space-y-4 rounded-3xl border bg-white p-6 shadow-sm">
@@ -164,30 +117,10 @@ function FeedCollaborativeEditorCore({
         </p>
       </div>
 
-      {showEditorUi ? (
-        <Toolbar editor={editor} />
-      ) : null}
-
-      <div className="feed-collaborative-editor relative">
-        {editor ? (
-          <div
-            className={
-              showEditorUi
-                ? undefined
-                : "pointer-events-none opacity-0"
-            }
-            aria-hidden={!showEditorUi}
-          >
-            <EditorContent editor={editor} />
-          </div>
-        ) : null}
-
-        {!showEditorUi ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white text-sm text-gray-500">
-            Loading document…
-          </div>
-        ) : null}
-      </div>
+      <FeedCollaborativeEditorCore
+        initialContent={initialContent}
+        onUpdate={handleUpdate}
+      />
 
       <p className="text-xs text-gray-500">
         {saveState === "saving" && "Saving snapshot…"}
