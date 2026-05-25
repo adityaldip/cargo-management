@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import { FeedCollaborativeEditor } from "@/components/feed-collaborative-editor";
+import { FeedPostNotificationSettings } from "@/components/feed-post-notification-settings";
 import { FeedPostReactions } from "@/components/feed-post-reactions";
 import type { FeedPostListItem } from "@/lib/feed-posts";
 
@@ -30,6 +31,7 @@ export function FeedPostRoom({
 }) {
   return (
     <div className="space-y-6">
+      <FeedPostNotificationSettings />
       <FeedCollaborativeEditor post={post} />
 
       <section className="rounded-3xl border bg-white p-5 shadow-sm">

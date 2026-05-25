@@ -1,5 +1,21 @@
+const FEED_POST_ROOM_PREFIX = "feed-post-";
+
 export function buildFeedRoomId(postId: string) {
-  return `feed-post-${postId}`;
+  return `${FEED_POST_ROOM_PREFIX}${postId}`;
+}
+
+export function parseFeedPostIdFromRoomId(
+  roomId: string
+) {
+  if (!roomId.startsWith(FEED_POST_ROOM_PREFIX)) {
+    return null;
+  }
+
+  const postId = roomId.slice(
+    FEED_POST_ROOM_PREFIX.length
+  );
+
+  return isValidFeedPostId(postId) ? postId : null;
 }
 
 export const COMPOSE_EDITOR_DEFAULT_HTML =

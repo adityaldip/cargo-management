@@ -336,6 +336,22 @@ export async function updateFeedPostSnapshot(
   return data;
 }
 
+export async function getFeedPostAuthorUserId(
+  feedPostId: string
+) {
+  const { data, error } = await supabaseAdmin
+    .from("feed_posts")
+    .select("author_user_id")
+    .eq("id", feedPostId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.author_user_id ?? null;
+}
+
 export async function getFeedPostTitle(
   feedPostId: string
 ) {

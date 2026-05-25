@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
-import { FileUp, Users, DollarSign, FileSpreadsheet, Receipt, UserCheck, Calculator, BarChart3, Menu, X, Coins, ChevronLeft, ChevronRight, Newspaper, LogOut } from "lucide-react"
+import { FileUp, Users, DollarSign, FileSpreadsheet, Receipt, UserCheck, Calculator, BarChart3, Menu, X, Coins, ChevronLeft, ChevronRight, Newspaper, LogOut, FlaskConical } from "lucide-react"
 import type { WorkflowStep } from "@/store/workflow-store"
 
 interface WorkflowNavigationProps {
@@ -52,9 +52,10 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
     { id: "review-invoices", label: "Review Invoices", icon: Receipt, tooltip: "Review and manage generated invoices from processed cargo data"},
     { id: "reporting", label: "Reporting", icon: BarChart3, tooltip: "View comprehensive reports and analytics for cargo data", lighterColor: true },
     { id: "feeds", label: "Feeds", icon: Newspaper, tooltip: "Open the shared workspace feed" },
+    { id: "poc-team-stream", label: "Team stream POC", icon: FlaskConical, tooltip: "Liveblocks Feeds proof of concept (separate from Feeds)" },
   ]
 
-  const handleStepChange = (stepId: WorkflowStep | "feeds") => {
+  const handleStepChange = (stepId: WorkflowStep | "feeds" | "poc-team-stream") => {
     // Don't allow navigation when processing, clearing data, exporting, bulk deleting, executing rules, or mapping and saving
     if (isProcessing || isClearingData || isExporting || isBulkDeleting || isExecutingRules || isMappingAndSaving) return
 
@@ -64,8 +65,14 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
       return
     }
 
+    if (stepId === "poc-team-stream") {
+      router.push("/poc/team-stream")
+      setIsMobileMenuOpen(false)
+      return
+    }
+
     onStepChange(stepId)
-    if (pathname.startsWith("/feeds")) {
+    if (pathname.startsWith("/feeds") || pathname.startsWith("/poc/")) {
       router.push("/")
     }
     setIsMobileMenuOpen(false) // Close mobile menu when step is selected
@@ -76,6 +83,11 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
     (pathname === "/feeds" ||
       pathname.startsWith("/feeds/") ||
       pathname.startsWith("/feeds?"))
+
+  const isPocTeamStreamActive =
+    isHydrated &&
+    (pathname === "/poc/team-stream" ||
+      pathname.startsWith("/poc/team-stream/"))
 
   const handleLogout = async () => {
     setIsSigningOut(true)
@@ -179,8 +191,11 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                   isHydrated &&
                   (step.id === "feeds"
                     ? isFeedActive
-                    : !isFeedActive &&
-                      activeStep === step.id)
+                    : step.id === "poc-team-stream"
+                      ? isPocTeamStreamActive
+                      : !isFeedActive &&
+                        !isPocTeamStreamActive &&
+                        activeStep === step.id)
                 const hasLighterColor = step.lighterColor
                 return (
                   <Tooltip key={step.id}>
@@ -191,6 +206,7 @@ export function WorkflowNavigation({ activeStep, onStepChange, isProcessing = fa
                             step.id as
                               | WorkflowStep
                               | "feeds"
+                              | "poc-team-stream"
                           )
                         }
                         className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-3'} py-2.5 rounded-lg transition-colors ${

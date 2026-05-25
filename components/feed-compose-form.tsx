@@ -12,6 +12,7 @@ import type { Editor } from "@tiptap/core";
 import { FeedComposeCollaborativeEditor } from "@/components/feed-compose-collaborative-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { dispatchFeedInboxRefresh } from "@/lib/feed-activity-refresh";
 
 export function FeedComposeForm({
   draftId,
@@ -84,6 +85,8 @@ export function FeedComposeForm({
         setIsSubmitting(false);
         return;
       }
+
+      dispatchFeedInboxRefresh();
 
       router.push(`/feeds/${postId}`);
       router.refresh();

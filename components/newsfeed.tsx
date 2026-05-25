@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Plane,
   Edit,
@@ -9,9 +10,11 @@ import {
   MessageCircle,
   FileText,
   SmilePlus,
+  AtSign,
 } from "lucide-react";
 
-import { useRealtimeInboxNotifications } from "@/hooks/use-realtime-inbox-notifications";
+import { useFeedActivity } from "@/hooks/use-feed-activity";
+import { feedPostHref } from "@/lib/inbox-notification-display";
 import { formatTimeAgo } from "@/lib/format-times";
 
 const getActivityIcon = (type?: string) => {
@@ -27,12 +30,18 @@ const getActivityIcon = (type?: string) => {
       );
 
     case "airport_deleted":
-      return(
+      return (
         <Trash className="h-4 w-4 text-red-500" />
       );
     case "feed-comment":
+    case "thread":
       return (
         <MessageCircle className="h-4 w-4 text-sky-600" />
+      );
+    case "feed-mention":
+    case "textMention":
+      return (
+        <AtSign className="h-4 w-4 text-violet-600" />
       );
     case "feed-post":
       return (
@@ -49,15 +58,15 @@ const getActivityIcon = (type?: string) => {
   }
 };
 
-
-
 export function Newsfeed() {
-  const { inboxNotifications, isLoading } =
-    useRealtimeInboxNotifications();
+  const {
+    activities,
+    isLoading,
+    error,
+  } = useFeedActivity();
 
   return (
-    <div className="h-[calc(100vh-2rem)] overflow-hidden rounded-2xl border bg-white shadow-sm">
-      
+    <div className="h-[calc(100vh-2rem)] overflow-hidden rounded-2xl border bg-white shadow-sm flex flex-col">
       <div className="border-b p-4">
         <h2 className="text-lg font-semibold">
           Activity Feed
@@ -68,7 +77,7 @@ export function Newsfeed() {
         </p>
       </div>
 
-      <div className="h-[calc(100%-80px)] overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className="space-y-3">
           {isLoading && (
             <div className="py-10 text-center text-sm text-gray-500">
@@ -76,73 +85,81 @@ export function Newsfeed() {
             </div>
           )}
 
-          {!isLoading &&
-            inboxNotifications?.length === 0 && (
-            <div className="py-10 text-center text-sm text-gray-500">
-              No activity yet
+          {error && !isLoading && (
+            <div className="py-10 text-center text-sm text-red-600">
+              {error.message}
             </div>
           )}
 
-          {inboxNotifications?.map(
-            (notification) => {
-              const data =
-                notification.activities[0];
-              const activityData =
-                data?.data;
-              const actorName =
-                activityData?.actorName ||
-                "Someone";
+          {!isLoading &&
+            !error &&
+            activities.length === 0 && (
+              <div className="py-10 text-center text-sm text-gray-500">
+                No activity yet
+              </div>
+            )}
 
-              return (
-                <div
-                  key={notification.id}
-                  className="flex items-start gap-3 rounded-xl border p-4 transition-all hover:bg-gray-50"
-                >
-                  <div className="mt-1 rounded-full bg-gray-100 p-2">
-                    {getActivityIcon(
-                      data?.data?.type
-                    )}
-                  </div>
+          {activities.map((activity) => {
+            const href = feedPostHref(
+              activity.feedPostId
+            );
 
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-900">
-                          {actorName}
-                        </p>
-                        <div className="rounded-full bg-gray-100 p-1.5">
-                          {getActivityIcon(
-                            activityData?.type
-                          )}
-                        </div>
-                      </div>
+            const card = (
+              <div className="flex items-start gap-3 rounded-xl border p-4 transition-all hover:bg-gray-50">
+                <div className="mt-1 rounded-full bg-gray-100 p-2">
+                  {getActivityIcon(
+                    activity.iconType
+                  )}
+                </div>
 
-                      <div className="flex items-center gap-1 text-xs text-gray-400">
-                        <Clock3 className="h-3 w-3" />
-
-                        {formatTimeAgo(
-                          notification.notifiedAt
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-gray-900">
+                        {activity.actorName}
+                      </p>
+                      <div className="rounded-full bg-gray-100 p-1.5">
+                        {getActivityIcon(
+                          activity.iconType
                         )}
                       </div>
                     </div>
 
-                    <p className="mt-2 text-sm text-gray-600">
-                      {activityData?.description}
-                    </p>
+                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                      <Clock3 className="h-3 w-3" />
 
-                    <div className="mt-3 flex items-center gap-2">
-                      <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
-                        {activityData?.title}
-                      </span>
-                      <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
-                        {activityData?.type}
-                      </span>
+                      {formatTimeAgo(
+                        activity.notifiedAt
+                      )}
                     </div>
                   </div>
+
+                  <p className="mt-2 text-sm text-gray-600">
+                    {activity.description}
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                      {activity.title}
+                    </span>
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                      {activity.kind}
+                    </span>
+                  </div>
                 </div>
-              );
-            }
-          )}
+              </div>
+            );
+
+            return (
+              <div key={activity.id}>
+                {href ? (
+                  <Link href={href}>{card}</Link>
+                ) : (
+                  card
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

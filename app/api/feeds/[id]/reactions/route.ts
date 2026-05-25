@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentAppUser } from "@/lib/app-auth";
 import { FEED_POST_EMOJIS } from "@/lib/feed-constants";
 import {
+  getFeedPostAuthorUserId,
   getFeedPostTitle,
   toggleFeedReaction,
 } from "@/lib/feed-posts";
@@ -53,12 +54,18 @@ export async function POST(
 
   if (result.added) {
     try {
-      const postTitle = await getFeedPostTitle(id);
+      const [postTitle, postAuthorUserId] =
+        await Promise.all([
+          getFeedPostTitle(id),
+          getFeedPostAuthorUserId(id),
+        ]);
       const displayTitle =
         truncateActivityTitle(postTitle);
 
       await notifyWorkspaceActivity({
         subjectId: id,
+        actorUserId: currentUser.id,
+        postAuthorUserId,
         activity: {
           type: "feed-reaction",
           actorName: currentUser.name,

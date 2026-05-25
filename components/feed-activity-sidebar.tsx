@@ -12,7 +12,7 @@ const LazyNewsfeed = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[320px] items-center justify-center rounded-2xl border bg-white text-sm text-gray-500">
+      <div className="flex h-[calc(100vh-2rem)] items-center justify-center rounded-2xl border bg-white text-sm text-gray-500">
         Loading activity...
       </div>
     ),

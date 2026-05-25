@@ -3,18 +3,15 @@
 import { useCallback } from "react";
 import { Composer, Thread } from "@liveblocks/react-ui";
 import { useThreads } from "@liveblocks/react";
-import { useTriggerActivityNotification } from "@/hooks/use-trigger-activity-notification";
-import { appUsersOperations } from '@/lib/supabase-operations'
+
+import { dispatchFeedInboxRefresh } from "@/lib/feed-activity-refresh";
 
 export function FeedPostComments({
   feedPostId,
-  postTitle,
 }: {
   feedPostId: string;
-  postTitle: string;
+  postTitle?: string;
 }) {
-  const notifyActivity =
-    useTriggerActivityNotification();
   const { threads, isLoading } =
     useThreads({
       query: {
@@ -25,69 +22,9 @@ export function FeedPostComments({
       },
     });
 
-    const handleCommentSubmit = useCallback(
-      async ({ body }: any) => {
-        try {
-          const mentionIds =
-            body?.content
-              ?.flatMap(
-                (node: any) => node.children || []
-              )
-              ?.filter(
-                (child: any) =>
-                  child.type === "mention" &&
-                  child.kind === "user"
-              )
-              ?.map((child: any) => child.id) || [];
-    
-              const { data: users, error } =
-              await appUsersOperations.getByIds(
-                mentionIds
-              );
-
-              const usersMap = Object.fromEntries(
-              (Array.isArray(users) ? users : []).map(
-                (user) => [user.id, user.name]
-              )
-          );
-
-          const commentText =
-            body?.content
-              ?.flatMap(
-                (node: any) => node.children || []
-              )
-              ?.map((child: any) => {
-                if (child.text) {
-                  return child.text;
-                }
-    
-                if (
-                  child.type === "mention" &&
-                  child.kind === "user"
-                ) {
-                  return `@${
-                    usersMap[child.id] ||
-                    child.id
-                  }`;
-                }
-    
-                return "";
-              })
-              ?.join("")
-              ?.trim() || "New comment";
-    
-          await notifyActivity({
-            title: "Feed Comment Added",
-            description: commentText,
-            type: "feed-comment",
-            subjectId: feedPostId,
-          });
-        } catch (error) {
-          console.error(error);
-        }
-      },
-      [feedPostId, notifyActivity]
-    );
+  const handleCommentSubmit = useCallback(() => {
+    dispatchFeedInboxRefresh();
+  }, []);
 
   return (
     <section className="space-y-4 rounded-3xl border bg-white p-5 shadow-sm">
@@ -97,6 +34,7 @@ export function FeedPostComments({
         </h2>
         <p className="text-sm text-gray-500">
           Mention teammates with @ and react to replies with emoji.
+          Thread notifications are sent automatically.
         </p>
       </div>
 
@@ -104,9 +42,7 @@ export function FeedPostComments({
         metadata={{
           feedPostId,
         }}
-        onComposerSubmit={
-          handleCommentSubmit
-        }
+        onComposerSubmit={handleCommentSubmit}
       />
 
       {isLoading ? (

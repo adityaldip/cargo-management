@@ -31,28 +31,103 @@ export function truncateActivityTitle(
   return `${trimmed.slice(0, maxLength)}…`;
 }
 
-export async function notifyWorkspaceActivity({
-  subjectId,
-  activity,
-}: {
-  subjectId: string;
-  activity: WorkspaceActivityPayload;
-}) {
-  const { data: appUsers, error } =
-    await supabaseAdmin
-      .from("app_users")
-      .select("id");
+function customKindForActivity(type: string) {
+  return type.startsWith("$")
+    ? type
+    : `$${type}`;
+}
+
+async function listAppUserIds() {
+  const { data, error } = await supabaseAdmin
+    .from("app_users")
+    .select("id");
 
   if (error) {
     throw error;
   }
 
+  return (data ?? []).map((user) => user.id);
+}
+
+async function resolveRecipientUserIds({
+  activity,
+  recipientUserIds,
+  actorUserId,
+  postAuthorUserId,
+}: {
+  activity: WorkspaceActivityPayload;
+  recipientUserIds?: string[];
+  actorUserId?: string;
+  postAuthorUserId?: string | null;
+}) {
+  if (recipientUserIds) {
+    return recipientUserIds;
+  }
+
+  const allUserIds = await listAppUserIds();
+
+  if (activity.type === "feed-reaction") {
+    if (
+      !postAuthorUserId ||
+      postAuthorUserId === actorUserId
+    ) {
+      return [];
+    }
+
+    return [postAuthorUserId];
+  }
+
+  if (activity.type === "feed-post") {
+    if (!actorUserId) {
+      return allUserIds;
+    }
+
+    return allUserIds.filter(
+      (id) => id !== actorUserId
+    );
+  }
+
+  return allUserIds;
+}
+
+/**
+ * Sends custom inbox notifications to a small recipient set.
+ * Comments use Liveblocks `thread` inbox; editor @mentions use `textMention`.
+ */
+export async function notifyWorkspaceActivity({
+  subjectId,
+  activity,
+  recipientUserIds,
+  actorUserId,
+  postAuthorUserId,
+}: {
+  subjectId: string;
+  activity: WorkspaceActivityPayload;
+  recipientUserIds?: string[];
+  actorUserId?: string;
+  postAuthorUserId?: string | null;
+}) {
+  const userIds = await resolveRecipientUserIds({
+    activity,
+    recipientUserIds,
+    actorUserId,
+    postAuthorUserId,
+  });
+
+  if (userIds.length === 0) {
+    return;
+  }
+
+  const kind = customKindForActivity(
+    activity.type
+  );
+
   await Promise.all(
-    (appUsers ?? []).map((appUser) =>
+    userIds.map((userId) =>
       liveblocks.triggerInboxNotification({
-        userId: appUser.id,
+        userId,
         roomId: LIVEBLOCKS_ROOM_ID,
-        kind: "$custom",
+        kind,
         subjectId,
         activityData: activity,
       })

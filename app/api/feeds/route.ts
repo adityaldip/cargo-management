@@ -134,6 +134,7 @@ export async function POST(
     try {
       await notifyWorkspaceActivity({
         subjectId: post.id,
+        actorUserId: currentUser.id,
         activity: {
           type: "feed-post",
           actorName: currentUser.name,

@@ -1,17 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { InboxNotificationData } from "@liveblocks/core";
-import { useClient } from "@liveblocks/react";
 
 import { FEED_INBOX_REFRESH_EVENT } from "@/lib/feed-activity-refresh";
 import { FEED_INBOX_POLL_INTERVAL_MS } from "@/lib/feed-constants";
+import type { FeedActivityItem } from "@/lib/feed-activity-types";
 
-export function useRealtimeInboxNotifications() {
-  const client = useClient();
+export function useFeedActivity() {
   const isFirstLoadRef = useRef(true);
-  const [inboxNotifications, setInboxNotifications] =
-    useState<InboxNotificationData[]>([]);
+  const [activities, setActivities] = useState<
+    FeedActivityItem[]
+  >([]);
   const [isLoading, setIsLoading] =
     useState(true);
   const [error, setError] =
@@ -27,18 +26,25 @@ export function useRealtimeInboxNotifications() {
 
       setError(null);
 
-      const result =
-        await client.getInboxNotifications();
-
-      setInboxNotifications(
-        result.inboxNotifications
+      const response = await fetch(
+        "/api/feed-activity"
       );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to fetch activity feed"
+        );
+      }
+
+      const result = await response.json();
+
+      setActivities(result.activities ?? []);
     } catch (err) {
       setError(
         err instanceof Error
           ? err
           : new Error(
-              "Failed to fetch inbox notifications"
+              "Failed to fetch activity feed"
             )
       );
     } finally {
@@ -47,26 +53,26 @@ export function useRealtimeInboxNotifications() {
         isFirstLoadRef.current = false;
       }
     }
-  }, [client]);
+  }, []);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   useEffect(() => {
-    const handleInboxRefresh = () => {
+    const handleRefresh = () => {
       void refresh();
     };
 
     window.addEventListener(
       FEED_INBOX_REFRESH_EVENT,
-      handleInboxRefresh
+      handleRefresh
     );
 
     return () => {
       window.removeEventListener(
         FEED_INBOX_REFRESH_EVENT,
-        handleInboxRefresh
+        handleRefresh
       );
     };
   }, [refresh]);
@@ -82,7 +88,7 @@ export function useRealtimeInboxNotifications() {
   }, [refresh]);
 
   return {
-    inboxNotifications,
+    activities,
     isLoading,
     error,
     refresh,
