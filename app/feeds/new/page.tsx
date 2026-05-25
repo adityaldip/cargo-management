@@ -1,7 +1,6 @@
 import { FeedComposeForm } from "@/components/feed-compose-form";
-import { FeedWorkspaceShell } from "@/components/feed-workspace-shell";
+import { FeedLightShell } from "@/components/feed-light-shell";
 import { getCurrentAppUser } from "@/lib/app-auth";
-import { createFeedPost } from "@/lib/feed-posts";
 
 export default async function NewFeedPostPage() {
   const currentUser =
@@ -11,19 +10,12 @@ export default async function NewFeedPostPage() {
     return null;
   }
 
-  const draft = await createFeedPost({
-    authorUserId: currentUser.id,
-    title: "",
-    bodyPlainText: "",
-    isPublished: false,
-  });
-
   return (
-    <FeedWorkspaceShell
+    <FeedLightShell
       title="Create a post"
-      subtitle="Draft the title and message first, then create the post. After that you can keep editing collaboratively and use comments, mentions, and reactions."
+      subtitle="Draft the title and message, then publish. On the post page you can react and comment."
     >
-      <FeedComposeForm draftId={draft.id} />
-    </FeedWorkspaceShell>
+      <FeedComposeForm />
+    </FeedLightShell>
   );
 }

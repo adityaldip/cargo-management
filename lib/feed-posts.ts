@@ -2,7 +2,10 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 
-import { FEED_POST_EMOJIS } from "@/lib/feed-constants";
+import {
+  FEED_POST_EMOJIS,
+  FEED_POSTS_PAGE_SIZE,
+} from "@/lib/feed-constants";
 import { LIVEBLOCKS_ROOM_ID } from "@/lib/liveblocks";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -11,7 +14,7 @@ export type FeedPostListItem = {
   liveblocks_room_id: string;
   title: string;
   body_preview: string;
-  body_plain_text: string;
+  body_plain_text?: string;
   hashtags: string[];
   is_published: boolean;
   created_at: string;
@@ -118,10 +121,27 @@ export async function createFeedPost(
   return createdPost;
 }
 
+export type FeedPostsPageResult = {
+  posts: FeedPostListItem[];
+  hasMore: boolean;
+  nextOffset: number;
+};
+
 export async function listFeedPosts(
   currentUserId: string,
-  search?: string
-) {
+  options?: {
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }
+): Promise<FeedPostsPageResult> {
+  const limit =
+    options?.limit ?? FEED_POSTS_PAGE_SIZE;
+  const offset = options?.offset ?? 0;
+  const normalizedSearch =
+    options?.search?.trim().toLowerCase() ??
+    "";
+
   let query = supabaseAdmin
     .from("feed_posts")
     .select(
@@ -130,7 +150,6 @@ export async function listFeedPosts(
         liveblocks_room_id,
         title,
         body_preview,
-        body_plain_text,
         hashtags,
         is_published,
         created_at,
@@ -151,9 +170,6 @@ export async function listFeedPosts(
       ascending: false,
     });
 
-  const normalizedSearch =
-    search?.trim().toLowerCase() ?? "";
-
   if (normalizedSearch) {
     const hashtagSearch =
       normalizedSearch.startsWith("#")
@@ -163,19 +179,28 @@ export async function listFeedPosts(
     query = query.or(
       [
         `title.ilike.%${normalizedSearch}%`,
-        `body_plain_text.ilike.%${normalizedSearch}%`,
+        `body_preview.ilike.%${normalizedSearch}%`,
         `hashtags.cs.{${hashtagSearch}}`,
       ].join(",")
     );
   }
 
-  const { data, error } = await query;
+  const { data, error } = await query.range(
+    offset,
+    offset + limit
+  );
 
   if (error) {
     throw error;
   }
 
-  return (data ?? []).map((post) => {
+  const rows = data ?? [];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore
+    ? rows.slice(0, limit)
+    : rows;
+
+  const posts = pageRows.map((post) => {
     const reactionSummary = mapReactions(
       post.reactions,
       currentUserId
@@ -191,6 +216,12 @@ export async function listFeedPosts(
         reactionSummary.currentUserReactions,
     } satisfies FeedPostListItem;
   });
+
+  return {
+    posts,
+    hasMore,
+    nextOffset: offset + posts.length,
+  };
 }
 
 export async function getFeedPost(

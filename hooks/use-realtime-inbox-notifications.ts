@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { InboxNotificationData } from "@liveblocks/core";
 import { useClient, useEventListener } from "@liveblocks/react";
 
+import { FEED_INBOX_POLL_INTERVAL_MS } from "@/lib/feed-constants";
 import {
   LIVEBLOCKS_ROOM_ID,
   isNotificationRefreshEvent,
@@ -16,7 +17,7 @@ type UseRealtimeInboxNotificationsOptions = {
 
 export function useRealtimeInboxNotifications({
   roomId = LIVEBLOCKS_ROOM_ID,
-  fallbackIntervalMs = 3000,
+  fallbackIntervalMs = FEED_INBOX_POLL_INTERVAL_MS,
 }: UseRealtimeInboxNotificationsOptions = {}) {
   const client = useClient();
   const lastRefreshAtRef = useRef(0);

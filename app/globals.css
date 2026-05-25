@@ -128,3 +128,39 @@
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+.feed-compose-editor {
+  min-height: 320px;
+  border-radius: 1.5rem;
+  border: 1px solid var(--border);
+  background: white;
+}
+
+.feed-compose-editor__mount {
+  min-height: 280px;
+}
+
+.feed-compose-editor__prosemirror {
+  min-height: 280px;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: #1f2937;
+  outline: none;
+}
+
+.feed-compose-editor__prosemirror:focus {
+  outline: none;
+}
+
+.feed-compose-editor__prosemirror p {
+  margin: 0.5em 0;
+}
+
+.feed-compose-editor__prosemirror p:first-child {
+  margin-top: 0;
+}
+
+.feed-compose-editor__prosemirror p:last-child {
+  margin-bottom: 0;
+}

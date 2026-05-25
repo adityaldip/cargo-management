@@ -1,9 +1,27 @@
 "use client";
 
-import { FeedPostComments } from "@/components/feed-post-comments";
-import { FeedPostEditor } from "@/components/feed-post-editor";
+import dynamic from "next/dynamic";
+
 import { FeedPostReactions } from "@/components/feed-post-reactions";
+import { FeedPostView } from "@/components/feed-post-view";
 import type { FeedPostListItem } from "@/lib/feed-posts";
+
+const LazyFeedPostComments = dynamic(
+  () =>
+    import("@/components/feed-post-comments").then(
+      (module) => ({
+        default: module.FeedPostComments,
+      })
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <section className="rounded-3xl border bg-white p-5 text-sm text-gray-500 shadow-sm">
+        Loading comments...
+      </section>
+    ),
+  }
+);
 
 export function FeedPostRoom({
   post,
@@ -12,11 +30,7 @@ export function FeedPostRoom({
 }) {
   return (
     <div className="space-y-6">
-      <FeedPostEditor
-        feedPostId={post.id}
-        initialTitle={post.title}
-        initialBodyText={post.body_plain_text}
-      />
+      <FeedPostView post={post} />
 
       <section className="rounded-3xl border bg-white p-5 shadow-sm">
         <div className="mb-4 flex flex-wrap gap-2">
@@ -37,7 +51,7 @@ export function FeedPostRoom({
         />
       </section>
 
-      <FeedPostComments
+      <LazyFeedPostComments
         feedPostId={post.id}
         postTitle={post.title}
       />

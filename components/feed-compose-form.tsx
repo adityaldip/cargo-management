@@ -1,93 +1,42 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  type Editor,
-  EditorContent,
-  useEditor,
-} from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import {
-  Toolbar,
-  useLiveblocksExtension,
-} from "@liveblocks/react-tiptap";
+import type { Editor } from "@tiptap/core";
 
+import { FeedComposeEditor } from "@/components/feed-compose-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useTriggerActivityNotification } from "@/hooks/use-trigger-activity-notification";
 
-function FeedDraftEditor({
-  draftId,
-  onEditorChange,
-}: {
-  draftId: string;
-  onEditorChange: (editor: Editor | null) => void;
-}) {
-  const liveblocks = useLiveblocksExtension({
-    field: `feed-post-content:${draftId}`,
-    initialContent:
-      "<p>Write your post here. You can mention teammates, add hashtags, and format the message before publishing it.</p>",
-  });
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({
-        undoRedo: false,
-      }),
-      liveblocks,
-    ],
-    editorProps: {
-      attributes: {
-        class:
-          "min-h-[320px] rounded-3xl border border-gray-200 bg-white px-5 py-4 text-base leading-7 text-gray-800 outline-none",
-      },
-    },
-  });
-
-  useEffect(() => {
-    onEditorChange(editor);
-
-    return () => {
-      onEditorChange(null);
-    };
-  }, [editor, onEditorChange]);
-
-  return (
-    <>
-      <Toolbar
-        editor={editor}
-        className="rounded-2xl border border-gray-200 bg-gray-50"
-      />
-      <EditorContent editor={editor} />
-    </>
-  );
-}
-
-export function FeedComposeForm({
-  draftId,
-}: {
-  draftId: string;
-}) {
+export function FeedComposeForm() {
   const router = useRouter();
-  const notifyActivity =
-    useTriggerActivityNotification();
+  const editorRef = useRef<Editor | null>(null);
   const [title, setTitle] = useState("");
   const [error, setError] =
     useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] =
     useState(false);
-  const [editor, setEditor] =
-    useState<Editor | null>(null);
+  const [isEditorReady, setIsEditorReady] =
+    useState(false);
+
+  const handleEditorReady = useCallback(
+    (editor: Editor) => {
+      editorRef.current = editor;
+      setIsEditorReady(true);
+    },
+    []
+  );
 
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
+    const editor = editorRef.current;
+
     if (!editor) {
       setError(
-        "The collaborative draft is still loading."
+        "The editor is still loading."
       );
       return;
     }
@@ -96,22 +45,17 @@ export function FeedComposeForm({
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(
-        `/api/feeds/${draftId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            title,
-            bodyPlainText:
-              editor.getText(),
-            isPublished: true,
-          }),
-        }
-      );
+      const response = await fetch("/api/feeds", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          bodyPlainText: editor.getText(),
+          isPublished: true,
+        }),
+      });
       const result = await response.json();
 
       if (!response.ok) {
@@ -123,21 +67,15 @@ export function FeedComposeForm({
         return;
       }
 
-      try {
-        await notifyActivity({
-          title: title.trim(),
-          description: editor.getText(),
-          type: "feed-post",
-          subjectId: draftId,
-        });
-      } catch (notificationError) {
-        console.error(
-          "Unable to refresh activity feed after creating post.",
-          notificationError
-        );
+      const postId = result.post?.id;
+
+      if (!postId) {
+        setError("Unable to create post.");
+        setIsSubmitting(false);
+        return;
       }
 
-      router.push(`/feeds/${draftId}`);
+      router.push(`/feeds/${postId}`);
       router.refresh();
     } catch (err) {
       setError(
@@ -178,12 +116,14 @@ export function FeedComposeForm({
         <label className="text-sm font-medium text-gray-700">
           Post
         </label>
-        <div className="space-y-4 rounded-3xl border bg-white p-5 shadow-sm">
-          <FeedDraftEditor
-            draftId={draftId}
-            onEditorChange={setEditor}
-          />
-        </div>
+        {!isEditorReady && (
+          <p className="mb-2 text-sm text-gray-500">
+            Loading editor...
+          </p>
+        )}
+        <FeedComposeEditor
+          onEditorReady={handleEditorReady}
+        />
       </div>
 
       {error && (
@@ -195,7 +135,7 @@ export function FeedComposeForm({
       <div className="flex items-center gap-3">
         <Button
           type="submit"
-          disabled={isBusy || !draftId}
+          disabled={isBusy || !isEditorReady}
         >
           {isSubmitting
             ? "Creating..."

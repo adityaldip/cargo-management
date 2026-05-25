@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { FeedPostRoom } from "@/components/feed-post-room";
-import { FeedWorkspaceShell } from "@/components/feed-workspace-shell";
+import { FeedDetailShell } from "@/components/feed-detail-shell";
 import { getCurrentAppUser } from "@/lib/app-auth";
 import { getFeedPost } from "@/lib/feed-posts";
 
@@ -30,11 +30,11 @@ export default async function FeedPostPage({
   }
 
   return (
-    <FeedWorkspaceShell
+    <FeedDetailShell
       title={post.title}
       subtitle={`${post.author?.name ?? "Unknown author"} · ${new Date(post.updated_at).toLocaleString()}`}
     >
       <FeedPostRoom post={post} />
-    </FeedWorkspaceShell>
+    </FeedDetailShell>
   );
 }

@@ -18,14 +18,17 @@ export default async function FeedsPage({
 
   const params = await searchParams;
   const search = params.search ?? "";
-  const posts = await listFeedPosts(
-    currentUser.id,
-    search
-  );
+  const { posts, hasMore, nextOffset } =
+    await listFeedPosts(currentUser.id, {
+      search,
+      offset: 0,
+    });
 
   return (
     <FeedPostsPage
       posts={posts}
+      hasMore={hasMore}
+      nextOffset={nextOffset}
       search={search}
     />
   );

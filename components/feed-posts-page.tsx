@@ -1,20 +1,24 @@
 import { FeedCreateButton } from "@/components/feed-create-button";
-import { FeedPostCard } from "@/components/feed-post-card";
+import { FeedPostsLoadMore } from "@/components/feed-posts-load-more";
 import { FeedSearchForm } from "@/components/feed-search-form";
-import { FeedWorkspaceShell } from "@/components/feed-workspace-shell";
+import { FeedLightShell } from "@/components/feed-light-shell";
 import type { FeedPostListItem } from "@/lib/feed-posts";
 
 export function FeedPostsPage({
   posts,
+  hasMore,
+  nextOffset,
   search,
 }: {
   posts: FeedPostListItem[];
+  hasMore: boolean;
+  nextOffset: number;
   search: string;
 }) {
   return (
-    <FeedWorkspaceShell
+    <FeedLightShell
       title="Team posts, comments, reactions, and hashtags"
-      subtitle="Use the shared workspace feed to publish updates, search by keyword or hashtag, and keep the activity timeline visible on the right."
+      subtitle="Browse published updates, search by keyword or hashtag, and open a post to comment or react."
       actions={<FeedCreateButton />}
     >
       <div className="space-y-4">
@@ -22,19 +26,13 @@ export function FeedPostsPage({
           <FeedSearchForm initialSearch={search} />
         </div>
 
-        {posts.length === 0 ? (
-          <div className="rounded-3xl border border-dashed bg-white p-10 text-center text-sm text-gray-500 shadow-sm">
-            No posts found yet.
-          </div>
-        ) : (
-          posts.map((post) => (
-            <FeedPostCard
-              key={post.id}
-              post={post}
-            />
-          ))
-        )}
+        <FeedPostsLoadMore
+          initialPosts={posts}
+          initialHasMore={hasMore}
+          initialNextOffset={nextOffset}
+          search={search}
+        />
       </div>
-    </FeedWorkspaceShell>
+    </FeedLightShell>
   );
 }

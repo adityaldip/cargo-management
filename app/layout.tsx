@@ -10,7 +10,6 @@ import { FilterProvider } from '@/store/filter-store'
 import { Toaster } from '@/components/ui/toaster'
 
 import "@liveblocks/react-ui/styles.css";
-import "@liveblocks/react-tiptap/styles.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
