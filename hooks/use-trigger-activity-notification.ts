@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useBroadcastEvent } from "@liveblocks/react";
 
+import { dispatchFeedActivityRefresh } from "@/lib/feed-activity-refresh";
 import {
   createNotificationRefreshEvent,
   triggerActivity,
@@ -14,10 +15,18 @@ export function useTriggerActivityNotification() {
 
   return useCallback(
     async (activity: TriggerActivityInput) => {
-      await triggerActivity(activity);
-      broadcastEvent(
-        createNotificationRefreshEvent()
-      );
+      try {
+        await triggerActivity(activity);
+        dispatchFeedActivityRefresh();
+        broadcastEvent(
+          createNotificationRefreshEvent()
+        );
+      } catch (error) {
+        console.error(
+          "Unable to record workspace activity.",
+          error
+        );
+      }
     },
     [broadcastEvent]
   );

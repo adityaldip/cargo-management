@@ -8,6 +8,7 @@ import {
   Trash,
   MessageCircle,
   FileText,
+  SmilePlus,
 } from "lucide-react";
 
 import { useRealtimeInboxNotifications } from "@/hooks/use-realtime-inbox-notifications";
@@ -37,6 +38,10 @@ const getActivityIcon = (type?: string) => {
       return (
         <FileText className="h-4 w-4 text-emerald-600" />
       );
+    case "feed-reaction":
+      return (
+        <SmilePlus className="h-4 w-4 text-amber-600" />
+      );
     default:
       return (
         <Plane className="h-4 w-4 text-gray-500" />
@@ -49,7 +54,7 @@ const getActivityIcon = (type?: string) => {
 export function Newsfeed() {
   const { inboxNotifications, isLoading } =
     useRealtimeInboxNotifications();
-  
+
   return (
     <div className="h-[calc(100vh-2rem)] overflow-hidden rounded-2xl border bg-white shadow-sm">
       

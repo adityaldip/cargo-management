@@ -2,25 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { InboxNotificationData } from "@liveblocks/core";
-import { useClient, useEventListener } from "@liveblocks/react";
+import { useClient } from "@liveblocks/react";
 
-import { FEED_INBOX_POLL_INTERVAL_MS } from "@/lib/feed-constants";
-import {
-  LIVEBLOCKS_ROOM_ID,
-  isNotificationRefreshEvent,
-} from "@/lib/liveblocks";
-
-type UseRealtimeInboxNotificationsOptions = {
-  roomId?: string;
-  fallbackIntervalMs?: number;
-};
+import { FEED_INBOX_REFRESH_EVENT } from "@/lib/feed-activity-refresh";
+import { LIVEBLOCKS_ROOM_ID } from "@/lib/liveblocks";
 
 export function useRealtimeInboxNotifications({
   roomId = LIVEBLOCKS_ROOM_ID,
-  fallbackIntervalMs = FEED_INBOX_POLL_INTERVAL_MS,
-}: UseRealtimeInboxNotificationsOptions = {}) {
+}: {
+  roomId?: string;
+} = {}) {
   const client = useClient();
-  const lastRefreshAtRef = useRef(0);
+  const isFirstLoadRef = useRef(true);
   const [inboxNotifications, setInboxNotifications] =
     useState<InboxNotificationData[]>([]);
   const [isLoading, setIsLoading] =
@@ -29,7 +22,13 @@ export function useRealtimeInboxNotifications({
     useState<Error | null>(null);
 
   const refresh = useCallback(async () => {
+    const showLoading = isFirstLoadRef.current;
+
     try {
+      if (showLoading) {
+        setIsLoading(true);
+      }
+
       setError(null);
 
       const result =
@@ -42,7 +41,6 @@ export function useRealtimeInboxNotifications({
       setInboxNotifications(
         result.inboxNotifications
       );
-      lastRefreshAtRef.current = Date.now();
     } catch (err) {
       setError(
         err instanceof Error
@@ -52,7 +50,10 @@ export function useRealtimeInboxNotifications({
             )
       );
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+        isFirstLoadRef.current = false;
+      }
     }
   }, [client, roomId]);
 
@@ -61,37 +62,22 @@ export function useRealtimeInboxNotifications({
   }, [refresh]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(
-      () => {
-        if (
-          document.visibilityState !== "visible"
-        ) {
-          return;
-        }
+    const handleInboxRefresh = () => {
+      void refresh();
+    };
 
-        if (
-          Date.now() -
-            lastRefreshAtRef.current <
-          fallbackIntervalMs
-        ) {
-          return;
-        }
-
-        void refresh();
-      },
-      fallbackIntervalMs
+    window.addEventListener(
+      FEED_INBOX_REFRESH_EVENT,
+      handleInboxRefresh
     );
 
     return () => {
-      window.clearInterval(intervalId);
+      window.removeEventListener(
+        FEED_INBOX_REFRESH_EVENT,
+        handleInboxRefresh
+      );
     };
-  }, [fallbackIntervalMs, refresh]);
-
-  useEventListener(({ event }) => {
-    if (isNotificationRefreshEvent(event)) {
-      void refresh();
-    }
-  });
+  }, [refresh]);
 
   return {
     inboxNotifications,

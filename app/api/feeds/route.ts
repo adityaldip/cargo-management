@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Liveblocks } from "@liveblocks/node";
 
 import { createFeedPost, listFeedPosts } from "@/lib/feed-posts";
 import { getCurrentAppUser } from "@/lib/app-auth";
-import { LIVEBLOCKS_ROOM_ID } from "@/lib/liveblocks";
-import { supabaseAdmin } from "@/lib/supabase";
-
-const liveblocks = new Liveblocks({
-  secret: process.env.LIVEBLOCKS_SECRET_KEY!,
-});
+import {
+  notifyWorkspaceActivity,
+  truncateActivityTitle,
+} from "@/lib/workspace-activity";
 
 export async function GET(
   request: NextRequest
@@ -93,27 +90,17 @@ export async function POST(
 
   if (isPublished) {
     try {
-      const { data: appUsers } =
-        await supabaseAdmin
-          .from("app_users")
-          .select("id");
-
-      await Promise.all(
-        (appUsers ?? []).map((appUser) =>
-          liveblocks.triggerInboxNotification({
-            userId: appUser.id,
-            roomId: LIVEBLOCKS_ROOM_ID,
-            kind: "$custom",
-            subjectId: post.id,
-            activityData: {
-              title: title || "New post",
-              description: bodyPlainText,
-              type: "feed-post",
-              actorName: currentUser.name,
-            },
-          })
-        )
-      );
+      await notifyWorkspaceActivity({
+        subjectId: post.id,
+        activity: {
+          type: "feed-post",
+          actorName: currentUser.name,
+          title: truncateActivityTitle(
+            title || "New post"
+          ),
+          description: bodyPlainText,
+        },
+      });
     } catch (notificationError) {
       console.error(
         "Unable to send feed post activity notification.",

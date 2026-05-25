@@ -8,6 +8,7 @@ import {
   PanelRightOpen,
 } from "lucide-react";
 
+import { FeedActivityRefreshBridge } from "@/components/feed-activity-refresh-bridge";
 import { FeedActivitySidebar } from "@/components/feed-activity-sidebar";
 import { WorkflowNavigation } from "@/components/workflow-navigation";
 import { LIVEBLOCKS_ROOM_ID } from "@/lib/liveblocks";
@@ -68,17 +69,54 @@ export function FeedWorkspaceLayout({
   const activityVisible =
     hasHydrated && showActivity;
 
-  const activitySidebar = activityVisible ? (
-    <div className="col-span-4">
-      {enableLiveblocksRoom ? (
-        <FeedActivitySidebar />
-      ) : (
-        <RoomProvider id={LIVEBLOCKS_ROOM_ID}>
+  const needsLiveblocksRoom =
+    enableLiveblocksRoom || activityVisible;
+
+  const feedGrid = (
+    <div className="grid h-full grid-cols-12 gap-4">
+      <div
+        className={
+          activityVisible
+            ? "col-span-8 overflow-y-auto rounded-3xl border bg-white p-6 shadow-sm"
+            : "col-span-12 overflow-y-auto rounded-3xl border bg-white p-6 shadow-sm"
+        }
+      >
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gray-400">
+              Workspace feed
+            </p>
+            <h1 className="text-4xl font-semibold tracking-tight text-gray-900">
+              {title}
+            </h1>
+            <p className="max-w-3xl text-sm text-gray-500">
+              {subtitle}
+            </p>
+          </div>
+
+          {actions}
+        </div>
+
+        {children}
+      </div>
+
+      {activityVisible ? (
+        <div className="col-span-4">
           <FeedActivitySidebar />
-        </RoomProvider>
-      )}
+        </div>
+      ) : null}
     </div>
-  ) : null;
+  );
+
+  const feedGridWithOptionalRoom =
+    needsLiveblocksRoom ? (
+      <RoomProvider id={LIVEBLOCKS_ROOM_ID}>
+        <FeedActivityRefreshBridge />
+        {feedGrid}
+      </RoomProvider>
+    ) : (
+      feedGrid
+    );
 
   const layout = (
     <div className="h-screen bg-white p-4 text-black">
@@ -120,46 +158,10 @@ export function FeedWorkspaceLayout({
           </button>
         </div>
 
-        <div className="grid h-full grid-cols-12 gap-4">
-          <div
-            className={
-              activityVisible
-                ? "col-span-8 overflow-y-auto rounded-3xl border bg-white p-6 shadow-sm"
-                : "col-span-12 overflow-y-auto rounded-3xl border bg-white p-6 shadow-sm"
-            }
-          >
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gray-400">
-                  Workspace feed
-                </p>
-                <h1 className="text-4xl font-semibold tracking-tight text-gray-900">
-                  {title}
-                </h1>
-                <p className="max-w-3xl text-sm text-gray-500">
-                  {subtitle}
-                </p>
-              </div>
-
-              {actions}
-            </div>
-
-            {children}
-          </div>
-
-          {activitySidebar}
-        </div>
+        {feedGridWithOptionalRoom}
       </div>
     </div>
   );
-
-  if (enableLiveblocksRoom) {
-    return (
-      <RoomProvider id={LIVEBLOCKS_ROOM_ID}>
-        {layout}
-      </RoomProvider>
-    );
-  }
 
   return layout;
 }

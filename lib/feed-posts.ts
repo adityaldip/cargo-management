@@ -317,6 +317,22 @@ export async function updateFeedPostSnapshot(
   return data;
 }
 
+export async function getFeedPostTitle(
+  feedPostId: string
+) {
+  const { data, error } = await supabaseAdmin
+    .from("feed_posts")
+    .select("title")
+    .eq("id", feedPostId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.title?.trim() || "Untitled post";
+}
+
 export async function toggleFeedReaction(
   input: {
     feedPostId: string;

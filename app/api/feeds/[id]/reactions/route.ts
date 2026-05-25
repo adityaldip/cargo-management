@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentAppUser } from "@/lib/app-auth";
+import { FEED_POST_EMOJIS } from "@/lib/feed-constants";
 import {
+  getFeedPostTitle,
   toggleFeedReaction,
 } from "@/lib/feed-posts";
-import { FEED_POST_EMOJIS } from "@/lib/feed-constants";
+import {
+  notifyWorkspaceActivity,
+  truncateActivityTitle,
+} from "@/lib/workspace-activity";
 
 export async function POST(
   request: NextRequest,
@@ -45,6 +50,30 @@ export async function POST(
     userId: currentUser.id,
     emoji,
   });
+
+  if (result.added) {
+    try {
+      const postTitle = await getFeedPostTitle(id);
+      const displayTitle =
+        truncateActivityTitle(postTitle);
+
+      await notifyWorkspaceActivity({
+        subjectId: id,
+        activity: {
+          type: "feed-reaction",
+          actorName: currentUser.name,
+          title: displayTitle,
+          description: `${currentUser.name} reacted ${emoji} on "${displayTitle}"`,
+          emoji,
+        },
+      });
+    } catch (notificationError) {
+      console.error(
+        "Unable to send feed reaction activity notification.",
+        notificationError
+      );
+    }
+  }
 
   return NextResponse.json(result);
 }
