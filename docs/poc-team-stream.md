@@ -33,7 +33,7 @@ Also requires `LIVEBLOCKS_SECRET_KEY` and the existing `/api/liveblocks-auth` se
 | Resource | Id pattern |
 |----------|------------|
 | Room | `poc-team-stream-room` or `poc-stream-{slug}` |
-| Feed (per room) | `poc-team-stream` |
+| Feed (per room) | `{roomId}-feed` |
 
 ## Stream messages vs comments
 
@@ -50,6 +50,21 @@ Open **Comments** on a message to reply. Comments are not feed messages — they
 - **Comments:** use `@` in the Liveblocks comment composer (built-in)
 - Post mentions use `$poc_mention` custom inbox (register in dashboard if needed)
 
+## Activity feed (POC only)
+
+Separate from `/feeds` activity. Uses the **same right sidebar UI** as the workspace feed: **Show Feed** / **Hide Feed** toggle (stored in `poc-stream-show-activity-sidebar`).
+
+**All data comes from Liveblocks** (no Supabase activity table). Aggregates **all stream rooms**:
+
+| Source | Event | Visible to |
+|--------|-------|------------|
+| Liveblocks **Feeds** (`getFeedMessages`) | `stream_message` | Everyone |
+| Liveblocks **Threads** (`getThreads`) | `stream_comment` | Everyone |
+| Liveblocks **Inbox** (`$room_created`) | `room_created` | All teammates (broadcast) |
+| Liveblocks **Inbox** (`$poc_mention`) | `stream_mention` | Mentioned user |
+
+Register custom notification kinds `$room_created` and `$poc_mention` in the Liveblocks dashboard if inbox triggers return 422.
+
 ## API
 
 | Method | Path | Purpose |
@@ -60,6 +75,7 @@ Open **Comments** on a message to reply. Comments are not feed messages — they
 | `GET` | `/api/poc/team-stream/messages?roomId=` | List messages |
 | `POST` | `/api/poc/team-stream/messages` | Body: `{ "roomId", "text", "mentionedUserIds" }` |
 | `POST` | `/api/poc/team-stream/seed` | Body: `{ "roomId" }` — sample messages |
+| `GET` | `/api/poc/team-stream/activity` | Liveblocks activity across all rooms |
 
 ## 5-minute demo
 

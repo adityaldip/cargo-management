@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { usePocTeamStreamRoom } from "@/components/poc/poc-team-stream-room-context";
+import { dispatchPocStreamActivityRefresh } from "@/lib/poc-stream-activity-refresh";
 import { Button } from "@/components/ui/button";
 
 type MentionUser = {
@@ -167,6 +168,7 @@ export function PocTeamStreamComposer() {
       setMentionedUserIds([]);
       setMentionQuery(null);
       setMentionUsers([]);
+      dispatchPocStreamActivityRefresh();
     } catch (err) {
       setError(
         err instanceof Error

@@ -15,3 +15,12 @@ export const POC_TEAM_STREAM_LEGACY_FEED_ID =
 export function getPocStreamFeedId(roomId: string) {
   return `${roomId}-feed`;
 }
+
+export const POC_STREAM_ACTIVITY_SIDEBAR_KEY =
+  "poc-stream-show-activity-sidebar";
+
+export const POC_STREAM_ACTIVITY_POLL_INTERVAL_MS = 30_000;
+
+export function pocStreamRoomHref(roomId: string) {
+  return `/poc/team-stream/${encodeURIComponent(roomId)}`;
+}

@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 
-import { WorkflowNavigation } from "@/components/workflow-navigation";
+import { PocTeamStreamLayout } from "@/components/poc/poc-team-stream-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useWorkflowStore } from "@/store/workflow-store";
+import { dispatchPocStreamActivityRefresh } from "@/lib/poc-stream-activity-refresh";
 
 export type PocStreamRoom = {
   id: string;
@@ -20,8 +20,6 @@ export type PocStreamRoom = {
 
 export function PocTeamStreamRoomsHub() {
   const router = useRouter();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] =
-    useState(false);
   const [rooms, setRooms] = useState<PocStreamRoom[]>(
     []
   );
@@ -33,16 +31,6 @@ export function PocTeamStreamRoomsHub() {
     useState<string | null>(null);
   const [isCreating, setIsCreating] =
     useState(false);
-  const {
-    activeStep,
-    setActiveStep,
-    isProcessing,
-    isClearingData,
-    isExporting,
-    isBulkDeleting,
-    isExecutingRules,
-    isMappingAndSaving,
-  } = useWorkflowStore();
 
   const loadRooms = useCallback(async () => {
     setIsLoading(true);
@@ -127,6 +115,7 @@ export function PocTeamStreamRoomsHub() {
 
       setTitle("");
       setDescription("");
+      dispatchPocStreamActivityRefresh();
       router.push(
         `/poc/team-stream/${encodeURIComponent(room.id)}`
       );
@@ -142,25 +131,8 @@ export function PocTeamStreamRoomsHub() {
   };
 
   return (
-    <div className="h-screen bg-white p-4 text-black">
-      <WorkflowNavigation
-        activeStep={activeStep}
-        onStepChange={(step) => {
-          setActiveStep(step);
-          router.push("/");
-        }}
-        isProcessing={isProcessing}
-        isClearingData={isClearingData}
-        isExporting={isExporting}
-        isBulkDeleting={isBulkDeleting}
-        isExecutingRules={isExecutingRules}
-        isMappingAndSaving={isMappingAndSaving}
-        onCollapseChange={setIsSidebarCollapsed}
-      />
-
-      <div
-        className={`flex h-full flex-col transition-all duration-300 ease-in-out ${isSidebarCollapsed ? "ml-16" : "ml-60"}`}
-      >
+    <PocTeamStreamLayout>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border bg-white p-4 shadow-sm">
         <div className="mb-4 rounded-2xl border border-violet-200 bg-violet-50/60 px-5 py-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">
             Proof of concept
@@ -289,6 +261,6 @@ export function PocTeamStreamRoomsHub() {
           )}
         </div>
       </div>
-    </div>
+    </PocTeamStreamLayout>
   );
 }

@@ -85,6 +85,9 @@ export async function POST(
     const room = await createPocStreamRoom({
       title,
       description,
+      actorUserId: currentUser.id,
+      actorName:
+        currentUser.name?.trim() || "Teammate",
     });
 
     return NextResponse.json({ room });

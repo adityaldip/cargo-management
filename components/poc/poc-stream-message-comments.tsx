@@ -5,6 +5,8 @@ import { Composer, Thread } from "@liveblocks/react-ui";
 import { useThreads } from "@liveblocks/react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
+import { dispatchPocStreamActivityRefresh } from "@/lib/poc-stream-activity-refresh";
+
 export function PocStreamMessageComments({
   streamMessageId,
 }: {
@@ -29,6 +31,7 @@ export function PocStreamMessageComments({
 
   const handleCommentSubmit = useCallback(() => {
     setIsOpen(true);
+    dispatchPocStreamActivityRefresh();
   }, []);
 
   return (

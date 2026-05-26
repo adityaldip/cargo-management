@@ -8,6 +8,7 @@ import {
   POC_TEAM_STREAM_ROOM_ID,
   POC_TEAM_STREAM_ROOM_PREFIX,
 } from "@/lib/poc-team-stream-constants";
+import { notifyPocStreamActivity } from "@/lib/poc-stream-activity-notify";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export type PocTeamStreamMessageData = {
@@ -163,6 +164,8 @@ export async function ensurePocStreamRoom(
 export async function createPocStreamRoom(input: {
   title: string;
   description?: string;
+  actorUserId: string;
+  actorName: string;
 }) {
   const title = input.title.trim();
 
@@ -178,6 +181,27 @@ export async function createPocStreamRoom(input: {
     title,
     description,
   });
+
+  try {
+    await notifyPocStreamActivity({
+      subjectId: roomId,
+      actorUserId: input.actorUserId,
+      activity: {
+        type: "room_created",
+        actorName: input.actorName,
+        title: `Created stream "${title}"`,
+        description:
+          description ||
+          `New team stream: ${title}`,
+        roomId,
+      },
+    });
+  } catch (activityError) {
+    console.error(
+      "Unable to notify POC stream room activity.",
+      activityError
+    );
+  }
 
   return {
     id: roomId,

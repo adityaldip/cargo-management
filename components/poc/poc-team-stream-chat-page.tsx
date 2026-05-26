@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 
+import { PocTeamStreamLayout } from "@/components/poc/poc-team-stream-layout";
 import { PocTeamStreamWorkspace } from "@/components/poc/poc-team-stream-workspace";
-import { WorkflowNavigation } from "@/components/workflow-navigation";
 import { Button } from "@/components/ui/button";
-import { useWorkflowStore } from "@/store/workflow-store";
 
 export function PocTeamStreamChatPage({
   roomId,
@@ -19,20 +16,6 @@ export function PocTeamStreamChatPage({
   roomTitle: string;
   roomDescription: string;
 }) {
-  const router = useRouter();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] =
-    useState(false);
-  const {
-    activeStep,
-    setActiveStep,
-    isProcessing,
-    isClearingData,
-    isExporting,
-    isBulkDeleting,
-    isExecutingRules,
-    isMappingAndSaving,
-  } = useWorkflowStore();
-
   if (!roomId?.trim()) {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
@@ -50,26 +33,9 @@ export function PocTeamStreamChatPage({
   }
 
   return (
-    <div className="h-screen bg-white p-4 text-black">
-      <WorkflowNavigation
-        activeStep={activeStep}
-        onStepChange={(step) => {
-          setActiveStep(step);
-          router.push("/");
-        }}
-        isProcessing={isProcessing}
-        isClearingData={isClearingData}
-        isExporting={isExporting}
-        isBulkDeleting={isBulkDeleting}
-        isExecutingRules={isExecutingRules}
-        isMappingAndSaving={isMappingAndSaving}
-        onCollapseChange={setIsSidebarCollapsed}
-      />
-
-      <div
-        className={`flex h-full flex-col transition-all duration-300 ease-in-out ${isSidebarCollapsed ? "ml-16" : "ml-60"}`}
-      >
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+    <PocTeamStreamLayout>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border bg-white p-4 shadow-sm">
+        <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
           <Button
             asChild
             variant="outline"
@@ -95,13 +61,13 @@ export function PocTeamStreamChatPage({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border bg-white shadow-sm">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border">
           <PocTeamStreamWorkspace
             roomId={roomId}
             roomLabel={roomTitle}
           />
         </div>
       </div>
-    </div>
+    </PocTeamStreamLayout>
   );
 }
